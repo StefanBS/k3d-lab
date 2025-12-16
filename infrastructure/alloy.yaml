@@ -27,6 +27,12 @@ spec:
                 format = "logfmt"
               }
 
+              loki.write "core" {
+                endpoint {
+                  url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+                }
+              }
+
               discovery.kubernetes "pods" {
                 role = "pod"
                 selectors {
@@ -92,30 +98,7 @@ spec:
 
               loki.process "pods" {
                 stage.cri {}
-
-                stage.json {
-                  expressions = {
-                    level = "level",
-                  }
-                }
-
-                stage.regex {
-                  expression = "\\s+(?P<level>INFO|WARN|ERROR|DEBUG|FATAL):\\s+"
-                }
-
-                stage.labels {
-                  values = {
-                    level = "level",
-                  }
-                }
-
-                forward_to = [loki.write.default.receiver]
-              }
-
-              loki.write "default" {
-                endpoint {
-                  url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
-                }
+                forward_to = [loki.write.core.receiver]
               }
   destination:
     server: https://kubernetes.default.svc
