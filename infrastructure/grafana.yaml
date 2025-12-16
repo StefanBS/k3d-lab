@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: grafana
+    targetRevision: 10.3.1
+    helm:
+      values: |
+        persistence:
+          enabled: false
+        adminPassword: admin
+        datasources:
+          datasources.yaml:
+            apiVersion: 1
+            datasources:
+            - name: Loki
+              type: loki
+              url: http://loki-gateway.monitoring.svc.cluster.local
+              access: proxy
+              isDefault: true
+        alerting:
+          contactpoints.yaml:
+            secret:
+              apiVersion: 1
+              contactPoints:
+                - orgId: 1
+                  name: slack-alerts-channel-notifier
+                  receivers:
+                    - uid: slack-alerts-channel-notifier
+                      type: slack
+                      settings:
+                        url: test.com
+                        username: Grafana Alerts
+                        color: |
+                          {{ `{{- if eq .Status "resolved" -}}good{{- else -}}
+                          {{- if eq .CommonLabels.severity "critical" -}}danger
+                          {{- else if eq .CommonLabels.severity "warning" -}}warning
+                          {{- else -}}#439FE0{{- end -}}
+                          {{- end -}}` }}
+        service:
+          type: ClusterIP
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+

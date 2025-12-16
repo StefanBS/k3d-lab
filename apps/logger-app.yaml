@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logger-app
+  namespace: default
+  labels:
+    app: logger
+    org-id: test-org-id
+    project-id: test-project-id
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logger
+  template:
+    metadata:
+      labels:
+        app: logger
+        org-id: test-org-id
+        project-id: test-project-id
+    spec:
+      containers:
+        - name: logger
+          image: busybox
+          args:
+            - /bin/sh
+            - -c
+            - >
+              i=0;
+              while true;
+              do
+                echo "$(date) INFO: This is log line $i";
+                if [ $((i % 5)) -eq 0 ]; then echo "$(date) WARN: Something might be wrong at $i"; fi;
+                if [ $((i % 10)) -eq 0 ]; then echo "$(date) ERROR: Critical failure at $i"; fi;
+                i=$((i+1));
+                sleep 2;
+              done
+
