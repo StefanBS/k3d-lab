@@ -3,7 +3,7 @@ kind: Simple
 metadata:
   name: my-lab-cluster
 servers: 1
-agents: 2
+agents: 1
 kubeAPI:
   host: "0.0.0.0"
   hostIP: "0.0.0.0"
