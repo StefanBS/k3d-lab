@@ -2,7 +2,7 @@
 description: Working with this repo (k3d lab cluster + kubectl context "lab")
 globs:
   - "**/*"
-alwaysApply: false
+alwaysApply: true
 ---
 
 ## Repository intent
