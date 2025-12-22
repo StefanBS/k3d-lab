@@ -54,5 +54,3 @@ k3d cluster start my-lab-cluster
 ```
 
 Avoid running `k3d cluster create ...` unless the user explicitly requests a fresh deployment.
-
-
