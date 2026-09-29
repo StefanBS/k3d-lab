@@ -30,6 +30,8 @@ The root Application syncs two ApplicationSets from `gitops/`: **Platform**, one
 - `component.yaml`: the upstream chart (`chart`, `repoURL`, a pinned `version`), the `namespace` to install it in, and its `wave`, from 0 to 9. Within a group, each wave syncs once every lower wave is Healthy, so CRDs and operators go in an earlier wave than anything that uses them.
 - `values.yaml`: the chart's values. For Cilium and ArgoCD, `just up` installs from the same file, so bootstrap and ArgoCD never disagree.
 
+The waves come from ApplicationSet RollingSync, which syncs an Application only when Git changes, never for drift in the Lab: a change made by hand with `kubectl` stays until the next commit to the tracked branch, or until you sync that Application from ArgoCD.
+
 `just lint` renders every component with its pinned chart and values and validates the output with `kubeconform`.
 
 ## Machine-specific values
