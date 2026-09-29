@@ -1,0 +1,12 @@
+configs:
+  params:
+    # The Platform and Workloads ApplicationSets sync their Applications in waves
+    # (RollingSync), which is off by default.
+    applicationsetcontroller.enable.progressive.syncs: true
+    # Plain HTTP until the Gateway terminates TLS in front of it.
+    server.insecure: true
+# Nothing logs in through SSO or needs notifications in the Lab, so neither runs.
+dex:
+  enabled: false
+notifications:
+  enabled: false

@@ -23,4 +23,13 @@ jobs:
           curl -sSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" |
             tar -xJ --strip-components=1 -C "$RUNNER_TEMP" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.2.2
+      - name: Install kubeconform
+        env:
+          KUBECONFORM_VERSION: v0.8.0
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" |
+            tar -xz -C "$RUNNER_TEMP" kubeconform
       - run: just lint

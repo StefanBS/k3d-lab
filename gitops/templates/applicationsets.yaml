@@ -1,0 +1,74 @@
+{{- /*
+One ApplicationSet per group: an Application for every <group>/<component>/ folder,
+installing the chart its component.yaml names with the values.yaml beside it.
+The `{{`...`}}` parts are left for the ApplicationSet's own templating.
+*/}}
+{{- range $group := list "platform" "workloads" }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ $group }}
+  namespace: argocd
+  annotations:
+    # The root Application creates Workloads only once every Platform Application is
+    # Healthy: an ApplicationSet stays Progressing until its RollingSync completes.
+    argocd.argoproj.io/sync-wave: {{ ternary "0" "1" (eq $group "platform") | quote }}
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: {{ $.Values.repoURL }}
+        revision: {{ $.Values.revision }}
+        files:
+          - path: {{ $group }}/*/component.yaml
+  # Syncs the Applications wave by wave, each wave once the previous one is Healthy.
+  # RollingSync also syncs them whenever they drift from Git, so they have no
+  # automated sync policy of their own.
+  strategy:
+    type: RollingSync
+    deletionOrder: Reverse
+    rollingSync:
+      steps:
+        {{- range $wave := until 10 }}
+        - matchExpressions:
+            - key: k3d-lab/wave
+              operator: In
+              values: [{{ $wave | quote }}]
+        {{- end }}
+  template:
+    metadata:
+      name: '{{`{{.path.basename}}`}}'
+      labels:
+        k3d-lab/group: {{ $group }}
+        k3d-lab/wave: '{{`{{.wave}}`}}'
+    spec:
+      project: default
+      sources:
+        - repoURL: '{{`{{.repoURL}}`}}'
+          chart: '{{`{{.chart}}`}}'
+          targetRevision: '{{`{{.version}}`}}'
+          helm:
+            # The release `just up` installs with, for the components it bootstraps.
+            releaseName: '{{`{{.path.basename}}`}}'
+            valueFiles:
+              - '$values/{{`{{.path.path}}`}}/values.yaml'
+        - repoURL: {{ $.Values.repoURL }}
+          targetRevision: {{ $.Values.revision }}
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{`{{.namespace}}`}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          # Some CRDs, ArgoCD's own among them, are too big for client-side apply.
+          - ServerSideApply=true
+        retry:
+          limit: 10
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
+{{- end }}

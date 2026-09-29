@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 # Builds the Lab from scratch, then runs verify.
+# Usage: up.sh [REVISION=<branch or tag>]. ArgoCD reads the Lab from that revision
+# of LAB_REPO, main by default.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
+revision=main
+for arg; do
+  case $arg in
+    REVISION=?*) revision=${arg#REVISION=} ;;
+    *) die "unknown argument '$arg'; usage: just up [REVISION=<branch>]" ;;
+  esac
+done
+
 lab_exists && die "a Lab already exists; run 'just down' first"
+git ls-remote --exit-code --heads --tags "$LAB_REPO" "$revision" >/dev/null ||
+  die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
 
 # Makes / rshared inside the k3d Nodes, which Cilium's bpffs mount needs.
 export K3D_FIX_MOUNTS=1
@@ -30,23 +42,54 @@ expected_ip=$(yaml_get "$LAB_ROOT/platform/cilium/values.yaml" k8sServiceHost)
 [[ $server_ip == "$expected_ip" ]] ||
   die "the Server got $server_ip, but Cilium's values expect $expected_ip; run 'just down' and try again"
 
-# Installs a Platform component from its folder with Helm: the same chart, version
-# and values that ArgoCD uses for it.
+# Installs a Platform component that ArgoCD can't install itself: the same chart,
+# version and values that ArgoCD then manages it with.
 install_component() {
-  local name=$1 dir=$LAB_ROOT/platform/$1
+  local name=$1 args
+  mapfile -t args < <(component_helm_args "platform/$name")
   log "Installing $name"
-  helm upgrade --install "$name" "$(yaml_get "$dir/component.yaml" chart)" \
-    --kube-context "$LAB_CONTEXT" \
-    --repo "$(yaml_get "$dir/component.yaml" repoURL)" \
-    --version "$(yaml_get "$dir/component.yaml" version)" \
-    --namespace "$(yaml_get "$dir/component.yaml" namespace)" \
-    --values "$dir/values.yaml" \
-    --wait --timeout 10m
+  helm upgrade --install "$name" "${args[@]}" --create-namespace \
+    --kube-context "$LAB_CONTEXT" --wait --timeout 10m
 }
 
 install_component cilium
 
 log "Waiting for every node to be Ready"
 kc wait --for=condition=Ready nodes --all --timeout=5m >/dev/null
+
+install_component argocd
+
+# From here on, Git is the only source of truth: ArgoCD takes over Cilium and itself,
+# and installs everything else, Platform first.
+log "Handing the Lab over to ArgoCD, tracking $revision"
+kc apply -f - >/dev/null <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: $LAB_REPO
+    targetRevision: $revision
+    path: gitops
+    helm:
+      valuesObject:
+        repoURL: $LAB_REPO
+        revision: $revision
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+EOF
+
+# The root Application is Healthy once every Platform and Workloads Application is.
+log "Waiting for ArgoCD to sync the Lab"
+kc -n argocd wait application/root --for=jsonpath='{.status.sync.status}'=Synced --timeout=15m >/dev/null
+kc -n argocd wait application/root --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
 
 exec "$LAB_ROOT/scripts/verify.sh"

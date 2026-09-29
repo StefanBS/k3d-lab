@@ -120,6 +120,23 @@ cluster_ip_services_work() {
   return "$bad"
 }
 
+# The root Application is among them, and it isn't Healthy while an ApplicationSet
+# fails to generate its Applications.
+applications_synced_and_healthy() {
+  local apps not_ok
+  apps=$(kc -n argocd get applications \
+    -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}') || return 1
+  [[ -n $apps ]] || {
+    echo "no ArgoCD Applications found"
+    return 1
+  }
+  not_ok=$(awk '$2 != "Synced" || $3 != "Healthy"' <<<"$apps")
+  [[ -z $not_ok ]] || {
+    echo "$not_ok"
+    return 1
+  }
+}
+
 check "Lab is running" lab_reachable
 if ((fails)); then
   exit 1
@@ -127,5 +144,6 @@ fi
 check "Every k3d Node is Ready" k3d_nodes_ready
 check "Cilium is healthy on every Ready node" cilium_healthy
 check "ClusterIP Services and DNS work from every Ready node" cluster_ip_services_work
+check "Every ArgoCD Application is Synced and Healthy" applications_synced_and_healthy
 
 exit $((fails > 0))

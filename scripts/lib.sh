@@ -16,6 +16,8 @@ LAB_NETWORK=k3d-$LAB_NAME
 LAB_BRIDGE=br-k3d-lab
 LAB_SUBNET=172.28.0.0/16
 LAB_GATEWAY=172.28.0.1
+# ArgoCD reads the Lab from here, without credentials.
+LAB_REPO=https://github.com/StefanBS/k3d-lab.git
 
 log() { printf '==> %s\n' "$*" >&2; }
 die() {
@@ -33,4 +35,23 @@ lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
 yaml_get() {
   sed -n "s/^$2:[[:space:]]*//p" "$1" | head -n1 |
     sed -e 's/[[:space:]]#.*$//' -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}
+
+# Every component folder, as <group>/<name>: one ArgoCD Application each.
+component_dirs() {
+  (cd "$LAB_ROOT" && for f in platform/*/component.yaml workloads/*/component.yaml; do
+    [[ -f $f ]] && dirname "$f"
+  done)
+}
+
+# The arguments that make `helm template` or `helm upgrade --install` render a component
+# the way ArgoCD does: its pinned chart, namespace and values. One per line, for mapfile.
+component_helm_args() {
+  local dir=$LAB_ROOT/$1
+  printf '%s\n' \
+    "$(yaml_get "$dir/component.yaml" chart)" \
+    --repo "$(yaml_get "$dir/component.yaml" repoURL)" \
+    --version "$(yaml_get "$dir/component.yaml" version)" \
+    --namespace "$(yaml_get "$dir/component.yaml" namespace)" \
+    --values "$dir/values.yaml"
 }

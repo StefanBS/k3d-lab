@@ -19,8 +19,9 @@ declare -A hints=(
   [helm]="https://helm.sh/docs/intro/install/"
   [just]="https://just.systems/man/en/packages.html"
   [shellcheck]="https://github.com/koalaman/shellcheck#installing (only 'just lint' needs it)"
+  [kubeconform]="https://github.com/yannh/kubeconform#installation (only 'just lint' needs it)"
 )
-for tool in docker k3d kubectl helm just shellcheck; do
+for tool in docker k3d kubectl helm just shellcheck kubeconform; do
   if command -v "$tool" >/dev/null; then
     ok "$tool is installed"
   else

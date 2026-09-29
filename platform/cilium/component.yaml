@@ -3,3 +3,5 @@ chart: cilium
 repoURL: https://helm.cilium.io
 version: 1.20.2
 namespace: kube-system
+# Synced first: nothing else runs without the Lab's networking.
+wave: 0
