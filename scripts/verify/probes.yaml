@@ -1,0 +1,57 @@
+# Probes that verify.sh uses to test the Lab from the inside: a web server behind a
+# ClusterIP Service, and a client on every Ready node (the GPU Node included, when Joined).
+# They stay running between checks, so repeated `just verify` runs are quick.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-verify
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lab-verify
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: web}
+  template:
+    metadata:
+      labels: {app: web}
+    spec:
+      containers:
+        - name: web
+          image: traefik/whoami:v1.11
+          ports: [{containerPort: 80}]
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: lab-verify
+spec:
+  selector: {app: web}
+  ports: [{port: 80}]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: client
+  namespace: lab-verify
+spec:
+  selector:
+    matchLabels: {app: client}
+  template:
+    metadata:
+      labels: {app: client}
+    spec:
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      containers:
+        - name: client
+          image: busybox:1.37
+          command: [sleep, infinity]
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}

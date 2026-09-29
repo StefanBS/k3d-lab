@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Destroys the Lab: the cluster and its Docker network. Nothing on the Host outside them is touched.
+# shellcheck source=lib.sh
+source "$(dirname "$0")/lib.sh"
+
+if lab_exists; then
+  log "Deleting the k3d cluster"
+  k3d cluster delete "$LAB_NAME"
+fi
+
+if docker network inspect "$LAB_NETWORK" >/dev/null 2>&1; then
+  log "Removing the Lab network $LAB_NETWORK"
+  docker network rm "$LAB_NETWORK" >/dev/null
+fi
+
+leftovers=$(
+  lab_exists && echo "cluster: $LAB_NAME"
+  docker network inspect "$LAB_NETWORK" >/dev/null 2>&1 && echo "network: $LAB_NETWORK"
+  ip -br link show br-k3d-lab >/dev/null 2>&1 && echo "bridge: br-k3d-lab"
+  docker volume ls -q --filter "name=k3d-$LAB_NAME" | sed 's/^/volume: /'
+  kubectl config get-contexts -o name | grep -x "$LAB_CONTEXT" | sed 's/^/kube context: /'
+  true
+)
+[[ -z $leftovers ]] || die "the Lab left things behind:
+$leftovers"
+
+log "The Lab is down"

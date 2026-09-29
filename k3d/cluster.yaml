@@ -1,0 +1,32 @@
+# The Lab's k3d cluster: 1 Server and 1 Agent on the Lab's own Docker network,
+# with k3s's own networking disabled so Cilium is the only networking layer.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: lab
+servers: 1
+agents: 1
+image: rancher/k3s:v1.36.4-k3s1
+# Created by `just up` beforehand: fixed subnet, routable from the GPU Node (ADR 0002).
+network: k3d-lab
+kubeAPI:
+  hostIP: 127.0.0.1
+  hostPort: "6550"
+options:
+  k3d:
+    disableLoadbalancer: true
+  k3s:
+    extraArgs:
+      - arg: --flannel-backend=none
+        nodeFilters: [server:*]
+      - arg: --disable-network-policy
+        nodeFilters: [server:*]
+      - arg: --disable-kube-proxy
+        nodeFilters: [server:*]
+      - arg: --disable=traefik
+        nodeFilters: [server:*]
+      - arg: --disable=servicelb
+        nodeFilters: [server:*]
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: false
