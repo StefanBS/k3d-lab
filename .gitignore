@@ -1,0 +1,2 @@
+# Machine-specific values (IPs, SSH destinations); commit only .env.example
+.env
