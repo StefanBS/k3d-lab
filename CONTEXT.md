@@ -18,6 +18,14 @@ _Avoid_: container node, docker node
 The physical machine on the LAN that joins the Lab as an Agent, so GPU Workloads can be scheduled on it.
 _Avoid_: physical node, GPU box, worker
 
+**Joined**:
+The GPU Node's state when it's registered with the current Lab and lending its GPU to it. A Joined GPU Node may be powered off; it's then unreachable, not Left.
+_Avoid_: online, active, attached
+
+**Left**:
+The GPU Node's state when it's not registered with the current Lab, so its GPU belongs entirely to its owner. It's the state after every reboot, until the next join.
+_Avoid_: offline, detached, removed
+
 **Server**:
 A node running the k3s control plane. The Lab has exactly one, and it is a k3d Node.
 _Avoid_: master, control-plane node
