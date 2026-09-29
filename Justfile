@@ -2,6 +2,9 @@
 
 set dotenv-load
 
+# Every script pins DOCKER_HOST to Docker CE (scripts/lib.sh, ADR 0001), so no recipe
+# lands on Podman. It isn't exported here, so `doctor` can still see the caller's value.
+
 # List the recipes
 default:
     @just --list

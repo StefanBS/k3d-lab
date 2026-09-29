@@ -13,6 +13,7 @@ export DOCKER_HOST=unix:///var/run/docker.sock
 LAB_NAME=lab
 LAB_CONTEXT=k3d-$LAB_NAME
 LAB_NETWORK=k3d-$LAB_NAME
+LAB_BRIDGE=br-k3d-lab
 LAB_SUBNET=172.28.0.0/16
 LAB_GATEWAY=172.28.0.1
 
@@ -27,5 +28,9 @@ kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
 
-# Reads a top-level scalar from a flat YAML file (yq isn't a prerequisite).
-yaml_get() { sed -n "s/^$2:[[:space:]]*//p" "$1" | head -n1; }
+# Reads a top-level scalar from a flat YAML file (yq isn't a prerequisite),
+# dropping a trailing comment and surrounding quotes.
+yaml_get() {
+  sed -n "s/^$2:[[:space:]]*//p" "$1" | head -n1 |
+    sed -e 's/[[:space:]]#.*$//' -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}

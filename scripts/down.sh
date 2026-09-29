@@ -16,7 +16,7 @@ fi
 leftovers=$(
   lab_exists && echo "cluster: $LAB_NAME"
   docker network inspect "$LAB_NETWORK" >/dev/null 2>&1 && echo "network: $LAB_NETWORK"
-  ip -br link show br-k3d-lab >/dev/null 2>&1 && echo "bridge: br-k3d-lab"
+  ip -br link show "$LAB_BRIDGE" >/dev/null 2>&1 && echo "bridge: $LAB_BRIDGE"
   docker volume ls -q --filter "name=k3d-$LAB_NAME" | sed 's/^/volume: /'
   kubectl config get-contexts -o name | grep -x "$LAB_CONTEXT" | sed 's/^/kube context: /'
   true

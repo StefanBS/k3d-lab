@@ -43,8 +43,15 @@ else
   fail "Docker CE isn't reachable at $DOCKER_HOST (ADR 0001)"
 fi
 
-if [[ $caller_docker_host == *podman* ]]; then
-  warn "your shell's DOCKER_HOST points at Podman; the Lab's recipes ignore it, but plain 'docker' commands won't reach the Lab (log in again, or use 'docker --context default')"
+# Where a plain `docker` in the caller's shell goes: DOCKER_HOST wins over the current context.
+caller_endpoint=$caller_docker_host
+if [[ -z $caller_endpoint ]]; then
+  caller_context=$(env -u DOCKER_HOST docker context show 2>/dev/null) || caller_context=""
+  caller_endpoint=$(env -u DOCKER_HOST docker context inspect "$caller_context" \
+    --format '{{.Endpoints.docker.Host}}' 2>/dev/null) || caller_endpoint=""
+fi
+if [[ $caller_endpoint == *podman* ]]; then
+  warn "plain 'docker' in your shell goes to Podman ($caller_endpoint); the Lab's recipes ignore that, but 'docker' commands won't see the Lab (unset DOCKER_HOST or log in again, and use 'docker context use default')"
 fi
 
 env_file=$LAB_ROOT/.env

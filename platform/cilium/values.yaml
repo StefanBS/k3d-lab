@@ -9,7 +9,7 @@ ipam:
   mode: kubernetes
 operator:
   replicas: 1
-# Inside a k3d Node, auto-mounting cgroup2 lands on the agent's own cgroup, so the
+# Inside a k3d Node, auto-mounting cgroup2 lands on the cilium-agent container's own cgroup, so the
 # socket load balancer covers nothing and every ClusterIP times out. This only takes
 # effect at install time: changing it later means recreating the Lab (ADR 0002).
 cgroup:
