@@ -1,0 +1,18 @@
+kubeProxyReplacement: true
+# The Server's fixed address on the Lab network: the first container on a fresh
+# 172.28.0.0/16 network. Also how the GPU Node reaches the API (ADR 0002).
+k8sServiceHost: 172.28.0.2
+k8sServicePort: 6443
+routingMode: tunnel
+tunnelProtocol: vxlan
+ipam:
+  mode: kubernetes
+operator:
+  replicas: 1
+# Inside a k3d Node, auto-mounting cgroup2 lands on the cilium-agent container's own cgroup, so the
+# socket load balancer covers nothing and every ClusterIP times out. This only takes
+# effect at install time: changing it later means recreating the Lab (ADR 0002).
+cgroup:
+  autoMount:
+    enabled: false
+  hostRoot: /sys/fs/cgroup

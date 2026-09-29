@@ -1,0 +1,2 @@
+# Lets shellcheck follow each script's `source .../lib.sh` relative to the script.
+source-path=SCRIPTDIR

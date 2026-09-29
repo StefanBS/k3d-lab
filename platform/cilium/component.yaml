@@ -1,0 +1,5 @@
+# Where this Platform component's chart comes from.
+chart: cilium
+repoURL: https://helm.cilium.io
+version: 1.20.2
+namespace: kube-system
