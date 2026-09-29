@@ -120,6 +120,21 @@ cluster_ip_services_work() {
   return "$bad"
 }
 
+# Names outside the Lab resolve through CoreDNS and Docker's embedded DNS, which needs
+# k3d/entrypoint-route-localnet.sh on every k3d Node. ArgoCD reads Git this way.
+external_dns_works() {
+  local pod out
+  pod=$(kc -n lab-verify get pods -l app=client -o name | head -n1) || return 1
+  [[ -n $pod ]] || {
+    echo "no client pod in lab-verify"
+    return 1
+  }
+  out=$(kc -n lab-verify exec "$pod" -- nslookup github.com 2>&1) || {
+    echo "github.com doesn't resolve from $pod: $(tail -n1 <<<"$out")"
+    return 1
+  }
+}
+
 # The root Application is among them, and it isn't Healthy while an ApplicationSet
 # fails to generate its Applications.
 applications_synced_and_healthy() {
@@ -144,6 +159,7 @@ fi
 check "Every k3d Node is Ready" k3d_nodes_ready
 check "Cilium is healthy on every Ready node" cilium_healthy
 check "ClusterIP Services and DNS work from every Ready node" cluster_ip_services_work
+check "Pods resolve names outside the Lab" external_dns_works
 check "Every ArgoCD Application is Synced and Healthy" applications_synced_and_healthy
 
 exit $((fails > 0))

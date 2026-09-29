@@ -35,7 +35,9 @@ else
 fi
 
 log "Creating the k3d cluster"
-k3d cluster create --config "$LAB_ROOT/k3d/cluster.yaml"
+# k3d runs every /bin/k3d-entrypoint-*.sh at each node start.
+k3d cluster create --config "$LAB_ROOT/k3d/cluster.yaml" \
+  --volume "$LAB_ROOT/k3d/entrypoint-route-localnet.sh:/bin/k3d-entrypoint-route-localnet.sh:ro@all"
 
 server_ip=$(docker inspect -f "{{(index .NetworkSettings.Networks \"$LAB_NETWORK\").IPAddress}}" "k3d-$LAB_NAME-server-0")
 expected_ip=$(yaml_get "$LAB_ROOT/platform/cilium/values.yaml" k8sServiceHost)
