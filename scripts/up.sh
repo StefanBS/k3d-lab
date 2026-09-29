@@ -14,7 +14,7 @@ for arg; do
 done
 
 lab_exists && die "a Lab already exists; run 'just down' first"
-git ls-remote --exit-code --heads --tags "$LAB_REPO" "$revision" >/dev/null ||
+git ls-remote --exit-code "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" >/dev/null ||
   die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
 
 # Makes / rshared inside the k3d Nodes, which Cilium's bpffs mount needs.
@@ -35,7 +35,8 @@ else
 fi
 
 log "Creating the k3d cluster"
-# k3d runs every /bin/k3d-entrypoint-*.sh at each node start.
+# k3d runs every /bin/k3d-entrypoint-*.sh at each k3d Node start. Mounted here rather
+# than in cluster.yaml, which would need the repo's absolute path.
 k3d cluster create --config "$LAB_ROOT/k3d/cluster.yaml" \
   --volume "$LAB_ROOT/k3d/entrypoint-route-localnet.sh:/bin/k3d-entrypoint-route-localnet.sh:ro@all"
 
@@ -74,12 +75,12 @@ spec:
   project: default
   source:
     repoURL: $LAB_REPO
-    targetRevision: $revision
+    targetRevision: "$revision"
     path: gitops
     helm:
       valuesObject:
         repoURL: $LAB_REPO
-        revision: $revision
+        revision: "$revision"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

@@ -39,8 +39,8 @@ for dir in "${components[@]}"; do
   for key in chart repoURL version namespace wave; do
     [[ -n $(yaml_get "$dir/component.yaml" "$key") ]] || fail "$dir/component.yaml: '$key' is missing"
   done
-  [[ $(yaml_get "$dir/component.yaml" wave) =~ ^[0-9]?$ ]] ||
-    fail "$dir/component.yaml: wave must be 0 to 9"
+  wave=$(yaml_get "$dir/component.yaml" wave)
+  [[ -z $wave || $wave =~ ^[0-9]$ ]] || fail "$dir/component.yaml: wave must be 0 to 9"
   [[ -f $dir/values.yaml ]] || fail "$dir/values.yaml is missing"
 done
 # Each folder's name is its Application's name, and those share one namespace.

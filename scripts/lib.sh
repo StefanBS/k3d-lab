@@ -41,7 +41,8 @@ yaml_get() {
 component_dirs() {
   (cd "$LAB_ROOT" && for f in platform/*/component.yaml workloads/*/component.yaml; do
     [[ -f $f ]] && dirname "$f"
-  done)
+  done
+  true)
 }
 
 # The arguments that make `helm template` or `helm upgrade --install` render a component

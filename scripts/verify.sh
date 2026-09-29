@@ -123,10 +123,15 @@ cluster_ip_services_work() {
 # Names outside the Lab resolve through CoreDNS and Docker's embedded DNS, which needs
 # k3d/entrypoint-route-localnet.sh on every k3d Node. ArgoCD reads Git this way.
 external_dns_works() {
-  local pod out
-  pod=$(kc -n lab-verify get pods -l app=client -o name | head -n1) || return 1
-  [[ -n $pod ]] || {
-    echo "no client pod in lab-verify"
+  local node pod out
+  node=$(ready_nodes | head -n1) || return 1
+  [[ -n $node ]] || {
+    echo "no Ready nodes"
+    return 1
+  }
+  kc apply -f "$LAB_ROOT/scripts/verify/probes.yaml" >/dev/null || return 1
+  pod=$(wait_pod_on_node lab-verify app=client "$node") || {
+    echo "${pod:-$node: client pod is not Ready}"
     return 1
   }
   out=$(kc -n lab-verify exec "$pod" -- nslookup github.com 2>&1) || {

@@ -24,8 +24,7 @@ spec:
         files:
           - path: {{ $group }}/*/component.yaml
   # Syncs the Applications wave by wave, each wave once the previous one is Healthy.
-  # RollingSync also syncs them whenever they drift from Git, so they have no
-  # automated sync policy of their own.
+  # RollingSync also syncs them whenever they drift from Git.
   strategy:
     type: RollingSync
     deletionOrder: Reverse
@@ -61,6 +60,11 @@ spec:
         server: https://kubernetes.default.svc
         namespace: '{{`{{.namespace}}`}}'
       syncPolicy:
+        # RollingSync strips this and triggers the syncs itself, but only prunes
+        # when it's here.
+        automated:
+          prune: true
+          selfHeal: true
         syncOptions:
           - CreateNamespace=true
           # Some CRDs, ArgoCD's own among them, are too big for client-side apply.
