@@ -3,5 +3,3 @@ chart: argo-cd
 repoURL: https://argoproj.github.io/argo-helm
 version: 10.9.4
 namespace: argocd
-# Synced after Cilium: nothing runs without the Lab's networking.
-wave: 1

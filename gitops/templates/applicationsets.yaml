@@ -12,7 +12,8 @@ metadata:
   namespace: argocd
   annotations:
     # The root Application creates Workloads only once every Platform Application is
-    # Healthy: an ApplicationSet stays Progressing until its RollingSync completes.
+    # Synced and Healthy, as ArgoCD's ApplicationSet health check (in
+    # platform/argocd/values.yaml) reports.
     argocd.argoproj.io/sync-wave: {{ ternary "0" "1" (eq $group "platform") | quote }}
 spec:
   goTemplate: true
@@ -23,25 +24,11 @@ spec:
         revision: {{ $.Values.revision }}
         files:
           - path: {{ $group }}/*/component.yaml
-  # Syncs the Applications wave by wave, each wave once the previous one is Healthy.
-  # RollingSync also syncs them whenever they drift from Git.
-  strategy:
-    type: RollingSync
-    deletionOrder: Reverse
-    rollingSync:
-      steps:
-        {{- range $wave := until 10 }}
-        - matchExpressions:
-            - key: k3d-lab/wave
-              operator: In
-              values: [{{ $wave | quote }}]
-        {{- end }}
   template:
     metadata:
       name: '{{`{{.path.basename}}`}}'
       labels:
         k3d-lab/group: {{ $group }}
-        k3d-lab/wave: '{{`{{.wave}}`}}'
     spec:
       project: default
       sources:
@@ -59,9 +46,9 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{`{{.namespace}}`}}'
+      # Git is the only source of truth: anything that drifts from it, or is no longer
+      # in it, is put back or removed.
       syncPolicy:
-        # RollingSync strips this and triggers the syncs itself, but only prunes
-        # when it's here.
         automated:
           prune: true
           selfHeal: true
@@ -69,8 +56,11 @@ spec:
           - CreateNamespace=true
           # Some CRDs, ArgoCD's own among them, are too big for client-side apply.
           - ServerSideApply=true
+        # Applications sync in no particular order within a group. One that needs
+        # another's CRDs fails until they exist, so it retries forever: once retries run
+        # out, ArgoCD never syncs the same commit again by itself.
         retry:
-          limit: 10
+          limit: -1
           backoff:
             duration: 10s
             factor: 2

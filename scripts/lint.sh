@@ -30,17 +30,14 @@ git ls-files -z --cached --others --exclude-standard '*.sh' | xargs -0 shellchec
 log "just --fmt --check"
 just --fmt --check
 
-# The ApplicationSets template each component's fields, and RollingSync only syncs
-# the waves it has a step for (0-9, in gitops/templates/applicationsets.yaml).
+# The ApplicationSets template each component's fields.
 log "Component folders"
 mapfile -t components < <(component_dirs)
 ((${#components[@]})) || fail "no component folders found"
 for dir in "${components[@]}"; do
-  for key in chart repoURL version namespace wave; do
+  for key in chart repoURL version namespace; do
     [[ -n $(yaml_get "$dir/component.yaml" "$key") ]] || fail "$dir/component.yaml: '$key' is missing"
   done
-  wave=$(yaml_get "$dir/component.yaml" wave)
-  [[ -z $wave || $wave =~ ^[0-9]$ ]] || fail "$dir/component.yaml: wave must be 0 to 9"
   [[ -f $dir/values.yaml ]] || fail "$dir/values.yaml is missing"
 done
 # Each folder's name is its Application's name, and those share one namespace.
