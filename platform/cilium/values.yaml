@@ -22,3 +22,25 @@ hubble:
   tls:
     auto:
       method: cronJob
+# The Lab's Gateway (platform/gateway), whose CRDs `just up` applies before Cilium.
+# Envoy listens on the Server's own network, which k3d publishes on the Host: there's no
+# LoadBalancer. Only the Server listens, so a Joined GPU Node never opens ports 80 and
+# 443 on the LAN. Changing these means recreating the Lab: cilium-agent only reads them
+# at start.
+gatewayAPI:
+  enabled: true
+  # Rendered whether or not the CRDs are there yet, so the Lab doesn't depend on
+  # what the cluster held when ArgoCD last rendered Cilium.
+  gatewayClass:
+    create: "true"
+  hostNetwork:
+    enabled: true
+    nodes:
+      matchLabels:
+        node-role.kubernetes.io/control-plane: "true"
+envoy:
+  securityContext:
+    capabilities:
+      # Envoy binds ports 80 and 443, below 1024. The first two are the chart's default.
+      keepCapNetBindService: true
+      envoy: [NET_ADMIN, SYS_ADMIN, NET_BIND_SERVICE]

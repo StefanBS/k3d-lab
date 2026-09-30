@@ -5,7 +5,7 @@ source "$(dirname "$0")/lib.sh"
 
 if lab_exists; then
   log "Deleting the k3d cluster"
-  k3d cluster delete "$LAB_NAME"
+  quietly k3d cluster delete "$LAB_NAME"
 fi
 
 if lab_network_exists; then

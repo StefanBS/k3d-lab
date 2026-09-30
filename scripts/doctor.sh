@@ -45,11 +45,21 @@ else
   fi
 fi
 
+# The Lab's Gateway is published on these (k3d/cluster.yaml); a running Lab holds them itself.
+if ! lab_exists; then
+  taken=$(lab_host_ports_taken)
+  if [[ -n $taken ]]; then
+    fail "the Lab's Gateway needs Host ports ${LAB_HOST_PORTS[*]}, but something listens on $(paste -sd' ' <<<"$taken")"
+  else
+    ok "Host ports ${LAB_HOST_PORTS[*]} are free for the Lab's Gateway"
+  fi
+fi
+
 # What host-setup does, including the steps that need root.
-if [[ -f $LAB_CA_CERT ]]; then
+if lab_ca_exists; then
   ok "the Lab CA exists ($LAB_CA_DIR)"
 else
-  warn "the Lab CA is missing ($LAB_CA_CERT): run 'just host-setup'"
+  warn "the Lab CA is missing from $LAB_CA_DIR: run 'just host-setup'"
 fi
 # shellcheck disable=SC2329  # called by run_root_steps
 not_set_up() { warn "not yet: $2 (run 'just host-setup')"; }

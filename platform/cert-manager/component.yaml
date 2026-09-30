@@ -1,0 +1,5 @@
+# Where this Platform component's chart comes from.
+chart: cert-manager
+repoURL: https://charts.jetstack.io
+version: v1.21.2
+namespace: cert-manager

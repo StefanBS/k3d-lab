@@ -1,0 +1,37 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: https-ingress
+spec:
+  description: >-
+    From the Host, the ArgoCD UI answers at https://argocd.lab.localhost with a
+    certificate from the Lab CA, which the Host trusts, and plain HTTP redirects to
+    HTTPS. The Gateway listens on the Host's ports 80 and 443 through k3d.
+  steps:
+    - try:
+        # ArgoCD can call the Gateway Healthy before Envoy serves it.
+        - assert:
+            resource:
+              apiVersion: gateway.networking.k8s.io/v1
+              kind: Gateway
+              metadata:
+                name: lab
+                namespace: gateway
+              (status.conditions[?type == 'Programmed'] | [0].status): 'True'
+        # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
+        # verify.sh exports LAB_CA_CERT.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" -o /dev/null https://argocd.lab.localhost/
+        # What a browser on the Host sees: its own trust store, with nothing imported
+        # for this Lab.
+        - script:
+            content: curl -sS --fail -o /dev/null https://argocd.lab.localhost/
+        # Cilium's Envoy spells out the default port, :443, which browsers treat as the same URL.
+        - script:
+            content: |
+              out=$(curl -sS --retry 5 --retry-all-errors --retry-delay 2 \
+                -o /dev/null -w '%{http_code} %{redirect_url}' http://argocd.lab.localhost/)
+              echo "$out"
+              echo "$out" | grep -Eqx '301 https://argocd\.lab\.localhost(:443)?/'

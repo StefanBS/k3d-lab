@@ -1,6 +1,7 @@
 {{- /*
-One ApplicationSet per group: an Application for every <group>/<component>/ folder,
-installing the chart its component.yaml names with the values.yaml beside it.
+One ApplicationSet per group: an Application for every <group>/<component>/ folder.
+It installs the chart its component.yaml names, with the values.yaml beside it, or,
+when component.yaml names no chart, the folder's kustomization.yaml.
 The `{{`...`}}` parts are left for the ApplicationSet's own templating.
 */}}
 {{- range $group := list "platform" "workloads" }}
@@ -26,18 +27,6 @@ spec:
         k3d-lab/group: {{ $group }}
     spec:
       project: default
-      sources:
-        - repoURL: '{{`{{.repoURL}}`}}'
-          chart: '{{`{{.chart}}`}}'
-          targetRevision: '{{`{{.version}}`}}'
-          helm:
-            # The release `just up` installs with, for the components it bootstraps.
-            releaseName: '{{`{{.path.basename}}`}}'
-            valueFiles:
-              - '$values/{{`{{.path.path}}`}}/values.yaml'
-        - repoURL: {{ $.Values.repoURL }}
-          targetRevision: {{ $.Values.revision }}
-          ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{`{{.namespace}}`}}'
@@ -60,4 +49,26 @@ spec:
             duration: 10s
             factor: 2
             maxDuration: 3m
+  # The sources depend on whether component.yaml names a chart, which the template
+  # itself can't test: with missingkey=error, a missing .chart fails it.
+  templatePatch: |
+    spec:
+      sources:
+      {{`{{- if hasKey . "chart" }}`}}
+        - repoURL: '{{`{{.repoURL}}`}}'
+          chart: '{{`{{.chart}}`}}'
+          targetRevision: '{{`{{.version}}`}}'
+          helm:
+            # The release `just up` installs with, for the components it bootstraps.
+            releaseName: '{{`{{.path.basename}}`}}'
+            valueFiles:
+              - '$values/{{`{{.path.path}}`}}/values.yaml'
+        - repoURL: {{ $.Values.repoURL }}
+          targetRevision: {{ $.Values.revision }}
+          ref: values
+      {{`{{- else }}`}}
+        - repoURL: {{ $.Values.repoURL }}
+          targetRevision: {{ $.Values.revision }}
+          path: '{{`{{.path.path}}`}}'
+      {{`{{- end }}`}}
 {{- end }}

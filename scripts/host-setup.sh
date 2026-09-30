@@ -11,7 +11,7 @@ source "$(dirname "$0")/host.sh"
 pending=0
 
 log "Lab CA"
-if [[ -f $LAB_CA_CERT && -f $LAB_CA_KEY ]]; then
+if lab_ca_exists; then
   ok "the Lab CA exists ($LAB_CA_DIR)"
 elif [[ -e $LAB_CA_CERT || -e $LAB_CA_KEY ]]; then
   die "only half of the Lab CA is in $LAB_CA_DIR; restore the other half, or delete both to start over (everything it signed must then be trusted again)"

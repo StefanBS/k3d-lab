@@ -21,13 +21,17 @@ host-setup:
 host-wizard:
     @scripts/host-wizard.sh
 
-# Build the Lab, then verify it; REVISION=<branch> builds it from a branch other than main
+# Build the Lab from the pushed branch checked out here, then verify it; REVISION=<branch> picks another
 up *args:
     @scripts/up.sh {{ args }}
 
 # Destroy the Lab (the Host's Secret Store, Lab CA and Docker CE are kept)
 down:
     @scripts/down.sh
+
+# Print the Lab's UIs and how to log in to them
+creds:
+    @scripts/creds.sh
 
 # Check how the running Lab behaves; `just verify <check>...` runs only those checks
 verify *args:
