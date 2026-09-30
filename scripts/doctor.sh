@@ -56,10 +56,10 @@ if ! lab_exists; then
 fi
 
 # What host-setup does, including the steps that need root.
-if [[ -f $LAB_CA_CERT ]]; then
+if lab_ca_exists; then
   ok "the Lab CA exists ($LAB_CA_DIR)"
 else
-  warn "the Lab CA is missing ($LAB_CA_CERT): run 'just host-setup'"
+  warn "the Lab CA is missing from $LAB_CA_DIR: run 'just host-setup'"
 fi
 # shellcheck disable=SC2329  # called by run_root_steps
 not_set_up() { warn "not yet: $2 (run 'just host-setup')"; }

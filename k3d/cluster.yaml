@@ -13,7 +13,8 @@ kubeAPI:
   hostIP: 127.0.0.1
   hostPort: "6550"
 # The Lab's Gateway listens on the Server's own network (platform/cilium/values.yaml).
-# Straight to the Server, since there is no k3d load balancer. On loopback only: *.lab.localhost always resolves there (ADR 0003).
+# The ports go straight to the Server, since there is no k3d load balancer, and only on
+# the Host's loopback, where *.lab.localhost always resolves (ADR 0003).
 ports:
   - port: 127.0.0.1:80:80
     nodeFilters: [server:0:direct]

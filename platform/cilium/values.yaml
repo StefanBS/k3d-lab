@@ -22,11 +22,11 @@ hubble:
   tls:
     auto:
       method: cronJob
-# The Lab's Gateway (platform/gateway). Its CRDs must exist before Cilium starts, so
-# `just up` applies them first. Envoy listens on the Server's own network, which k3d
-# publishes on the Host: there's no LoadBalancer. Only the Server listens, so a Joined
-# GPU Node never opens ports 80 and 443 on the LAN. Changing these means recreating
-# the Lab: the agents only read them at start.
+# The Lab's Gateway (platform/gateway), whose CRDs `just up` applies before Cilium.
+# Envoy listens on the Server's own network, which k3d publishes on the Host: there's no
+# LoadBalancer. Only the Server listens, so a Joined GPU Node never opens ports 80 and
+# 443 on the LAN. Changing these means recreating the Lab: cilium-agent only reads them
+# at start.
 gatewayAPI:
   enabled: true
   # Rendered whether or not the CRDs are there yet, so the Lab doesn't depend on

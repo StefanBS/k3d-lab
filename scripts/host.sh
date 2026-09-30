@@ -1,7 +1,8 @@
 # The Host's one-time setup (ADRs 0001 and 0003): where it puts things, and what "done"
 # means for each step. Sourced after lib.sh by host-setup.sh and doctor.sh, which check
 # these as the owner, and by host-setup-root.sh, which fixes the ones that need root.
-# Sharing them keeps them agreeing on what's left to do. Each check needs no root and
+# up.sh and verify.sh source it for the Lab CA. Sharing them keeps them agreeing on
+# what's left to do. Each check needs no root and
 # no Docker socket.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the variables here are used by the scripts that source this file
@@ -72,6 +73,9 @@ docker_data_root_labelled() {
 # The group lets the owner run k3d and docker without sudo. It's root-equivalent.
 in_docker_group() { [[ " $(id -nG "$@") " == *" docker "* ]]; }
 owner_in_docker_group() { in_docker_group "$LAB_OWNER"; }
+
+# Both halves: the Lab loads the key into cert-manager, and the Host trusts the certificate.
+lab_ca_exists() { [[ -f $LAB_CA_CERT && -f $LAB_CA_KEY ]]; }
 
 # In the bundle curl and browsers read, which update-ca-trust extracts from the anchors.
 lab_ca_trusted() {

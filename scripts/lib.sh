@@ -77,7 +77,7 @@ component_dirs() {
 
 # Whether a component folder installs a chart; otherwise its kustomization.yaml is the
 # component (the Platform and Workloads ApplicationSets decide the same way).
-component_has_chart() { [[ $(yq '.chart' "$LAB_ROOT/$1/component.yaml") != null ]]; }
+component_has_chart() { [[ $(yq 'has("chart")' "$LAB_ROOT/$1/component.yaml") == true ]]; }
 
 # The arguments that make `helm template` or `helm upgrade --install` render a component
 # the way ArgoCD does: its pinned chart, namespace and values. One per line, for mapfile.

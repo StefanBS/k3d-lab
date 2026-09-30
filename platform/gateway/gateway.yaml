@@ -14,7 +14,7 @@ spec:
       protocol: HTTP
       port: 80
       hostname: "*.lab.localhost"
-      # Only the redirect below.
+      # It only serves the redirect below.
       allowedRoutes:
         namespaces:
           from: Same
