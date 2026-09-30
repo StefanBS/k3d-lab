@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks how the running Lab behaves, as one named PASS/FAIL/WARN line per check.
+# Checks how the running Lab behaves, as one named PASS/FAIL line per check.
 # Exits non-zero if any check fails.
 #
 # Check functions run inside `if`, where `set -e` doesn't apply: every step that can
@@ -45,10 +45,8 @@ wait_pod_on_node() {
   for attempt in {1..30}; do
     # Skips pods being deleted: while a pod is replaced, the node briefly has two.
     pod=$(kc -n "$namespace" get pods -l "$selector" --field-selector "spec.nodeName=$node" \
-      -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.deletionTimestamp}{"\n"}{end}' 2>&1) || {
-      echo "$node: $pod" >&2
+      -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.deletionTimestamp}{"\n"}{end}') ||
       return 1
-    }
     pod=$(awk 'NF == 1 { print "pod/" $1; exit }' <<<"$pod")
     [[ -n $pod ]] && break
     ((attempt < 30)) && sleep 2
@@ -64,9 +62,25 @@ wait_pod_on_node() {
   echo "$pod"
 }
 
-# The probes the checks below run from. They stay between runs, so this is quick.
-apply_probes() {
-  kc apply -f "$LAB_ROOT/scripts/verify/probes.yaml" >/dev/null
+# Runs a command in the pod with the given label on every Ready node, and fails unless
+# every output matches the glob pattern.
+exec_on_ready_nodes() {
+  local namespace=$1 selector=$2 pattern=$3 nodes node pod out bad=0
+  shift 3
+  nodes=$(ready_nodes) || return 1
+  for node in $nodes; do
+    pod=$(wait_pod_on_node "$namespace" "$selector" "$node") || {
+      bad=1
+      continue
+    }
+    out=$(kc -n "$namespace" exec "$pod" "$@" 2>&1) || true
+    # shellcheck disable=SC2053  # the pattern is a glob on purpose
+    [[ $out == $pattern ]] || {
+      echo "$node: $(tail -n1 <<<"$out")"
+      bad=1
+    }
+  done
+  return "$bad"
 }
 
 lab_reachable() {
@@ -93,44 +107,20 @@ k3d_nodes_ready() {
 }
 
 cilium_healthy() {
-  local nodes node pod status bad=0
-  nodes=$(ready_nodes) || return 1
-  for node in $nodes; do
-    pod=$(wait_pod_on_node kube-system k8s-app=cilium "$node") || {
-      bad=1
-      continue
-    }
-    status=$(kc -n kube-system exec "$pod" -c cilium-agent -- cilium-dbg status --brief 2>&1) || true
-    [[ $status == OK ]] || {
-      echo "$node: $status"
-      bad=1
-    }
-  done
-  return "$bad"
+  exec_on_ready_nodes kube-system k8s-app=cilium OK -c cilium-agent -- cilium-dbg status --brief
+}
+
+# The probes the checks below run from. They stay between runs, so this is quick.
+probes_deployed() {
+  kc apply -f "$LAB_ROOT/scripts/verify/probes.yaml" >/dev/null &&
+    kc -n lab-verify rollout status deploy/web --timeout=120s >/dev/null
 }
 
 # From a client pod on every Ready node, reach the web Service by its DNS name.
 # That needs both DNS (itself a ClusterIP Service) and Cilium's ClusterIP translation.
 cluster_ip_services_work() {
-  local nodes node pod out bad=0
-  apply_probes || return 1
-  kc -n lab-verify rollout status deploy/web --timeout=120s >/dev/null 2>&1 || {
-    echo "the web probe behind the Service is not available"
-    return 1
-  }
-  nodes=$(ready_nodes) || return 1
-  for node in $nodes; do
-    pod=$(wait_pod_on_node lab-verify app=client "$node") || {
-      bad=1
-      continue
-    }
-    out=$(kc -n lab-verify exec "$pod" -- wget -qO- -T 5 http://web.lab-verify.svc.cluster.local/ 2>&1) || true
-    [[ $out == *Hostname:* ]] || {
-      echo "from $node: web.lab-verify.svc.cluster.local is unreachable: $(tail -n1 <<<"$out")"
-      bad=1
-    }
-  done
-  return "$bad"
+  exec_on_ready_nodes lab-verify app=client '*Hostname:*' \
+    -- wget -qO- -T 5 http://web.lab-verify.svc.cluster.local/
 }
 
 # Names outside the Lab resolve through CoreDNS and Docker's embedded DNS, which needs
@@ -138,7 +128,6 @@ cluster_ip_services_work() {
 external_dns_works() {
   local nodes pod out
   nodes=$(ready_nodes) || return 1
-  apply_probes || return 1
   pod=$(wait_pod_on_node lab-verify app=client "$(head -n1 <<<"$nodes")") || return 1
   out=$(kc -n lab-verify exec "$pod" -- nslookup github.com 2>&1) || {
     echo "github.com doesn't resolve from $pod: $(tail -n1 <<<"$out")"
@@ -168,6 +157,7 @@ check "Lab is running" lab_reachable
 ((fails == 0)) || exit 1
 check "Every k3d Node is Ready" k3d_nodes_ready
 check "Cilium is healthy on every Ready node" cilium_healthy
+check "The verify probes are deployed" probes_deployed
 check "ClusterIP Services and DNS work from every Ready node" cluster_ip_services_work
 check "Pods resolve names outside the Lab" external_dns_works
 check "Every ArgoCD Application is Synced and Healthy" applications_synced_and_healthy
