@@ -1,0 +1,13 @@
+# The Lab's tools, at the versions the Host and CI both use. The scripts put these
+# first on PATH themselves (scripts/lib.sh). Docker CE is the one prerequisite mise
+# doesn't install (ADR 0001).
+[tools]
+k3d = "5.9.0"
+# Matches the Lab's Kubernetes version (k3d/cluster.yaml): kubectl supports one minor
+# version of skew either way.
+kubectl = "1.36.4"
+helm = "4.2.2"
+just = "1.50.0"
+yq = "4.53.3"
+shellcheck = "0.11.0"
+kubeconform = "0.8.0"

@@ -6,6 +6,12 @@ set -euo pipefail
 
 LAB_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
+# The tools come from mise.toml, at the versions CI uses, whatever the caller's PATH
+# holds. Without mise, the scripts use PATH as it is, and doctor says what's missing.
+if command -v mise >/dev/null; then
+  eval "$(cd "$LAB_ROOT" && mise env --shell bash)"
+fi
+
 # ADR 0001: the k3d Nodes run on Docker CE. Never trust the caller's DOCKER_HOST,
 # which may still point at Podman in shells started before the switch.
 export DOCKER_HOST=unix:///var/run/docker.sock

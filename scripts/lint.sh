@@ -39,8 +39,10 @@ kubeconform_args=(
   -strict -summary
   -kubernetes-version "${k8s_version%.*}.0"
   -schema-location default
-  # CRD schemas (ArgoCD, Cilium, cert-manager, ESO, Gateway API, Rollouts...).
-  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+  # CRD schemas (ArgoCD, Cilium, cert-manager, ESO, Gateway API, Rollouts...), pinned to
+  # a commit of the CRDs catalog so an upstream change can't break lint on its own.
+  # Bump it when a component's CRDs need newer schemas.
+  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/d373c2da9702bc9509a004db83e57263fe3bdfc1/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
   # No schema is published for CustomResourceDefinitions themselves.
   -skip CustomResourceDefinition
 )
