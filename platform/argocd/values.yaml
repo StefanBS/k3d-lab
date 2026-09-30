@@ -4,6 +4,10 @@ configs:
   params:
     # Plain HTTP behind the Lab's Gateway, which terminates TLS in front of it.
     server.insecure: true
+    # Diff against what the API server would store, defaults included. Otherwise the
+    # defaults that CRD schemas fill in, such as Gateway API's parentRefs group and
+    # kind, keep Applications OutOfSync forever.
+    controller.diff.server.side: true
 server:
   httproute:
     enabled: true

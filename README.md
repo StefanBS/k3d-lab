@@ -13,7 +13,7 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 
   The Lab's recipes use those versions whatever else is on your `PATH`.
 
-- **Ports 80 and 443 free on the Host's loopback**: the Lab serves its UIs there.
+- **Ports 80 and 443 free on the Host**: the Lab serves its UIs on them, on loopback.
 
 `just doctor` checks all of this and prints hints for anything missing.
 
