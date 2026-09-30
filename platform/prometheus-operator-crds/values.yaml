@@ -1,0 +1,13 @@
+# Only the CRDs for the monitors that charts ship, which Alloy scrapes
+# (platform/alloy/values.yaml). No Prometheus operator runs in the Lab.
+crds:
+  alertmanagerconfigs: {enabled: false}
+  alertmanagers: {enabled: false}
+  podmonitors: {enabled: true}
+  probes: {enabled: false}
+  prometheusagents: {enabled: false}
+  prometheuses: {enabled: false}
+  prometheusrules: {enabled: false}
+  scrapeconfigs: {enabled: false}
+  servicemonitors: {enabled: true}
+  thanosrulers: {enabled: false}

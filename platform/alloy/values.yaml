@@ -1,0 +1,99 @@
+# The Lab's only collector. One Alloy per node scrapes only what runs on its own node:
+# the kubelet, cAdvisor, and the targets of every ServiceMonitor and PodMonitor, such as
+# node-exporter's and kube-state-metrics'. It remote-writes them all to Prometheus, and
+# labels each series with its node.
+# Targets without a pod behind them, such as a ServiceMonitor on the API server's own
+# endpoints, belong to no node, so nothing scrapes them.
+alloy:
+  configMap:
+    content: |
+      // K8S_NODE_NAME is the chart's: the node this Alloy runs on.
+      discovery.kubernetes "this_node" {
+        role = "node"
+        selectors {
+          role  = "node"
+          field = "metadata.name=" + sys.env("K8S_NODE_NAME")
+        }
+      }
+
+      discovery.relabel "this_node" {
+        targets = discovery.kubernetes.this_node.targets
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          target_label  = "node"
+        }
+      }
+
+      prometheus.scrape "kubelet" {
+        job_name          = "kubelet"
+        targets           = discovery.relabel.this_node.output
+        scheme            = "https"
+        scrape_interval   = "30s"
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        tls_config {
+          ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+        }
+        forward_to = [prometheus.remote_write.prometheus.receiver]
+      }
+
+      prometheus.scrape "cadvisor" {
+        job_name          = "cadvisor"
+        targets           = discovery.relabel.this_node.output
+        metrics_path      = "/metrics/cadvisor"
+        scheme            = "https"
+        scrape_interval   = "30s"
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        tls_config {
+          ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+        }
+        forward_to = [prometheus.remote_write.prometheus.receiver]
+      }
+
+      prometheus.operator.servicemonitors "this_node" {
+        forward_to = [prometheus.remote_write.prometheus.receiver]
+        scrape {
+          default_scrape_interval = "30s"
+        }
+        rule {
+          action        = "keep"
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          regex         = sys.env("K8S_NODE_NAME")
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+      }
+
+      prometheus.operator.podmonitors "this_node" {
+        forward_to = [prometheus.remote_write.prometheus.receiver]
+        scrape {
+          default_scrape_interval = "30s"
+        }
+        rule {
+          action        = "keep"
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          regex         = sys.env("K8S_NODE_NAME")
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+      }
+
+      prometheus.remote_write "prometheus" {
+        endpoint {
+          url = "http://prometheus-server.monitoring.svc/api/v1/write"
+        }
+      }
+  # Modest requests for a Host short on RAM.
+  resources:
+    requests: {cpu: 25m, memory: 128Mi}
+configReloader:
+  resources:
+    requests: {cpu: 5m, memory: 16Mi}
+controller:
+  type: daemonset
+  # Runs on the GPU Node too, once it's Joined.
+  tolerations:
+    - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}

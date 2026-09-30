@@ -1,0 +1,14 @@
+# Grafana's dashboards, one JSON file each. Grafana's sidecar loads every ConfigMap
+# labelled grafana_dashboard in its namespace (platform/grafana/values.yaml), so a new
+# dashboard is a JSON file here plus its line below. Export one from Grafana with
+# "Export for sharing externally" off, and give it a fixed uid.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+configMapGenerator:
+  - name: dashboard-k3d-lab
+    files:
+      - k3d-lab.json

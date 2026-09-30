@@ -1,0 +1,11 @@
+# Alloy scrapes it through this ServiceMonitor (platform/alloy/values.yaml).
+prometheus:
+  monitor:
+    enabled: true
+    http:
+      # Keeps the namespace and pod labels of the objects it reports on, rather than
+      # its own.
+      honorLabels: true
+# Modest requests for a Host short on RAM.
+resources:
+  requests: {cpu: 10m, memory: 32Mi}

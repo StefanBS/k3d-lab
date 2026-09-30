@@ -1,0 +1,34 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: grafana-healthy
+spec:
+  description: >-
+    From the Host, Grafana answers at https://grafana.lab.localhost with a certificate
+    from the Lab CA. Anonymous viewers find its Prometheus datasource healthy, and the
+    dashboards from Git (platform/grafana-dashboards/) loaded.
+  steps:
+    - try:
+        # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
+        # verify.sh exports LAB_CA_CERT.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" -o /dev/null https://grafana.lab.localhost/api/health
+        # Grafana asks the datasource itself; without a login, as the anonymous viewer.
+        - script:
+            content: |
+              out=$(curl -sS --retry 5 --retry-all-errors --retry-delay 2 \
+                https://grafana.lab.localhost/api/datasources/uid/prometheus/health)
+              echo "$out"
+              [[ $(yq -p json '.status' <<<"$out") == OK ]]
+        # The sidecar loads dashboards a few seconds after Grafana starts.
+        - script:
+            content: |
+              for attempt in {1..12}; do
+                out=$(curl -sS https://grafana.lab.localhost/api/search?type=dash-db)
+                [[ $(yq -p json '[.[] | select(.uid == "k3d-lab")] | length' <<<"$out") == 1 ]] && exit
+                sleep 5
+              done
+              echo "no dashboard with uid k3d-lab; Grafana has: $(yq -p json '[.[].uid] | join(" ")' <<<"$out")"
+              exit 1

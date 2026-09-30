@@ -1,0 +1,5 @@
+# Where this Platform component's chart comes from.
+chart: prometheus
+repoURL: https://prometheus-community.github.io/helm-charts
+version: 29.35.0
+namespace: monitoring

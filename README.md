@@ -62,6 +62,9 @@ The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA
 | UI | URL |
 |---|---|
 | ArgoCD | https://argocd.lab.localhost |
+| Grafana | https://grafana.lab.localhost |
+
+`just creds` prints each UI's admin login. Grafana also lets anyone look without logging in.
 
 A component adds its UI with an HTTPRoute for its own `<name>.lab.localhost`, whose `parentRefs` is the `https` listener of the Gateway `lab` in the namespace `gateway`.
 
@@ -79,6 +82,19 @@ A component with no upstream chart, such as the Lab's own Gateway, leaves `chart
 Every Application syncs automatically, with pruning and self-heal: a change made by hand with `kubectl` is undone. Applications sync in no particular order, Platform and Workloads alike. One that needs CRDs another component installs fails, and retries until they exist.
 
 `just lint` renders every component with its pinned chart and values, or its kustomization, and validates the output with `kubeconform`.
+
+## Metrics
+
+Each component comes from its own upstream chart, never an umbrella chart, and all run in the namespace `monitoring`:
+
+- **Alloy** (`platform/alloy/`) is the only collector: a DaemonSet whose pod on each node scrapes what runs there, the kubelet, cAdvisor and every ServiceMonitor or PodMonitor target, and remote-writes it all to Prometheus. Every series carries a `node` label.
+- **Prometheus** (`platform/prometheus/`) runs only its server, scrapes nothing itself and accepts remote writes. It keeps 7 days on a 10 Gi volume.
+- **kube-state-metrics** and **node-exporter** ship ServiceMonitors that Alloy picks up. node-exporter's `drm` collector reports the GPU Node's GPU. The Prometheus-operator CRDs (`platform/prometheus-operator-crds/`) are only the ServiceMonitor and PodMonitor CRDs; no operator runs.
+- **Grafana** (`platform/grafana/`) has Prometheus as its datasource. Its admin password is new with every Lab: `just up` generates it into the Secret `grafana-admin`, never Git.
+
+A chart that ships a ServiceMonitor or PodMonitor is scraped with no change to Alloy, as long as its targets are pods: a target with no pod behind it, such as the API server's endpoints, runs on no node, so no Alloy scrapes it. Alloy and node-exporter tolerate the GPU Node's taint, so its metrics start as soon as it joins.
+
+Dashboards live in Git, in `platform/grafana-dashboards/`: one JSON file each, listed in its `kustomization.yaml`. Grafana loads them without any import. To add one, build it in Grafana, save its JSON (Export, with "Export for sharing externally" off) there with a fixed `uid`, and add the file to the `kustomization.yaml`. Grafana won't save changes to a dashboard from Git: change it by exporting it again over its file.
 
 ## Machine-specific values
 

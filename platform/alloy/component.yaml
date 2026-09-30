@@ -1,0 +1,5 @@
+# Where this Platform component's chart comes from.
+chart: alloy
+repoURL: https://grafana.github.io/helm-charts
+version: 1.13.0
+namespace: monitoring

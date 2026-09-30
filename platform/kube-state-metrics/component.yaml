@@ -1,0 +1,5 @@
+# Where this Platform component's chart comes from.
+chart: kube-state-metrics
+repoURL: https://prometheus-community.github.io/helm-charts
+version: 8.6.0
+namespace: monitoring

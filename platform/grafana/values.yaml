@@ -1,0 +1,48 @@
+# Anyone can look without logging in; changing things takes the admin login, whose
+# password `just up` generates into the Secret named here. `just creds` prints it.
+admin:
+  existingSecret: grafana-admin
+grafana.ini:
+  server:
+    root_url: https://grafana.lab.localhost
+  auth.anonymous:
+    enabled: true
+    org_role: Viewer
+  # Grafana otherwise downloads a set of plugins at every start, which nothing here uses.
+  plugins:
+    preinstall_disabled: true
+# Nothing to keep: datasources come from here and dashboards from Git, and a new Lab
+# starts empty anyway.
+persistence:
+  enabled: false
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        url: http://prometheus-server.monitoring.svc
+        isDefault: true
+# Loads every ConfigMap labelled grafana_dashboard in this namespace, as
+# platform/grafana-dashboards/ makes them.
+sidecar:
+  dashboards:
+    enabled: true
+  resources:
+    requests: {cpu: 5m, memory: 64Mi}
+route:
+  main:
+    enabled: true
+    parentRefs:
+      - name: lab
+        namespace: gateway
+        sectionName: https
+    hostnames:
+      - grafana.lab.localhost
+# The chart's `helm test` pod, which ArgoCD never runs.
+testFramework:
+  enabled: false
+# Modest requests for a Host short on RAM.
+resources:
+  requests: {cpu: 25m, memory: 128Mi}

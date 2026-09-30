@@ -1,0 +1,22 @@
+# Named node-exporter rather than node-exporter-prometheus-node-exporter.
+fullnameOverride: node-exporter
+# drm reports AMD GPUs' utilisation, temperature, power and VRAM from sysfs, without
+# AMD's own exporter. Setting extraArgs replaces the chart's defaults, so the first two
+# are those defaults, copied from the chart's values.
+extraArgs:
+  - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/containerd/.+|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+  - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|erofs)$
+  - --collector.drm
+# Runs on the GPU Node too, once it's Joined.
+tolerations:
+  - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+# Alloy scrapes it through this ServiceMonitor (platform/alloy/values.yaml).
+prometheus:
+  monitor:
+    enabled: true
+    # Its metrics' job is node-exporter, this release's name, as dashboards expect,
+    # rather than the chart's name.
+    jobLabel: app.kubernetes.io/instance
+# Modest requests for a Host short on RAM.
+resources:
+  requests: {cpu: 10m, memory: 16Mi}
