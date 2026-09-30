@@ -1,0 +1,18 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: logs-reach-loki
+spec:
+  description: >-
+    For every Ready node, the GPU Node included when Joined, Loki holds the line the
+    probe client there logged as it started: Alloy on that node collected it and
+    shipped it.
+  steps:
+    - use:
+        template: ../lib/deploy-probes.yaml
+    - try:
+        # Waits for every node's client to be Ready, so it has logged its line.
+        - script:
+            content: ../lib/on-ready-nodes.sh "$NAMESPACE" app=client -- true
+        - script:
+            content: ../lib/loki-has-logs.sh "$NAMESPACE"
