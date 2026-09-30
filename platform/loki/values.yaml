@@ -1,0 +1,58 @@
+# One Loki process does everything, with its chunks and index on a 10 Gi volume. Alloy
+# pushes every pod's logs to it at http://loki.monitoring.svc:3100/loki/api/v1/push.
+deploymentMode: Monolithic
+loki:
+  # One tenant: whatever pushes or queries needs no X-Scope-OrgID header.
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2026-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  # The compactor deletes what's older than the retention period.
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+  limits_config:
+    retention_period: 7d
+singleBinary:
+  replicas: 1
+  persistence:
+    size: 10Gi
+  # Modest requests for a Host short on RAM.
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+# Monolithic runs none of these.
+write:
+  replicas: 0
+read:
+  replicas: 0
+backend:
+  replicas: 0
+# The nginx gateway only routes between Loki's components, and one process has none.
+gateway:
+  enabled: false
+# Memcached caches for a much bigger Loki; each would ask for gigabytes of RAM.
+memcached:
+  enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+# The sidecar that loads alerting rules from ConfigMaps, which the Lab doesn't have.
+sidecar:
+  rules:
+    enabled: false
+# The canary and the chart's `helm test` pod, which ArgoCD never runs.
+lokiCanary:
+  enabled: false
+test:
+  enabled: false

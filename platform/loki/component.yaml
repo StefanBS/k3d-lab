@@ -1,0 +1,6 @@
+# Where this Platform component's chart comes from. grafana/loki now serves only
+# Enterprise Logs, so Loki comes from the community's chart.
+chart: loki
+repoURL: https://grafana-community.github.io/helm-charts
+version: 18.13.7
+namespace: monitoring

@@ -1,5 +1,6 @@
 # Probes that the checks use to test the Lab from the inside: a web server behind a
 # ClusterIP Service, and a client on every node (the GPU Node included, when Joined).
+# Each client logs one known line as it starts, which logs-reach-loki looks for.
 # Chainsaw applies them into each check's own namespace (deploy-probes.yaml), and
 # deletes that namespace afterwards.
 apiVersion: apps/v1
@@ -47,6 +48,10 @@ spec:
       containers:
         - name: client
           image: busybox:1.37
-          command: [sleep, infinity]
+          command: [sh, -c, 'echo "k3d-lab probe on $NODE_NAME"; exec sleep infinity']
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef: {fieldPath: spec.nodeName}
           resources:
             requests: {cpu: 5m, memory: 8Mi}

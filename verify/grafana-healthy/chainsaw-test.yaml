@@ -5,8 +5,8 @@ metadata:
 spec:
   description: >-
     From the Host, Grafana answers at https://grafana.lab.localhost with a certificate
-    from the Lab CA. Anonymous viewers find its Prometheus datasource healthy, and the
-    dashboards from Git (platform/grafana-dashboards/) loaded.
+    from the Lab CA. Anonymous viewers find its Prometheus and Loki datasources healthy,
+    and the dashboards from Git (platform/grafana-dashboards/) loaded.
   steps:
     - try:
         # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
@@ -15,13 +15,17 @@ spec:
             content: >-
               curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
               --cacert "$LAB_CA_CERT" -o /dev/null https://grafana.lab.localhost/api/health
-        # Grafana asks the datasource itself; without a login, as the anonymous viewer.
+        # Grafana asks each datasource itself; without a login, as the anonymous viewer.
         - script:
             content: |
-              out=$(curl -sS --retry 5 --retry-all-errors --retry-delay 2 \
-                https://grafana.lab.localhost/api/datasources/uid/prometheus/health)
-              echo "$out"
-              [[ $(yq -p json '.status' <<<"$out") == OK ]]
+              bad=0
+              for uid in prometheus loki; do
+                out=$(curl -sS --retry 5 --retry-all-errors --retry-delay 2 \
+                  "https://grafana.lab.localhost/api/datasources/uid/$uid/health")
+                echo "$uid: $out"
+                [[ $(yq -p json '.status' <<<"$out") == OK ]] || bad=1
+              done
+              exit "$bad"
         # The sidecar loads dashboards a few seconds after Grafana starts.
         - script:
             content: |

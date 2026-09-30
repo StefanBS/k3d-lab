@@ -24,6 +24,10 @@ datasources:
         type: prometheus
         url: http://prometheus-server.monitoring.svc
         isDefault: true
+      - name: Loki
+        uid: loki
+        type: loki
+        url: http://loki.monitoring.svc:3100
 # Loads every ConfigMap labelled grafana_dashboard in this namespace, as
 # platform/grafana-dashboards/ makes them.
 sidecar:
