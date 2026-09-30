@@ -119,7 +119,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Root filesystem used",
+      "title": "Disk used by k3s",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -154,10 +154,11 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}",
+          "expr": "max by (node) (1 - node_filesystem_avail_bytes{mountpoint=~\"/|/var/lib/rancher/k3s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/var/lib/rancher/k3s\"})",
           "legendFormat": "{{node}}"
         }
-      ]
+      ],
+      "description": "The filesystem holding k3s's data, where the kubelet evicts pods when it fills: Docker CE's data directory for the k3d Nodes, the root filesystem for the GPU Node."
     },
     {
       "type": "row",
@@ -293,7 +294,7 @@
     },
     {
       "type": "row",
-      "title": "GPU (while the GPU Node is Joined)",
+      "title": "GPUs",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -301,7 +302,8 @@
         "x": 0,
         "y": 18
       },
-      "panels": []
+      "panels": [],
+      "description": "From node-exporter's drm collector. The k3d Nodes share the Host's kernel, so each shows the Host's own GPU too."
     },
     {
       "type": "timeseries",
