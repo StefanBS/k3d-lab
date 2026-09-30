@@ -2,10 +2,10 @@
 # the kubelet, cAdvisor, and the targets of every ServiceMonitor and PodMonitor, such as
 # node-exporter's and kube-state-metrics'. It remote-writes them all to Prometheus, and
 # labels each series with its node.
-# It also reads the logs of every pod on its node and pushes them to Loki, each labelled
-# with its namespace, pod, container and node.
 # Targets without a pod behind them, such as a ServiceMonitor on the API server's own
 # endpoints, belong to no node, so nothing scrapes them.
+# It also reads the logs of every pod on its node and pushes them to Loki, each labelled
+# with its namespace, pod, container and node.
 alloy:
   configMap:
     content: |
@@ -91,7 +91,7 @@ alloy:
 
       // The kubelet writes each container's logs to
       // /var/log/pods/<namespace>_<pod>_<uid>/<container>/<restart count>.log.
-      discovery.kubernetes "pods_here" {
+      discovery.kubernetes "this_node_pods" {
         role = "pod"
         selectors {
           role  = "pod"
@@ -100,7 +100,7 @@ alloy:
       }
 
       discovery.relabel "pod_logs" {
-        targets = discovery.kubernetes.pods_here.targets
+        targets = discovery.kubernetes.this_node_pods.targets
         rule {
           source_labels = ["__meta_kubernetes_namespace"]
           target_label  = "namespace"
@@ -148,6 +148,12 @@ alloy:
   # The node's /var/log, read-only, for the pods' logs.
   mounts:
     varlog: true
+    # Where Alloy remembers how far it has read each log file. On the node rather than
+    # in the container, so that a restarted or replaced Alloy, as after every chart
+    # upgrade, carries on where it stopped instead of sending every log again.
+    extra:
+      - {name: storage, mountPath: /var/lib/alloy}
+  storagePath: /var/lib/alloy
   # Modest requests for a Host short on RAM.
   resources:
     requests: {cpu: 25m, memory: 128Mi}
@@ -156,6 +162,10 @@ configReloader:
     requests: {cpu: 5m, memory: 16Mi}
 controller:
   type: daemonset
+  volumes:
+    extra:
+      - name: storage
+        hostPath: {path: /var/lib/alloy, type: DirectoryOrCreate}
   # Runs on the GPU Node too, once it's Joined.
   tolerations:
     - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}

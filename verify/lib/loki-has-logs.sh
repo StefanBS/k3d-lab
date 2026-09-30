@@ -13,7 +13,8 @@ namespace=$1
 
 # Usage: query <LogQL>
 # Runs the query through the API server's proxy to Loki's Service, over the last hour,
-# and prints the lines it found, one per line.
+# and prints the lines it found, one per line. The chart names Loki's one HTTP port,
+# API included, http-metrics.
 query() {
   local encoded
   encoded=$(Q=$1 yq -n 'strenv(Q) | @uri')
