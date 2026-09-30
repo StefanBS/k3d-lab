@@ -90,9 +90,11 @@ spec:
       selfHeal: true
 EOF
 
-# The root Application is Healthy once every Platform and Workloads Application is.
+# The root Application is Healthy once both ApplicationSets have generated their
+# Applications, so from then on every Application exists to be waited for.
 log "Waiting for ArgoCD to sync the Lab"
-kc -n argocd wait application/root --for=jsonpath='{.status.sync.status}'=Synced --timeout=15m >/dev/null
 kc -n argocd wait application/root --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
+kc -n argocd wait applications --all --for=jsonpath='{.status.sync.status}'=Synced --timeout=15m >/dev/null
+kc -n argocd wait applications --all --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
 
 exec "$LAB_ROOT/scripts/verify.sh"

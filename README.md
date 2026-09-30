@@ -25,12 +25,12 @@ The Lab's kube context is `k3d-lab`. `just up` adds it to your kubeconfig withou
 
 `just up` installs Cilium and ArgoCD with Helm, then applies one root Application. From then on ArgoCD manages the whole Lab, Cilium and itself included, from `main` of this repo (or the `REVISION` you gave `up`). A change merged there is applied without running `up` again.
 
-The root Application syncs two ApplicationSets from `gitops/`: **Platform**, one Application per folder in `platform/`, and **Workloads**, one per folder in `workloads/`, which `just up` creates once the whole Platform is Healthy. Adding a component means adding one folder, `<group>/<name>/`, holding:
+The root Application syncs two ApplicationSets from `gitops/`: **Platform**, one Application per folder in `platform/`, and **Workloads**, one per folder in `workloads/`. Adding a component means adding one folder, `<group>/<name>/`, holding:
 
 - `component.yaml`: the upstream chart (`chart`, `repoURL`, a pinned `version`) and the `namespace` to install it in.
 - `values.yaml`: the chart's values. For Cilium and ArgoCD, `just up` installs from the same file, so bootstrap and ArgoCD never disagree.
 
-Every Application syncs automatically, with pruning and self-heal: a change made by hand with `kubectl` is undone. Within a group, Applications sync in no particular order. One that needs CRDs another component installs fails, and retries until they exist.
+Every Application syncs automatically, with pruning and self-heal: a change made by hand with `kubectl` is undone. Applications sync in no particular order, Platform and Workloads alike. One that needs CRDs another component installs fails, and retries until they exist.
 
 `just lint` renders every component with its pinned chart and values and validates the output with `kubeconform`.
 
