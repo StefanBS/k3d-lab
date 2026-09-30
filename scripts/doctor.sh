@@ -6,6 +6,8 @@
 caller_docker_host=${DOCKER_HOST:-}
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=host.sh
+source "$(dirname "$0")/host.sh"
 
 # The variable names a .env-style file assigns, sorted.
 env_keys() {
@@ -39,6 +41,26 @@ if [[ -z $caller_endpoint ]]; then
 fi
 if [[ $caller_endpoint == *podman* ]]; then
   warn "plain 'docker' in your shell goes to Podman ($caller_endpoint); the Lab's recipes ignore that, but 'docker' commands won't see the Lab (unset DOCKER_HOST or log in again, and use 'docker context use default')"
+fi
+
+# k3s evicts pods and taints the node when its image filesystem drops below 15% free,
+# and the k3d Nodes keep theirs in Docker's data directory (ADR 0001).
+if data_root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null); then
+  read -r avail size < <(df --output=avail,size --block-size=1G "$data_root" | tail -1)
+  free_pct=$((100 * avail / size))
+  if ((free_pct < 20)); then
+    warn "Docker's data directory $data_root has only ${avail} GiB free (${free_pct}%); k3s evicts pods below 15%"
+  else
+    ok "Docker's data directory $data_root has ${avail} GiB free (${free_pct}%)"
+  fi
+fi
+
+if [[ ! -f $LAB_CA_CERT ]]; then
+  warn "the Lab CA is missing ($LAB_CA_CERT): run 'just host-setup'"
+elif ! lab_ca_trusted; then
+  warn "the Host doesn't trust the Lab CA yet: run 'just host-setup'"
+else
+  ok "the Lab CA exists and the Host trusts it"
 fi
 
 env_file=$LAB_ROOT/.env

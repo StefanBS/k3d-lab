@@ -13,11 +13,19 @@ default:
 doctor:
     @scripts/doctor.sh
 
+# Prepare the Host once; safe to re-run. Says when to run the root steps yourself
+host-setup:
+    @scripts/host-setup.sh
+
+# Walk through the Host steps only you can do, such as the router's DHCP reservation
+host-wizard:
+    @scripts/host-wizard.sh
+
 # Build the Lab, then verify it; REVISION=<branch> builds it from a branch other than main
 up *args:
     @scripts/up.sh {{ args }}
 
-# Destroy the Lab (the Host's Secret Store and Lab CA are kept)
+# Destroy the Lab (the Host's Secret Store, Lab CA and Docker CE are kept)
 down:
     @scripts/down.sh
 

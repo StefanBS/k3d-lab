@@ -15,11 +15,34 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 
 `just doctor` checks all of this and prints hints for anything missing.
 
+## Preparing the Host
+
+Once per Host, run:
+
+```sh
+just host-setup
+```
+
+It prepares what outlives any Lab and is safe to re-run: a run with nothing to do says so.
+
+- **Docker CE alongside Podman** ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)): `podman-docker` removed, Docker CE installed with its data in `/home/docker-data` (labelled for SELinux like `/var/lib/docker`), and Docker CLI contexts in place of `DOCKER_HOST` exports: `default` is Docker CE, `docker --context podman` is Podman. The exports it finds in your shell startup files are commented out, not deleted.
+- **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `localtest.me`, `k3d.internal`, the Lab's subnet and loopback.
+
+`host-setup` never escalates privileges. It checks the steps that need root and, if any are left, asks you to run them yourself, then run `just host-setup` again:
+
+```sh
+sudo scripts/host-setup-root.sh
+```
+
+`just host-wizard` walks you through the steps only you can do: for now, reserving the Host's LAN address on your router, which the GPU Node needs. It saves the address to `.env`.
+
+`just down` never touches any of this.
+
 ## Everyday commands
 
 | Command | What it does |
 |---|---|
-| `just doctor` | Checks the Host has what the Lab needs. Installs nothing. |
+| `just doctor` | Checks the Host has what the Lab needs, including free space in Docker's data directory and the Lab CA. Installs nothing. |
 | `just up` | Builds the Lab, then runs `just verify`. Refuses if a Lab already exists. `just up REVISION=<branch>` builds it from a pushed branch instead of `main`. |
 | `just verify` | Checks how the running Lab behaves: one PASS/FAIL/WARN line per check, non-zero exit on any FAIL. |
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. |
