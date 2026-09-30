@@ -21,12 +21,13 @@ declare -A hints=(
   [docker]="install Docker CE: https://docs.docker.com/engine/install/fedora/"
   [k3d]="https://k3d.io/stable/#installation"
   [kubectl]="https://kubernetes.io/docs/tasks/tools/"
+  [yq]="sudo dnf install yq (mikefarah's yq v4)"
   [helm]="https://helm.sh/docs/intro/install/"
   [just]="https://just.systems/man/en/packages.html"
   [shellcheck]="https://github.com/koalaman/shellcheck#installing (only 'just lint' needs it)"
   [kubeconform]="https://github.com/yannh/kubeconform#installation (only 'just lint' needs it)"
 )
-for tool in docker k3d kubectl helm just shellcheck kubeconform; do
+for tool in docker k3d kubectl helm just yq shellcheck kubeconform; do
   if command -v "$tool" >/dev/null; then
     ok "$tool is installed"
   else
@@ -40,6 +41,15 @@ if command -v k3d >/dev/null; then
     ok "k3d $k3d_version is 5.9 or newer"
   else
     fail "k3d $k3d_version is too old; the Lab needs 5.9 or newer: ${hints[k3d]}"
+  fi
+fi
+
+# The Python tool also called yq takes different arguments, and prints JSON.
+if command -v yq >/dev/null; then
+  if yq --version 2>&1 | grep -q mikefarah; then
+    ok "yq is mikefarah's yq"
+  else
+    fail "yq isn't mikefarah's yq, which the Lab's scripts use: ${hints[yq]}"
   fi
 fi
 

@@ -6,7 +6,7 @@ source "$(dirname "$0")/lib.sh"
 cd "$LAB_ROOT" || exit
 
 # The Kubernetes version the Lab runs, from its k3s image: v1.36.4-k3s1 is 1.36.4.
-k8s_version=$(yaml_get k3d/cluster.yaml image | sed -n 's/.*:v\([0-9.]*\)-k3s.*/\1/p')
+k8s_version=$(yq '.image' k3d/cluster.yaml | sed -n 's/.*:v\([0-9.]*\)-k3s.*/\1/p')
 [[ -n $k8s_version ]] || die "can't read the Kubernetes version from k3d/cluster.yaml's image"
 
 # Where each render goes. kubeconform only reads files named .yaml or .json.
@@ -17,7 +17,8 @@ trap 'rm -f "$manifests"' EXIT
 lint_component_folder() {
   local dir=$1 key
   for key in chart repoURL version namespace; do
-    [[ -n $(yaml_get "$dir/component.yaml" "$key") ]] || fail "$dir/component.yaml: '$key' is missing"
+    # -e: fails when the key is missing or null.
+    yq -e ".$key" "$dir/component.yaml" >/dev/null 2>&1 || fail "$dir/component.yaml: '$key' is missing"
   done
   [[ -f $dir/values.yaml ]] || fail "$dir/values.yaml is missing"
 }

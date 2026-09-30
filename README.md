@@ -5,7 +5,7 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 ## Prerequisites
 
 - **Docker CE**, running as root, alongside any Podman setup ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)). The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
-- `k3d` 5.9 or newer, `kubectl`, `helm` and `just`. `shellcheck` and `kubeconform` are only needed for `just lint`.
+- `k3d` 5.9 or newer, `kubectl`, `helm`, `just` and [yq](https://github.com/mikefarah/yq) (mikefarah's, v4; Fedora's `yq` package). `shellcheck` and `kubeconform` are only needed for `just lint`.
 
 `just doctor` checks all of this and prints install hints for anything missing.
 

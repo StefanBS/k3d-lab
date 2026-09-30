@@ -41,13 +41,6 @@ kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
 
-# Reads a top-level scalar from a flat YAML file (yq isn't a prerequisite),
-# dropping a trailing comment and surrounding quotes.
-yaml_get() {
-  sed -n "s/^$2:[[:space:]]*//p" "$1" | head -n1 |
-    sed -e 's/[[:space:]]#.*$//' -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
-}
-
 # Every component folder, as <group>/<name>: one ArgoCD Application each.
 component_dirs() {
   local file
@@ -64,9 +57,9 @@ component_helm_args() {
   local dir=$LAB_ROOT/$1
   local component=$dir/component.yaml
   printf '%s\n' \
-    "$(yaml_get "$component" chart)" \
-    --repo "$(yaml_get "$component" repoURL)" \
-    --version "$(yaml_get "$component" version)" \
-    --namespace "$(yaml_get "$component" namespace)" \
+    "$(yq '.chart' "$component")" \
+    --repo "$(yq '.repoURL' "$component")" \
+    --version "$(yq '.version' "$component")" \
+    --namespace "$(yq '.namespace' "$component")" \
     --values "$dir/values.yaml"
 }
