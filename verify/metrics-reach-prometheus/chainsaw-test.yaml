@@ -1,0 +1,13 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: metrics-reach-prometheus
+spec:
+  description: >-
+    For every Ready node, the GPU Node included when Joined, Prometheus holds metrics
+    that Alloy scraped there and remote-wrote: the kubelet's, cAdvisor's and
+    node-exporter's. kube-state-metrics' reach it too.
+  steps:
+    - try:
+        - script:
+            content: ../lib/prometheus-has-metrics.sh

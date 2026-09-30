@@ -1,0 +1,38 @@
+# Only the server runs, and it scrapes nothing itself: Alloy is the Lab's only collector,
+# and remote-writes to it at http://prometheus-server.monitoring.svc/api/v1/write.
+server:
+  extraFlags:
+    - web.enable-lifecycle
+    - web.enable-remote-write-receiver
+  retention: 7d
+  # Deletes the oldest data before the volume fills, whatever the 7 days hold.
+  retentionSize: 8GB
+  persistentVolume:
+    size: 10Gi
+  # Modest requests for a Host short on RAM.
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+configmapReload:
+  prometheus:
+    resources:
+      requests: {cpu: 5m, memory: 16Mi}
+scrapeConfigs:
+  prometheus: {enabled: false}
+  kubernetes-api-servers: {enabled: false}
+  kubernetes-nodes: {enabled: false}
+  kubernetes-nodes-cadvisor: {enabled: false}
+  kubernetes-service-endpoints: {enabled: false}
+  kubernetes-service-endpoints-slow: {enabled: false}
+  prometheus-pushgateway: {enabled: false}
+  kubernetes-services: {enabled: false}
+  kubernetes-pods: {enabled: false}
+  kubernetes-pods-slow: {enabled: false}
+# Each of these is its own component, or not in the Lab at all.
+alertmanager:
+  enabled: false
+prometheus-pushgateway:
+  enabled: false
+kube-state-metrics:
+  enabled: false
+prometheus-node-exporter:
+  enabled: false
