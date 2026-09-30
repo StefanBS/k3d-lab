@@ -13,6 +13,16 @@ for arg; do
   esac
 done
 
+# Installs a Platform component that ArgoCD can't install itself: the same chart,
+# version and values that ArgoCD then manages it with.
+install_component() {
+  local name=$1 args
+  mapfile -t args < <(component_helm_args "platform/$name")
+  log "Installing $name"
+  helm upgrade --install "$name" "${args[@]}" --create-namespace \
+    --kube-context "$LAB_CONTEXT" --wait --timeout 10m
+}
+
 lab_exists && die "a Lab already exists; run 'just down' first"
 git ls-remote --exit-code "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" >/dev/null ||
   die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
@@ -45,16 +55,6 @@ expected_ip=$(yaml_get "$LAB_ROOT/platform/cilium/values.yaml" k8sServiceHost)
 [[ $server_ip == "$expected_ip" ]] ||
   die "the Server got $server_ip, but Cilium's values expect $expected_ip; run 'just down' and try again"
 
-# Installs a Platform component that ArgoCD can't install itself: the same chart,
-# version and values that ArgoCD then manages it with.
-install_component() {
-  local name=$1 args
-  mapfile -t args < <(component_helm_args "platform/$name")
-  log "Installing $name"
-  helm upgrade --install "$name" "${args[@]}" --create-namespace \
-    --kube-context "$LAB_CONTEXT" --wait --timeout 10m
-}
-
 install_component cilium
 
 log "Waiting for every node to be Ready"
@@ -63,7 +63,7 @@ kc wait --for=condition=Ready nodes --all --timeout=5m >/dev/null
 install_component argocd
 
 # From here on, Git is the only source of truth: ArgoCD takes over Cilium and itself,
-# and installs everything else, Platform first.
+# and installs everything else.
 log "Handing the Lab over to ArgoCD, tracking $revision"
 kc apply -f - >/dev/null <<EOF
 apiVersion: argoproj.io/v1alpha1

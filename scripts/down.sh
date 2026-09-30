@@ -13,13 +13,14 @@ if docker network inspect "$LAB_NETWORK" >/dev/null 2>&1; then
   docker network rm "$LAB_NETWORK" >/dev/null
 fi
 
+# One line per thing that should be gone but isn't.
 leftovers=$(
   lab_exists && echo "cluster: $LAB_NAME"
   docker network inspect "$LAB_NETWORK" >/dev/null 2>&1 && echo "network: $LAB_NETWORK"
   ip -br link show "$LAB_BRIDGE" >/dev/null 2>&1 && echo "bridge: $LAB_BRIDGE"
   docker volume ls -q --filter "name=k3d-$LAB_NAME" | sed 's/^/volume: /'
   kubectl config get-contexts -o name | grep -x "$LAB_CONTEXT" | sed 's/^/kube context: /'
-  true
+  true # finding nothing is success, whatever the last check returned
 )
 [[ -z $leftovers ]] || die "the Lab left things behind:
 $leftovers"

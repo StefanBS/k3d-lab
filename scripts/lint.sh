@@ -5,13 +5,6 @@
 source "$(dirname "$0")/lib.sh"
 cd "$LAB_ROOT" || exit
 
-fails=0
-ok() { printf 'OK    %s\n' "$1"; }
-fail() {
-  printf 'FAIL  %s\n' "$1"
-  fails=$((fails + 1))
-}
-
 # The Kubernetes version the Lab runs, from its k3s image: v1.36.4-k3s1 is 1.36.4.
 k8s_version=$(yaml_get k3d/cluster.yaml image | sed -n 's/.*:v\([0-9.]*\)-k3s.*/\1/p')
 [[ -n $k8s_version ]] || die "can't read the Kubernetes version from k3d/cluster.yaml's image"

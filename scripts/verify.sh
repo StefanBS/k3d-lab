@@ -8,8 +8,7 @@
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
-fails=0
-
+# Runs a check function, printing PASS, or FAIL and the end of what it printed.
 check() {
   local name=$1 out
   shift
@@ -28,13 +27,26 @@ node_readiness() {
     -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 }
 
-ready_nodes() { node_readiness | awk '$2 == "True" { print $1 }'; }
+# Prints the name of every Ready node. With none, prints why and fails.
+ready_nodes() {
+  local nodes
+  nodes=$(node_readiness | awk '$2 == "True" { print $1 }') || return 1
+  [[ -n $nodes ]] || {
+    echo "no Ready nodes"
+    return 1
+  }
+  echo "$nodes"
+}
 
-# Waits for the pod with the given label on the given node to be Ready, and prints its name.
+# Waits for the pod with the given label on the given node to be Ready, and prints its
+# name. Otherwise, prints why and fails.
 wait_pod_on_node() {
   local namespace=$1 selector=$2 node=$3 pod="" attempt
   for attempt in {1..30}; do
-    pod=$(kc -n "$namespace" get pods -l "$selector" --field-selector "spec.nodeName=$node" -o name) || return 1
+    pod=$(kc -n "$namespace" get pods -l "$selector" --field-selector "spec.nodeName=$node" -o name 2>&1) || {
+      echo "$node: $pod"
+      return 1
+    }
     [[ -n $pod ]] && break
     ((attempt < 30)) && sleep 2
   done
@@ -42,8 +54,16 @@ wait_pod_on_node() {
     echo "$node: no pod matching $selector"
     return 1
   }
-  kc -n "$namespace" wait --for=condition=Ready "$pod" --timeout=120s >/dev/null || return 1
+  kc -n "$namespace" wait --for=condition=Ready "$pod" --timeout=120s >/dev/null 2>&1 || {
+    echo "$node: $pod is not Ready"
+    return 1
+  }
   echo "$pod"
+}
+
+# The probes the checks below run from. They stay between runs, so this is quick.
+apply_probes() {
+  kc apply -f "$LAB_ROOT/scripts/verify/probes.yaml" >/dev/null
 }
 
 lab_reachable() {
@@ -71,14 +91,13 @@ k3d_nodes_ready() {
 
 cilium_healthy() {
   local nodes node pod status bad=0
-  nodes=$(ready_nodes) || return 1
-  [[ -n $nodes ]] || {
-    echo "no Ready nodes"
+  nodes=$(ready_nodes) || {
+    echo "$nodes"
     return 1
   }
   for node in $nodes; do
     pod=$(wait_pod_on_node kube-system k8s-app=cilium "$node") || {
-      echo "${pod:-$node: cilium-agent pod is not Ready}"
+      echo "$pod"
       bad=1
       continue
     }
@@ -95,19 +114,18 @@ cilium_healthy() {
 # That needs both DNS (itself a ClusterIP Service) and Cilium's ClusterIP translation.
 cluster_ip_services_work() {
   local nodes node pod out bad=0
-  kc apply -f "$LAB_ROOT/scripts/verify/probes.yaml" >/dev/null || return 1
+  apply_probes || return 1
   kc -n lab-verify rollout status deploy/web --timeout=120s >/dev/null 2>&1 || {
     echo "the web probe behind the Service is not available"
     return 1
   }
-  nodes=$(ready_nodes) || return 1
-  [[ -n $nodes ]] || {
-    echo "no Ready nodes"
+  nodes=$(ready_nodes) || {
+    echo "$nodes"
     return 1
   }
   for node in $nodes; do
     pod=$(wait_pod_on_node lab-verify app=client "$node") || {
-      echo "${pod:-$node: client pod is not Ready}"
+      echo "$pod"
       bad=1
       continue
     }
@@ -123,15 +141,14 @@ cluster_ip_services_work() {
 # Names outside the Lab resolve through CoreDNS and Docker's embedded DNS, which needs
 # k3d/entrypoint-route-localnet.sh on every k3d Node. ArgoCD reads Git this way.
 external_dns_works() {
-  local node pod out
-  node=$(ready_nodes | head -n1) || return 1
-  [[ -n $node ]] || {
-    echo "no Ready nodes"
+  local nodes pod out
+  nodes=$(ready_nodes) || {
+    echo "$nodes"
     return 1
   }
-  kc apply -f "$LAB_ROOT/scripts/verify/probes.yaml" >/dev/null || return 1
-  pod=$(wait_pod_on_node lab-verify app=client "$node") || {
-    echo "${pod:-$node: client pod is not Ready}"
+  apply_probes || return 1
+  pod=$(wait_pod_on_node lab-verify app=client "$(head -n1 <<<"$nodes")") || {
+    echo "$pod"
     return 1
   }
   out=$(kc -n lab-verify exec "$pod" -- nslookup github.com 2>&1) || {
@@ -158,6 +175,7 @@ applications_synced_and_healthy() {
 }
 
 check "Lab is running" lab_reachable
+# Without a Lab, every other check would fail for the same reason.
 if ((fails)); then
   exit 1
 fi

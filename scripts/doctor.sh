@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # Checks that the Host has what the Lab needs. Installs nothing; prints hints instead.
+
+# Saved before lib.sh pins DOCKER_HOST to Docker CE: the Podman check below needs the
+# caller's own value.
 caller_docker_host=${DOCKER_HOST:-}
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
-fails=0
-ok() { printf 'OK    %s\n' "$1"; }
-warn() { printf 'WARN  %s\n' "$1"; }
-fail() {
-  printf 'FAIL  %s\n' "$1"
-  fails=$((fails + 1))
+# True if version $1 is $2 or newer.
+version_at_least() {
+  [[ $(printf '%s\n' "$2" "$1" | sort -V | head -n1) == "$2" ]]
+}
+
+# The variable names a .env-style file assigns, sorted.
+env_keys() {
+  sed -n 's/^\([A-Z_][A-Z0-9_]*\)=.*/\1/p' "$1" | sort
 }
 
 declare -A hints=(
@@ -31,7 +36,7 @@ done
 
 if command -v k3d >/dev/null; then
   k3d_version=$(k3d version | sed -n 's/^k3d version v//p')
-  if [[ $(printf '%s\n' 5.9.0 "$k3d_version" | sort -V | head -n1) == 5.9.0 ]]; then
+  if version_at_least "$k3d_version" 5.9.0; then
     ok "k3d $k3d_version is 5.9 or newer"
   else
     fail "k3d $k3d_version is too old; the Lab needs 5.9 or newer: ${hints[k3d]}"
@@ -59,9 +64,7 @@ env_file=$LAB_ROOT/.env
 if [[ ! -f $env_file ]]; then
   warn ".env is missing: copy .env.example and fill it in (only the GPU Node recipes need it)"
 else
-  missing=$(comm -23 \
-    <(sed -n 's/^\([A-Z_][A-Z0-9_]*\)=.*/\1/p' "$LAB_ROOT/.env.example" | sort) \
-    <(sed -n 's/^\([A-Z_][A-Z0-9_]*\)=.*/\1/p' "$env_file" | sort))
+  missing=$(comm -23 <(env_keys "$LAB_ROOT/.env.example") <(env_keys "$env_file"))
   if [[ -n $missing ]]; then
     warn ".env is missing keys from .env.example: $(echo "$missing" | paste -sd' ')"
   else

@@ -25,6 +25,17 @@ die() {
   exit 1
 }
 
+# For the scripts that report one line per check: doctor and lint print with these,
+# verify with its own check(). Each counts its failures in fails, and exits non-zero
+# if there are any.
+fails=0
+ok() { printf 'OK    %s\n' "$1"; }
+warn() { printf 'WARN  %s\n' "$1"; }
+fail() {
+  printf 'FAIL  %s\n' "$1"
+  fails=$((fails + 1))
+}
+
 # kubectl, always against the Lab, whatever the current context is.
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
@@ -39,20 +50,23 @@ yaml_get() {
 
 # Every component folder, as <group>/<name>: one ArgoCD Application each.
 component_dirs() {
-  (cd "$LAB_ROOT" && for f in platform/*/component.yaml workloads/*/component.yaml; do
-    [[ -f $f ]] && dirname "$f"
+  local file
+  for file in "$LAB_ROOT"/{platform,workloads}/*/component.yaml; do
+    [[ -f $file ]] || continue # an empty group leaves its glob unexpanded
+    file=${file#"$LAB_ROOT"/}
+    echo "${file%/component.yaml}"
   done
-  true)
 }
 
 # The arguments that make `helm template` or `helm upgrade --install` render a component
 # the way ArgoCD does: its pinned chart, namespace and values. One per line, for mapfile.
 component_helm_args() {
   local dir=$LAB_ROOT/$1
+  local component=$dir/component.yaml
   printf '%s\n' \
-    "$(yaml_get "$dir/component.yaml" chart)" \
-    --repo "$(yaml_get "$dir/component.yaml" repoURL)" \
-    --version "$(yaml_get "$dir/component.yaml" version)" \
-    --namespace "$(yaml_get "$dir/component.yaml" namespace)" \
+    "$(yaml_get "$component" chart)" \
+    --repo "$(yaml_get "$component" repoURL)" \
+    --version "$(yaml_get "$component" version)" \
+    --namespace "$(yaml_get "$component" namespace)" \
     --values "$dir/values.yaml"
 }
