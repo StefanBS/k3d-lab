@@ -1,5 +1,4 @@
-# Named node-exporter rather than node-exporter-prometheus-node-exporter, which is also
-# the job name its metrics carry.
+# Named node-exporter rather than node-exporter-prometheus-node-exporter.
 fullnameOverride: node-exporter
 # drm reports AMD GPUs' utilisation, temperature, power and VRAM from sysfs, without
 # AMD's own exporter. The chart's default arguments stay.
@@ -14,6 +13,9 @@ tolerations:
 prometheus:
   monitor:
     enabled: true
+    # Its metrics' job is node-exporter, this release's name, as dashboards expect,
+    # rather than the chart's name.
+    jobLabel: app.kubernetes.io/instance
 # Modest requests for a Host short on RAM.
 resources:
   requests: {cpu: 10m, memory: 16Mi}

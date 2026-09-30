@@ -8,6 +8,9 @@ grafana.ini:
   auth.anonymous:
     enabled: true
     org_role: Viewer
+  # Grafana otherwise downloads a set of plugins at every start, which nothing here uses.
+  plugins:
+    preinstall_disabled: true
 # Nothing to keep: datasources come from here and dashboards from Git, and a new Lab
 # starts empty anyway.
 persistence:
