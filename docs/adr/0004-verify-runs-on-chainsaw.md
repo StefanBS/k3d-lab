@@ -18,7 +18,8 @@ It was a close call. Chainsaw can't run a step once per node, so every check tha
     - GPU Node Left: GPU checks left out, silently.
     - Joined and Ready: GPU checks run.
     - Joined but NotReady (powered off): GPU checks left out, with a WARN (ADR 0002).
-  - It passes any extra arguments on to Chainsaw, so `just verify --include-test-regex chainsaw/<check>` reruns one check. The regex is matched against `chainsaw/<check>`, so a bare check name matches nothing.
+  - It runs only the checks named first, as in `just verify cilium-healthy`, and fails on a name with no folder in `verify/`. Chainsaw itself passes when a filter matches nothing (its regex is matched against `chainsaw/<check>`), so a typo would otherwise look like success.
+  - It passes any other arguments on to Chainsaw, after the check names.
 - **Isolation:** each check runs in its own throwaway namespace and deploys its own probes there, so the checks can run concurrently, and `verify` leaves nothing in the Lab outside Git.
 - **Output:** it follows Chainsaw's own format, with a PASS or FAIL for each check, rather than the one-line-per-check format that doctor and lint use.
 - **Traps when writing a check:**

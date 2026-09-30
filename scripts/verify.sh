@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 # Checks how the running Lab behaves: runs the Chainsaw tests in verify/, one per check
 # (ADR 0004). Exits non-zero if any check fails.
-# Any arguments go to `chainsaw test`, such as --include-test-regex chainsaw/<check>.
+# Usage: verify.sh [<check>...] [<chainsaw test flags>...]
+# Leading plain words name the checks to run, the folders in verify/; without any, every
+# check runs. The rest go to `chainsaw test`, such as --pause-on-failure.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+
+# Checked here, because Chainsaw passes when a filter matches no check: a typo would
+# otherwise look like success.
+checks=()
+while (($#)) && [[ $1 != -* ]]; do
+  [[ -f $LAB_ROOT/verify/$1/chainsaw-test.yaml ]] || die "no check named '$1'; the checks are the folders in verify/"
+  checks+=("$1")
+  shift
+done
 
 # Without a Lab, every check would fail for the same reason.
 lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
@@ -11,6 +22,8 @@ kc get --raw /readyz --request-timeout=10s >/dev/null || die "the Lab doesn't an
 
 args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" --kube-context "$LAB_CONTEXT")
 [[ -t 1 ]] || args+=(--no-color)
+# Chainsaw names each check chainsaw/<check>, and matches the regex against that.
+((${#checks[@]} == 0)) || args+=(--include-test-regex "^chainsaw/($(IFS='|' && echo "${checks[*]}"))\$")
 
 # The GPU checks, labelled k3d-lab/gpu, run only while the GPU Node is Joined and Ready.
 # Left is its normal state, so that says nothing. Joined but NotReady means it's powered

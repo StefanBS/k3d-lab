@@ -29,7 +29,7 @@ up *args:
 down:
     @scripts/down.sh
 
-# Check how the running Lab behaves; arguments go to Chainsaw, e.g. --include-test-regex chainsaw/<check>
+# Check how the running Lab behaves; `just verify <check>...` runs only those checks
 verify *args:
     @scripts/verify.sh {{ args }}
 
