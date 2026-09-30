@@ -13,6 +13,8 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 
   The Lab's recipes use those versions whatever else is on your `PATH`.
 
+- **Ports 80 and 443 free on the Host's loopback**: the Lab serves its UIs there.
+
 `just doctor` checks all of this and prints hints for anything missing.
 
 ## Preparing the Host
@@ -44,11 +46,24 @@ sudo scripts/host-setup-root.sh
 |---|---|
 | `just doctor` | Checks the Host has what the Lab needs: the tools, every `host-setup` step, free space in Docker's data directory, and that `HOST_LAN_IP` in `.env` is still the Host's address. Installs nothing. |
 | `just up` | Builds the Lab, then runs `just verify`. Refuses if a Lab already exists. `just up REVISION=<branch>` builds it from a pushed branch instead of `main`. |
+| `just creds` | Prints each of the Lab's UIs with its URL and login. The passwords are new with every Lab. |
 | `just verify` | Checks how the running Lab behaves, with one Chainsaw test per check in `verify/`: a PASS or FAIL for each, and a non-zero exit on any FAIL. `just verify <check>...` runs only those checks, named by their folders; any Chainsaw flags go after them. |
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
 
 The Lab's kube context is `k3d-lab`. `just up` adds it to your kubeconfig without switching to it.
+
+## The Lab's UIs
+
+Every UI is served by name at `https://<name>.lab.localhost`, and plain HTTP redirects to HTTPS. `*.lab.localhost` always resolves to the Host's loopback ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)), where k3d publishes ports 80 and 443 of the Server. There, Cilium's Gateway API implementation runs the Lab's one Gateway (`platform/gateway/`) on the Server's own network, with no LoadBalancer.
+
+The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA: `just up` loads the CA into the Lab as the `lab-ca` ClusterIssuer. The Host already trusts the Lab CA, so every new Lab's certificate is trusted without importing anything.
+
+| UI | URL |
+|---|---|
+| ArgoCD | https://argocd.lab.localhost |
+
+A component adds its UI with an HTTPRoute for its own `<name>.lab.localhost`, whose `parentRefs` is the `https` listener of the Gateway `lab` in the namespace `gateway`.
 
 ## GitOps
 
@@ -59,9 +74,11 @@ The root Application syncs two ApplicationSets from `gitops/`: **Platform**, one
 - `component.yaml`: the upstream chart (`chart`, `repoURL`, a pinned `version`) and the `namespace` to install it in.
 - `values.yaml`: the chart's values. For Cilium and ArgoCD, `just up` installs from the same file, so bootstrap and ArgoCD never disagree.
 
+A component with no upstream chart, such as the Lab's own Gateway, leaves `chart`, `repoURL` and `version` out of `component.yaml`, and holds a `kustomization.yaml` instead of `values.yaml`.
+
 Every Application syncs automatically, with pruning and self-heal: a change made by hand with `kubectl` is undone. Applications sync in no particular order, Platform and Workloads alike. One that needs CRDs another component installs fails, and retries until they exist.
 
-`just lint` renders every component with its pinned chart and values and validates the output with `kubeconform`.
+`just lint` renders every component with its pinned chart and values, or its kustomization, and validates the output with `kubeconform`.
 
 ## Machine-specific values
 
