@@ -8,8 +8,6 @@
   echo "error: run this with sudo, as the Lab's owner: sudo $0" >&2
   exit 1
 }
-# lib.sh finds the Lab CA in the owner's home, not root's.
-HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
@@ -85,13 +83,8 @@ fix_lab_ca_trusted() {
   update-ca-trust extract
 }
 
-for ((i = 0; i < ${#ROOT_STEPS[@]}; i += 2)); do
-  if "${ROOT_STEPS[i]}"; then
-    ok "${ROOT_STEPS[i + 1]}"
-  else
-    "fix_${ROOT_STEPS[i]}"
-  fi
-done
+fix() { "fix_$1"; }
+run_root_steps fix
 
 if ((changes == 0)); then
   log "Nothing to change: the Host's root steps are already done"

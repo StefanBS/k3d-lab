@@ -35,8 +35,12 @@ render_gitops() {
   helm template gitops gitops --kube-version "$k8s_version" >"$manifests"
 }
 
+# Schemas are cached between runs: the CRDs catalog is pinned, so they never change
+# under the same URL.
+kubeconform_cache=${XDG_CACHE_HOME:-$HOME/.cache}/kubeconform
+mkdir -p "$kubeconform_cache"
 kubeconform_args=(
-  -strict -summary
+  -strict -summary -cache "$kubeconform_cache"
   -kubernetes-version "${k8s_version%.*}.0"
   -schema-location default
   # CRD schemas (ArgoCD, Cilium, cert-manager, ESO, Gateway API, Rollouts...), pinned to

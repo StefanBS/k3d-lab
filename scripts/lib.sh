@@ -8,9 +8,7 @@ LAB_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 # The tools come from mise.toml, at the versions CI uses, whatever the caller's PATH
 # holds. Without mise, the scripts use PATH as it is, and doctor says what's missing.
-# Not as root: host-setup-root.sh runs under sudo, where mise would write root-owned
-# files into the owner's home.
-if ((EUID != 0)) && command -v mise >/dev/null; then
+if command -v mise >/dev/null; then
   eval "$(cd "$LAB_ROOT" && mise env --shell bash)"
 fi
 
@@ -27,17 +25,8 @@ LAB_SUBNET_NETMASK=255.255.0.0 # LAB_SUBNET's /16, for the Lab CA's name constra
 LAB_GATEWAY=172.28.0.1
 # ArgoCD reads the Lab from here, without credentials.
 LAB_REPO=https://github.com/StefanBS/k3d-lab.git
-
-# ADR 0001: Docker CE's data directory, on /home because the root volume is small.
-DOCKER_DATA_ROOT=/home/docker-data
-
-# ADR 0003: the Lab CA, generated once by host-setup, outside the repo, and trusted by
-# the Host through the anchor below (Fedora's ca-trust). host-setup-root.sh points
-# HOME at the owner's before sourcing this.
-LAB_CA_DIR=$HOME/.local/share/k3d-lab/ca
-LAB_CA_CERT=$LAB_CA_DIR/ca.crt
-LAB_CA_KEY=$LAB_CA_DIR/ca.key
-LAB_CA_ANCHOR=/etc/pki/ca-trust/source/anchors/k3d-lab-ca.crt
+# Machine-specific values, never committed (.env.example lists them).
+LAB_ENV_FILE=$LAB_ROOT/.env
 
 log() { printf '==> %s\n' "$*" >&2; }
 die() {
@@ -60,6 +49,11 @@ fail() {
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
+lab_network_exists() { docker network inspect "$LAB_NETWORK" >/dev/null 2>&1; }
+
+# The Host's route to the LAN, and its address there (HOST_LAN_IP, ADR 0002).
+host_route() { ip -4 route get 1.1.1.1; }
+host_lan_ip() { host_route | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
 
 # Every component folder, as <group>/<name>: one ArgoCD Application each.
 component_dirs() {

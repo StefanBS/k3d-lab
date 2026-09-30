@@ -27,26 +27,26 @@ node_readiness() {
     -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
 }
 
-# Prints the name of every Ready node. With none, prints why and fails.
+# Prints the name of every Ready node. With none, says why on stderr and fails.
 ready_nodes() {
   local nodes
   nodes=$(node_readiness | awk '$2 == "True" { print $1 }') || return 1
   [[ -n $nodes ]] || {
-    echo "no Ready nodes"
+    echo "no Ready nodes" >&2
     return 1
   }
   echo "$nodes"
 }
 
 # Waits for the pod with the given label on the given node to be Ready, and prints its
-# name. Otherwise, prints why and fails.
+# name. Otherwise, says why on stderr and fails.
 wait_pod_on_node() {
   local namespace=$1 selector=$2 node=$3 pod="" attempt
   for attempt in {1..30}; do
     # Skips pods being deleted: while a pod is replaced, the node briefly has two.
     pod=$(kc -n "$namespace" get pods -l "$selector" --field-selector "spec.nodeName=$node" \
       -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.deletionTimestamp}{"\n"}{end}' 2>&1) || {
-      echo "$node: $pod"
+      echo "$node: $pod" >&2
       return 1
     }
     pod=$(awk 'NF == 1 { print "pod/" $1; exit }' <<<"$pod")
@@ -54,11 +54,11 @@ wait_pod_on_node() {
     ((attempt < 30)) && sleep 2
   done
   [[ -n $pod ]] || {
-    echo "$node: no pod matching $selector"
+    echo "$node: no pod matching $selector" >&2
     return 1
   }
   kc -n "$namespace" wait --for=condition=Ready "$pod" --timeout=120s >/dev/null 2>&1 || {
-    echo "$node: $pod is not Ready"
+    echo "$node: $pod is not Ready" >&2
     return 1
   }
   echo "$pod"
@@ -94,13 +94,9 @@ k3d_nodes_ready() {
 
 cilium_healthy() {
   local nodes node pod status bad=0
-  nodes=$(ready_nodes) || {
-    echo "$nodes"
-    return 1
-  }
+  nodes=$(ready_nodes) || return 1
   for node in $nodes; do
     pod=$(wait_pod_on_node kube-system k8s-app=cilium "$node") || {
-      echo "$pod"
       bad=1
       continue
     }
@@ -122,13 +118,9 @@ cluster_ip_services_work() {
     echo "the web probe behind the Service is not available"
     return 1
   }
-  nodes=$(ready_nodes) || {
-    echo "$nodes"
-    return 1
-  }
+  nodes=$(ready_nodes) || return 1
   for node in $nodes; do
     pod=$(wait_pod_on_node lab-verify app=client "$node") || {
-      echo "$pod"
       bad=1
       continue
     }
@@ -145,15 +137,9 @@ cluster_ip_services_work() {
 # k3d/entrypoint-route-localnet.sh on every k3d Node. ArgoCD reads Git this way.
 external_dns_works() {
   local nodes pod out
-  nodes=$(ready_nodes) || {
-    echo "$nodes"
-    return 1
-  }
+  nodes=$(ready_nodes) || return 1
   apply_probes || return 1
-  pod=$(wait_pod_on_node lab-verify app=client "$(head -n1 <<<"$nodes")") || {
-    echo "$pod"
-    return 1
-  }
+  pod=$(wait_pod_on_node lab-verify app=client "$(head -n1 <<<"$nodes")") || return 1
   out=$(kc -n lab-verify exec "$pod" -- nslookup github.com 2>&1) || {
     echo "github.com doesn't resolve from $pod: $(tail -n1 <<<"$out")"
     return 1
@@ -179,9 +165,7 @@ applications_synced_and_healthy() {
 
 check "Lab is running" lab_reachable
 # Without a Lab, every other check would fail for the same reason.
-if ((fails)); then
-  exit 1
-fi
+((fails == 0)) || exit 1
 check "Every k3d Node is Ready" k3d_nodes_ready
 check "Cilium is healthy on every Ready node" cilium_healthy
 check "ClusterIP Services and DNS work from every Ready node" cluster_ip_services_work

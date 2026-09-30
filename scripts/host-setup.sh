@@ -34,29 +34,15 @@ else
 fi
 
 log "Root steps (sudo scripts/host-setup-root.sh)"
-for ((i = 0; i < ${#ROOT_STEPS[@]}; i += 2)); do
-  if "${ROOT_STEPS[i]}"; then
-    ok "${ROOT_STEPS[i + 1]}"
-  else
-    warn "not yet: ${ROOT_STEPS[i + 1]}"
-    pending=$((pending + 1))
-  fi
-done
+not_yet() {
+  warn "not yet: $2"
+  pending=$((pending + 1))
+}
+run_root_steps not_yet
 
 # The group database has it, but this login session was started without it.
 if owner_in_docker_group && ! in_docker_group; then
   warn "this session isn't in the docker group yet: log in again to use docker and k3d without sudo"
-fi
-
-# Only the GPU Node needs this (ADR 0002), and only you can make the reservation.
-log "Host LAN address"
-lan_ip=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
-env_ip=""
-[[ ! -f $LAB_ROOT/.env ]] || env_ip=$(sed -n 's/^HOST_LAN_IP=//p' "$LAB_ROOT/.env" | tail -1)
-if [[ -n $lan_ip && $env_ip == "$lan_ip" ]]; then
-  ok "HOST_LAN_IP in .env is the Host's address ($lan_ip)"
-else
-  warn "HOST_LAN_IP in .env isn't the Host's address ($lan_ip): run 'just host-wizard' before joining the GPU Node"
 fi
 
 if ((pending > 0)); then

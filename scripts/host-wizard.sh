@@ -5,12 +5,10 @@
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
-env_file=$LAB_ROOT/.env
-
 # What the Host uses to reach the LAN.
-route=$(ip -4 route get 1.1.1.1)
+route=$(host_route)
 iface=$(sed -n 's/.* dev \([^ ]*\).*/\1/p' <<<"$route")
-lan_ip=$(sed -n 's/.* src \([0-9.]*\).*/\1/p' <<<"$route")
+lan_ip=$(host_lan_ip)
 router=$(sed -n 's/.* via \([0-9.]*\).*/\1/p' <<<"$route")
 mac=$(<"/sys/class/net/$iface/address")
 connection=$(nmcli -g GENERAL.CONNECTION device show "$iface" 2>/dev/null) || connection=""
@@ -40,7 +38,7 @@ read -rp "Is the reservation saved? [y/N] " reply || true
 [[ $reply == [Yy]* ]] || die "nothing saved; run 'just host-wizard' again once the reservation is in place"
 
 # Replaces any HOST_LAN_IP line and keeps the rest of .env.
-touch "$env_file"
-sed -i '/^HOST_LAN_IP=/d' "$env_file"
-echo "HOST_LAN_IP=$lan_ip" >>"$env_file"
+touch "$LAB_ENV_FILE"
+sed -i '/^HOST_LAN_IP=/d' "$LAB_ENV_FILE"
+echo "HOST_LAN_IP=$lan_ip" >>"$LAB_ENV_FILE"
 log "Saved HOST_LAN_IP=$lan_ip to .env"

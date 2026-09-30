@@ -24,7 +24,7 @@ else
 fi
 
 if engine=$(docker version --format '{{.Server.Platform.Name}}' 2>/dev/null) && [[ $engine == Docker* ]]; then
-  ok "Docker CE is running ($DOCKER_HOST)"
+  ok "Docker CE answers at $DOCKER_HOST"
 else
   fail "Docker CE isn't reachable at $DOCKER_HOST (ADR 0001): https://docs.docker.com/engine/install/fedora/"
 fi
@@ -45,23 +45,31 @@ else
   fi
 fi
 
-if [[ ! -f $LAB_CA_CERT ]]; then
-  warn "the Lab CA is missing ($LAB_CA_CERT): run 'just host-setup'"
-elif ! lab_ca_trusted; then
-  warn "the Host doesn't trust the Lab CA yet: run 'just host-setup'"
+# What host-setup does, including the steps that need root.
+if [[ -f $LAB_CA_CERT ]]; then
+  ok "the Lab CA exists ($LAB_CA_DIR)"
 else
-  ok "the Lab CA exists and the Host trusts it"
+  warn "the Lab CA is missing ($LAB_CA_CERT): run 'just host-setup'"
 fi
+# shellcheck disable=SC2329  # called by run_root_steps
+not_set_up() { warn "not yet: $2 (run 'just host-setup')"; }
+run_root_steps not_set_up
 
-env_file=$LAB_ROOT/.env
-if [[ ! -f $env_file ]]; then
+if [[ ! -f $LAB_ENV_FILE ]]; then
   warn ".env is missing: copy .env.example and fill it in (only the GPU Node recipes need it)"
 else
-  missing=$(comm -23 <(env_keys "$LAB_ROOT/.env.example") <(env_keys "$env_file"))
+  missing=$(comm -23 <(env_keys "$LAB_ROOT/.env.example") <(env_keys "$LAB_ENV_FILE"))
   if [[ -n $missing ]]; then
-    warn ".env is missing keys from .env.example: $(echo "$missing" | paste -sd' ')"
+    warn ".env is missing keys from .env.example: $(paste -sd' ' <<<"$missing")"
   else
     ok ".env has every key in .env.example"
+  fi
+  # The GPU Node routes the Lab's subnet through this address (ADR 0002).
+  lan_ip=$(host_lan_ip)
+  if [[ $(sed -n 's/^HOST_LAN_IP=//p' "$LAB_ENV_FILE") == "$lan_ip" ]]; then
+    ok "HOST_LAN_IP in .env is the Host's address ($lan_ip)"
+  else
+    warn "HOST_LAN_IP in .env isn't the Host's address ($lan_ip): run 'just host-wizard' before joining the GPU Node"
   fi
 fi
 
