@@ -43,10 +43,13 @@ ready_nodes() {
 wait_pod_on_node() {
   local namespace=$1 selector=$2 node=$3 pod="" attempt
   for attempt in {1..30}; do
-    pod=$(kc -n "$namespace" get pods -l "$selector" --field-selector "spec.nodeName=$node" -o name 2>&1) || {
+    # Skips pods being deleted: while a pod is replaced, the node briefly has two.
+    pod=$(kc -n "$namespace" get pods -l "$selector" --field-selector "spec.nodeName=$node" \
+      -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.deletionTimestamp}{"\n"}{end}' 2>&1) || {
       echo "$node: $pod"
       return 1
     }
+    pod=$(awk 'NF == 1 { print "pod/" $1; exit }' <<<"$pod")
     [[ -n $pod ]] && break
     ((attempt < 30)) && sleep 2
   done
