@@ -30,9 +30,10 @@ nodes=$("$(dirname "$0")/ready-nodes.sh")
 for attempt in {1..24}; do
   missing=()
   for node in $nodes; do
+    # The ID send-trace.sh gave that node's trace.
     trace=$(printf '%s/%s' "$namespace" "$node" | md5sum | cut -c1-32)
     pod=$(kubectl -n "$namespace" get pods -l app=client --field-selector "spec.nodeName=$node" \
-      -o jsonpath='{.items[0].metadata.name}')
+      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null) || pod=""
     found=$(pod_tags "$trace" 2>&1) || found=""
     # Both services' spans came from that pod.
     [[ $(grep -cxF "$namespace $pod" <<<"$found") == 2 ]] || missing+=("$node")

@@ -173,6 +173,7 @@ alloy:
         }
       }
 
+      // Sends Tempo spans in batches rather than one request each.
       otelcol.processor.batch "default" {
         output {
           traces = [otelcol.exporter.otlp.tempo.input]
@@ -205,7 +206,9 @@ alloy:
 configReloader:
   resources:
     requests: {cpu: 5m, memory: 16Mi}
-# A pod's traces go to the Alloy on its own node, which knows its pods.
+# A pod's traces go to the Alloy on its own node, which knows its pods. While that
+# Alloy restarts, as in a chart upgrade, the node's traces have nowhere to go: OTLP
+# senders retry, then drop them.
 service:
   internalTrafficPolicy: Local
 controller:

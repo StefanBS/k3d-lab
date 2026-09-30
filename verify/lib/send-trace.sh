@@ -4,7 +4,9 @@
 # HTTP, as a call from the service <namespace>-client to the service <namespace>-web.
 # Its ID is the MD5 of <namespace>/<node>, so tempo-has-traces.sh finds it without
 # being told. The service names are new with each check's namespace, so the service
-# graph Prometheus holds for them can only come from this run.
+# graph prometheus-has-trace-metrics.sh finds for them can only come from this run.
+# Both scripts derive the same ID and names: change them together.
+# Run by traces-reach-tempo, through on-ready-nodes.sh.
 set -eu
 
 namespace=$1
