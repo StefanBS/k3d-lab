@@ -8,9 +8,8 @@
   echo "error: run this with sudo, as the Lab's owner: sudo $0" >&2
   exit 1
 }
-owner=$SUDO_USER
 # lib.sh finds the Lab CA in the owner's home, not root's.
-HOME=$(getent passwd "$owner" | cut -d: -f6)
+HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
@@ -24,54 +23,45 @@ dnf_install() {
 }
 
 # Fails before changing anything, so a half-done run can't come from this.
-[[ -f $LAB_CA_CERT ]] || die "the Lab CA doesn't exist yet: run 'just host-setup' as $owner first"
+[[ -f $LAB_CA_CERT ]] || die "the Lab CA doesn't exist yet: run 'just host-setup' as $LAB_OWNER first"
 if [[ -f $DOCKER_DAEMON_JSON ]] && ! docker_data_root_set; then
   die "$DOCKER_DAEMON_JSON exists without data-root $DOCKER_DATA_ROOT: add it by hand, then re-run"
 fi
 
-if podman_docker_removed; then
-  ok "podman-docker isn't installed"
-else
+# Each fix_<check> does one step of ROOT_STEPS (host.sh), and says what it changes.
+
+fix_podman_docker_removed() {
   changed "Removing podman-docker, which conflicts with docker-ce (Podman itself stays)"
+  local conflicting
   mapfile -t conflicting < <(podman_docker_installed)
-  dnf -y remove "${conflicting[@]}"
-fi
+  ((${#conflicting[@]} == 0)) || dnf -y remove "${conflicting[@]}"
+  [[ ! -L /var/run/docker.sock ]] || rm /var/run/docker.sock
+}
 
-# podman-docker's symlink to rootful Podman's socket; Docker CE creates a real one.
-if [[ -L /var/run/docker.sock ]]; then
-  changed "Removing the /var/run/docker.sock symlink podman-docker left"
-  rm /var/run/docker.sock
-fi
-
-if docker_ce_installed; then
-  ok "Docker CE is installed"
-else
+fix_docker_ce_installed() {
   changed "Installing Docker CE"
   [[ -f /etc/yum.repos.d/docker-ce.repo ]] ||
     dnf -y config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo
   dnf_install "${DOCKER_CE_PACKAGES[@]}"
-fi
+}
 
-if docker_data_root_labelled; then
-  ok "SELinux labels $DOCKER_DATA_ROOT like /var/lib/docker"
-else
+fix_docker_data_root_labelled() {
   changed "Labelling $DOCKER_DATA_ROOT like /var/lib/docker for SELinux"
   dnf_install policycoreutils-python-utils
   semanage fcontext -a -e /var/lib/docker "$DOCKER_DATA_ROOT"
   [[ ! -d $DOCKER_DATA_ROOT ]] || restorecon -R "$DOCKER_DATA_ROOT"
-fi
+}
 
-if docker_data_root_set; then
-  ok "Docker CE keeps its data in $DOCKER_DATA_ROOT"
-else
+# daemon.json is written last, so a run that fails partway resumes here: rsync picks
+# up where it stopped.
+fix_docker_data_root_set() {
   changed "Moving Docker CE's data to $DOCKER_DATA_ROOT"
   systemctl stop docker.socket docker 2>/dev/null || true
-  # daemon.json is written last, so a run that fails partway resumes here: rsync picks
-  # up where it stopped.
   if [[ -d /var/lib/docker ]]; then
     # Anything Docker already stored moves with it. The old directory is kept until you
     # delete it yourself, and it's never pruned: it may hold images nothing else has.
     dnf_install rsync
+    local need free
     need=$(du -sx --block-size=1 /var/lib/docker | cut -f1)
     [[ ! -d $DOCKER_DATA_ROOT ]] || need=$((need - $(du -sx --block-size=1 "$DOCKER_DATA_ROOT" | cut -f1)))
     free=$(df --output=avail --block-size=1 /home | tail -1)
@@ -85,32 +75,34 @@ else
   restorecon -R "$DOCKER_DATA_ROOT"
   install -d /etc/docker
   printf '{\n  "data-root": "%s"\n}\n' "$DOCKER_DATA_ROOT" >"$DOCKER_DAEMON_JSON"
-fi
+}
 
-if docker_ce_running; then
-  ok "Docker CE is running and starts at boot"
-else
+fix_docker_ce_running() {
   changed "Starting Docker CE and enabling it at boot"
   systemctl enable --now docker
-fi
+}
 
-if in_docker_group "$owner"; then
-  ok "$owner is in the docker group"
-else
-  changed "Adding $owner to the docker group (root-equivalent; takes effect at the next login)"
-  usermod -aG docker "$owner"
-fi
+fix_owner_in_docker_group() {
+  changed "Adding $LAB_OWNER to the docker group (root-equivalent; takes effect at the next login)"
+  usermod -aG docker "$LAB_OWNER"
+}
 
-if lab_ca_trusted; then
-  ok "the Host trusts the Lab CA"
-else
+fix_lab_ca_trusted() {
   changed "Adding the Lab CA to the Host's trust store"
   install -m 0644 "$LAB_CA_CERT" "$LAB_CA_ANCHOR"
   update-ca-trust extract
-fi
+}
+
+for ((i = 0; i < ${#ROOT_STEPS[@]}; i += 2)); do
+  if "${ROOT_STEPS[i]}"; then
+    ok "${ROOT_STEPS[i + 1]}"
+  else
+    "fix_${ROOT_STEPS[i]}"
+  fi
+done
 
 if ((changes == 0)); then
   log "Nothing to change: the Host's root steps are already done"
 else
-  log "Made $changes change(s). Now run 'just host-setup' again as $owner"
+  log "Made $changes change(s). Now run 'just host-setup' again as $LAB_OWNER"
 fi

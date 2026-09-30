@@ -9,21 +9,11 @@ source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/host.sh"
 
 pending=0
-# check_root_step <description> <check> [args...]: host-setup-root.sh does the step.
-check_root_step() {
-  local description=$1
-  shift
-  if "$@"; then
-    ok "$description"
-  else
-    warn "not yet: $description"
-    pending=$((pending + 1))
-  fi
-}
-
-# Marks the lines this script disabled, so you can find and restore them.
-disabled_marker='# disabled by k3d-lab ADR 0001 (use docker contexts): '
 podman_socket=unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock
+# What sets DOCKER_HOST to Podman in a shell startup file, and the marker this
+# script comments it out with, so you can find and restore it.
+podman_export='^[[:space:]]*(export[[:space:]]+)?(DOCKER_HOST|DOCKER_SOCK)=.*podman'
+disabled_marker='# disabled by k3d-lab ADR 0001 (use docker contexts): '
 
 log "Lab CA"
 if [[ -f $LAB_CA_CERT && -f $LAB_CA_KEY ]]; then
@@ -49,13 +39,14 @@ else
 fi
 
 log "Root steps (sudo scripts/host-setup-root.sh)"
-check_root_step "podman-docker isn't installed" podman_docker_removed
-check_root_step "Docker CE is installed" docker_ce_installed
-check_root_step "Docker CE keeps its data in $DOCKER_DATA_ROOT" docker_data_root_set
-check_root_step "SELinux labels $DOCKER_DATA_ROOT like /var/lib/docker" docker_data_root_labelled
-check_root_step "Docker CE is running and starts at boot" docker_ce_running
-check_root_step "$USER is in the docker group" in_docker_group "$USER"
-check_root_step "the Host trusts the Lab CA" lab_ca_trusted
+for ((i = 0; i < ${#ROOT_STEPS[@]}; i += 2)); do
+  if "${ROOT_STEPS[i]}"; then
+    ok "${ROOT_STEPS[i + 1]}"
+  else
+    warn "not yet: ${ROOT_STEPS[i + 1]}"
+    pending=$((pending + 1))
+  fi
+done
 
 log "Docker CLI contexts"
 if ! docker_ce_installed; then
@@ -73,10 +64,9 @@ fi
 # Disabled rather than deleted, so they can be restored.
 for rc in ~/.bashrc ~/.bash_profile ~/.profile ~/.zshrc ~/.bashrc.d/*; do
   [[ -f $rc ]] || continue
-  pattern='^[[:space:]]*(export[[:space:]]+)?(DOCKER_HOST|DOCKER_SOCK)=.*podman'
-  if grep -Eq "$pattern" "$rc"; then
+  if grep -Eq "$podman_export" "$rc"; then
     changed "Disabling the DOCKER_HOST export in $rc (open shells keep it until you log in again)"
-    sed -Ei "s|$pattern|$disabled_marker&|" "$rc"
+    sed -Ei "s|$podman_export|$disabled_marker&|" "$rc"
   fi
 done
 for conf in ~/.config/environment.d/*.conf; do
@@ -92,7 +82,7 @@ if systemctl --user show-environment 2>/dev/null | grep -Eq '^DOCKER_HOST=.*podm
 fi
 ok "nothing points docker at Podman by default"
 # The group database has it, but this login session was started without it.
-if in_docker_group "$USER" && ! id -nG | tr ' ' '\n' | grep -qx docker; then
+if owner_in_docker_group && ! in_docker_group; then
   warn "this session isn't in the docker group yet: log in again to use docker and k3d without sudo"
 fi
 

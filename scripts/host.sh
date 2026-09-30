@@ -3,13 +3,29 @@
 # and by host-setup-root.sh, which fixes the ones that need root. Sharing them keeps
 # them agreeing on what's left to do. Each check needs no root and no Docker socket.
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # ROOT_STEPS is used by the scripts that source this file
+
+# The Lab's owner, also when host-setup-root.sh runs under sudo.
+LAB_OWNER=${SUDO_USER:-$USER}
 
 DOCKER_CE_PACKAGES=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin)
 # podman-docker declares Conflicts: docker-ce (ADR 0001), and these come with it.
 # Rootless Podman itself stays.
 PODMAN_DOCKER_PACKAGES=(podman-docker docker-compose docker-compose-switch moby-filesystem)
 DOCKER_DAEMON_JSON=/etc/docker/daemon.json
-CA_TRUST_BUNDLE=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+
+# The steps that need root, in the order host-setup-root.sh does them: a check, then
+# what it means. host-setup.sh only runs the checks; host-setup-root.sh runs
+# fix_<check> for each one that fails.
+ROOT_STEPS=(
+  podman_docker_removed "podman-docker isn't installed"
+  docker_ce_installed "Docker CE is installed"
+  docker_data_root_labelled "SELinux labels $DOCKER_DATA_ROOT like /var/lib/docker"
+  docker_data_root_set "Docker CE keeps its data in $DOCKER_DATA_ROOT"
+  docker_ce_running "Docker CE is running and starts at boot"
+  owner_in_docker_group "$LAB_OWNER is in the docker group"
+  lab_ca_trusted "the Host trusts the Lab CA"
+)
 
 # Counts what a setup script changed, so a run with nothing to do can say so.
 changes=0
@@ -22,7 +38,8 @@ changed() {
 podman_docker_installed() {
   rpm -q --qf '%{NAME}\n' "${PODMAN_DOCKER_PACKAGES[@]}" 2>/dev/null | grep -v 'not installed'
 }
-podman_docker_removed() { [[ -z $(podman_docker_installed) ]]; }
+# Also its symlink to rootful Podman's socket, where Docker CE creates a real one.
+podman_docker_removed() { [[ -z $(podman_docker_installed) && ! -L /var/run/docker.sock ]]; }
 
 docker_ce_installed() { rpm -q "${DOCKER_CE_PACKAGES[@]}" >/dev/null 2>&1; }
 
@@ -39,12 +56,12 @@ docker_data_root_labelled() {
     [[ $(matchpathcon -n "$DOCKER_DATA_ROOT") == "$(matchpathcon -n /var/lib/docker)" ]]
 }
 
+# in_docker_group [user]: without a user, whether this login session is.
 # The group lets the owner run k3d and docker without sudo. It's root-equivalent.
-in_docker_group() { id -nG "$1" | tr ' ' '\n' | grep -qx docker; }
+in_docker_group() { [[ " $(id -nG "$@") " == *" docker "* ]]; }
+owner_in_docker_group() { in_docker_group "$LAB_OWNER"; }
 
-# Anchored, and in the bundle curl and browsers read, which update-ca-trust extracts.
-# Not a pipe into grep -q: with pipefail, tr's SIGPIPE would make it fail at random.
+# In the bundle curl and browsers read, which update-ca-trust extracts from the anchors.
 lab_ca_trusted() {
-  cmp -s "$LAB_CA_CERT" "$LAB_CA_ANCHOR" &&
-    grep -qF "$(sed '/-----/d' "$LAB_CA_CERT" | tr -d '\n')" <(tr -d '\n' <"$CA_TRUST_BUNDLE")
+  openssl verify -CAfile /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem "$LAB_CA_CERT" >/dev/null 2>&1
 }
