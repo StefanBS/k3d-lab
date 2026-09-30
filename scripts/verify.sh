@@ -17,10 +17,8 @@ args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" -
 # off (ADR 0002): not a failure, but worth knowing.
 gpu_node=$(kc get nodes -l k3d-lab/gpu \
   -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}')
-if [[ -z $gpu_node ]]; then
-  args+=(--selector '!k3d-lab/gpu')
-elif [[ $gpu_node != *" True" ]]; then
-  warn "the GPU Node ${gpu_node%% *} is Joined but NotReady; its checks are skipped"
+if [[ $gpu_node != *" True" ]]; then
+  [[ -z $gpu_node ]] || warn "the GPU Node ${gpu_node%% *} is Joined but NotReady; its checks are skipped"
   args+=(--selector '!k3d-lab/gpu')
 fi
 exec chainsaw test "${args[@]}" "$@"

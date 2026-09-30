@@ -42,6 +42,8 @@ spec:
     spec:
       tolerations:
         - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      # `sleep infinity` ignores SIGTERM, so deleting the pod would otherwise wait 30s.
+      terminationGracePeriodSeconds: 0
       containers:
         - name: client
           image: busybox:1.37

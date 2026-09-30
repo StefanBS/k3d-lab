@@ -100,14 +100,18 @@ lint_rendering gitops render_gitops
 # Chainsaw only checks each file against its schema. The step templates have none, so
 # a broken one shows up when `just verify` loads the checks that use it.
 log "Verify checks"
-for file in verify/.chainsaw.yaml verify/*/chainsaw-test.yaml; do
-  kind="test"
-  [[ $file == */.chainsaw.yaml ]] && kind=configuration
-  if out=$(chainsaw lint "$kind" -f "$file" 2>&1); then
-    ok "$file is a valid Chainsaw $kind"
+# lint_chainsaw <test|configuration> <file>
+lint_chainsaw() {
+  local out
+  if out=$(chainsaw lint "$1" -f "$2" 2>&1); then
+    ok "$2 is a valid Chainsaw $1"
   else
-    fail "$file isn't a valid Chainsaw $kind:"$'\n'"$out"
+    fail "$2 isn't a valid Chainsaw $1:"$'\n'"$out"
   fi
+}
+lint_chainsaw configuration verify/.chainsaw.yaml
+for file in verify/*/chainsaw-test.yaml; do
+  lint_chainsaw test "$file"
 done
 lint_rendering verify/lib/probes.yaml render_probes
 

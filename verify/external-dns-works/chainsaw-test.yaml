@@ -12,8 +12,6 @@ spec:
         template: ../lib/deploy-probes.yaml
     - try:
         - script:
-            # on-ready-nodes.sh gives each node up to 1m.
-            timeout: 5m
             content: >-
-              ../lib/on-ready-nodes.sh "$NAMESPACE" app=client '*Name:*'
+              ../lib/on-ready-nodes.sh "$NAMESPACE" app=client
               -- nslookup github.com

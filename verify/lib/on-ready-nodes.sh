@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Usage: on-ready-nodes.sh <namespace> <pod selector> <glob> <kubectl exec args>...
+# Usage: on-ready-nodes.sh <namespace> <pod selector> <kubectl exec args>...
 # Runs a command in the pod matching the selector on every Ready node, the GPU Node
-# included when it's Joined, and fails unless every output matches the glob.
+# included when it's Joined, and fails if it fails on any of them.
 # Chainsaw has no step that runs once per node (ADR 0004), so its script steps call
 # this. They point kubectl at the Lab, through a context named chainsaw.
 set -euo pipefail
 
-namespace=$1 selector=$2 pattern=$3
-shift 3
+namespace=$1 selector=$2
+shift 2
 
 # Waits for the pod on the given node to be Ready, and prints its name. Otherwise, says
 # why on stderr and fails. Each node gets 30s to show its pod and 30s for it to be Ready,
-# which keeps a few nodes within the step's timeout, so a slow node is named.
+# which keeps a few nodes within the exec timeout (.chainsaw.yaml), so a slow node is named.
 pod_on_node() {
   local node=$1 pod="" attempt
   for attempt in {1..15}; do
@@ -47,9 +47,7 @@ for node in $nodes; do
     bad=1
     continue
   }
-  out=$(kubectl -n "$namespace" exec "$pod" "$@" 2>&1) || true
-  # shellcheck disable=SC2053  # the pattern is a glob on purpose
-  if [[ $out == $pattern ]]; then
+  if out=$(kubectl -n "$namespace" exec "$pod" "$@" 2>&1); then
     echo "OK    $node"
   else
     # The command's own last line, rather than kubectl's "command terminated" after it.
