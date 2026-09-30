@@ -1,0 +1,19 @@
+# Deploys the probes into the check's namespace. The client pods are waited for node by
+# node (on-ready-nodes.sh), since a Joined GPU Node may be powered off.
+# Paths here are relative to the check's folder, not this file's.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: StepTemplate
+metadata:
+  name: deploy-probes
+spec:
+  try:
+    - apply:
+        file: ../lib/probes.yaml
+    - assert:
+        resource:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: web
+          status:
+            availableReplicas: 1

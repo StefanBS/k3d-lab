@@ -1,0 +1,12 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: cilium-healthy
+spec:
+  description: Cilium's agent reports itself healthy on every Ready node.
+  steps:
+    - try:
+        - script:
+            # on-ready-nodes.sh gives each node up to 1m.
+            timeout: 5m
+            content: ../lib/on-ready-nodes.sh kube-system k8s-app=cilium OK -c cilium-agent -- cilium-dbg status --brief

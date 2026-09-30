@@ -29,9 +29,9 @@ up *args:
 down:
     @scripts/down.sh
 
-# Check how the running Lab behaves
-verify:
-    @scripts/verify.sh
+# Check how the running Lab behaves; arguments go to Chainsaw, e.g. --include-test-regex chainsaw/<check>
+verify *args:
+    @scripts/verify.sh {{ args }}
 
 # Static checks; needs no Lab
 lint:

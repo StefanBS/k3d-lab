@@ -35,8 +35,8 @@ die() {
 }
 
 # For the scripts that report one line per check: doctor, lint and the host-setup
-# scripts print with these, verify with its own check(). doctor and lint count their
-# failures in fails, and exit non-zero if there are any.
+# scripts print with these; verify's checks report through Chainsaw (ADR 0004).
+# doctor and lint count their failures in fails, and exit non-zero if there are any.
 fails=0
 ok() { printf 'OK    %s\n' "$1"; }
 warn() { printf 'WARN  %s\n' "$1"; }

@@ -1,0 +1,18 @@
+# Chainsaw's settings for `just verify` (ADR 0004). Each folder here is one check.
+apiVersion: chainsaw.kyverno.io/v1alpha2
+kind: Configuration
+metadata:
+  name: verify
+spec:
+  # Chainsaw's defaults (5s for exec) are too short for waiting on pods and probes.
+  timeouts:
+    assert: 2m
+    error: 2m
+    exec: 2m
+  namespace:
+    # Each check's namespace is still deleted, without the run waiting for it.
+    fastDelete: true
+  execution:
+    # The probes are thrown away with each check's namespace, and busybox's
+    # `sleep infinity` ignores SIGTERM: without this, every cleanup waits 30s.
+    forceTerminationGracePeriod: 0s

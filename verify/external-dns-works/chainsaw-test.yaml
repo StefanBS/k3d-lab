@@ -1,0 +1,19 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: external-dns-works
+spec:
+  description: >-
+    Pods on every Ready node resolve names outside the Lab. CoreDNS forwards them to
+    Docker's embedded DNS, which needs k3d/entrypoint-route-localnet.sh on the k3d Nodes
+    it runs on. ArgoCD reads Git this way.
+  steps:
+    - use:
+        template: ../lib/deploy-probes.yaml
+    - try:
+        - script:
+            # on-ready-nodes.sh gives each node up to 1m.
+            timeout: 5m
+            content: >-
+              ../lib/on-ready-nodes.sh "$NAMESPACE" app=client '*Name:*'
+              -- nslookup github.com
