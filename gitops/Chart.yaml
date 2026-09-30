@@ -1,0 +1,5 @@
+apiVersion: v2
+name: gitops
+description: What the Lab's root Application syncs; the Platform and Workloads ApplicationSets.
+type: application
+version: 0.1.0

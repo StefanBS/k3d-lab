@@ -1,0 +1,63 @@
+{{- /*
+One ApplicationSet per group: an Application for every <group>/<component>/ folder,
+installing the chart its component.yaml names with the values.yaml beside it.
+The `{{`...`}}` parts are left for the ApplicationSet's own templating.
+*/}}
+{{- range $group := list "platform" "workloads" }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ $group }}
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: {{ $.Values.repoURL }}
+        revision: {{ $.Values.revision }}
+        files:
+          - path: {{ $group }}/*/component.yaml
+  template:
+    metadata:
+      name: '{{`{{.path.basename}}`}}'
+      labels:
+        k3d-lab/group: {{ $group }}
+    spec:
+      project: default
+      sources:
+        - repoURL: '{{`{{.repoURL}}`}}'
+          chart: '{{`{{.chart}}`}}'
+          targetRevision: '{{`{{.version}}`}}'
+          helm:
+            # The release `just up` installs with, for the components it bootstraps.
+            releaseName: '{{`{{.path.basename}}`}}'
+            valueFiles:
+              - '$values/{{`{{.path.path}}`}}/values.yaml'
+        - repoURL: {{ $.Values.repoURL }}
+          targetRevision: {{ $.Values.revision }}
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{`{{.namespace}}`}}'
+      # Git is the only source of truth: anything that drifts from it, or is no longer
+      # in it, is put back or removed.
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          # Some CRDs, ArgoCD's own among them, are too big for client-side apply.
+          - ServerSideApply=true
+        # Applications sync in no particular order, Platform and Workloads alike. One
+        # that needs another's CRDs fails until they exist, so it retries forever: once
+        # retries run out, ArgoCD never syncs the same commit again by itself.
+        retry:
+          limit: -1
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
+{{- end }}

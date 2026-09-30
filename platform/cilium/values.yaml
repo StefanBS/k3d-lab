@@ -16,3 +16,9 @@ cgroup:
   autoMount:
     enabled: false
   hostRoot: /sys/fs/cgroup
+# Hubble's certificates come from a Job in the Lab, not from Helm: Helm generates new
+# ones on every render, so ArgoCD would find Cilium out of sync forever.
+hubble:
+  tls:
+    auto:
+      method: cronJob

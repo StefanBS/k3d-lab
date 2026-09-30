@@ -5,21 +5,40 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 ## Prerequisites
 
 - **Docker CE**, running as root, alongside any Podman setup ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)). The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
-- `k3d` 5.9 or newer, `kubectl`, `helm` and `just`. `shellcheck` is only needed for `just lint`.
+- **[mise](https://mise.jdx.dev/installing-mise.html)**, activated in your shell. It installs every other tool (`k3d`, `kubectl`, `helm`, `just`, `yq`, `shellcheck`, `kubeconform`) at the versions pinned in `mise.toml`, the same ones CI uses. Once, in this repo:
 
-`just doctor` checks all of this and prints install hints for anything missing.
+  ```sh
+  mise trust && mise install
+  ```
+
+  The Lab's recipes use those versions whatever else is on your `PATH`.
+
+`just doctor` checks all of this and prints hints for anything missing.
 
 ## Everyday commands
 
 | Command | What it does |
 |---|---|
 | `just doctor` | Checks the Host has what the Lab needs. Installs nothing. |
-| `just up` | Builds the Lab, then runs `just verify`. Refuses if a Lab already exists. |
+| `just up` | Builds the Lab, then runs `just verify`. Refuses if a Lab already exists. `just up REVISION=<branch>` builds it from a pushed branch instead of `main`. |
 | `just verify` | Checks how the running Lab behaves: one PASS/FAIL/WARN line per check, non-zero exit on any FAIL. |
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
 
 The Lab's kube context is `k3d-lab`. `just up` adds it to your kubeconfig without switching to it.
+
+## GitOps
+
+`just up` installs Cilium and ArgoCD with Helm, then applies one root Application. From then on ArgoCD manages the whole Lab, Cilium and itself included, from `main` of this repo (or the `REVISION` you gave `up`). A change merged there is applied without running `up` again.
+
+The root Application syncs two ApplicationSets from `gitops/`: **Platform**, one Application per folder in `platform/`, and **Workloads**, one per folder in `workloads/`. Adding a component means adding one folder, `<group>/<name>/`, holding:
+
+- `component.yaml`: the upstream chart (`chart`, `repoURL`, a pinned `version`) and the `namespace` to install it in.
+- `values.yaml`: the chart's values. For Cilium and ArgoCD, `just up` installs from the same file, so bootstrap and ArgoCD never disagree.
+
+Every Application syncs automatically, with pruning and self-heal: a change made by hand with `kubectl` is undone. Applications sync in no particular order, Platform and Workloads alike. One that needs CRDs another component installs fails, and retries until they exist.
+
+`just lint` renders every component with its pinned chart and values and validates the output with `kubeconform`.
 
 ## Machine-specific values
 

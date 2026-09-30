@@ -13,9 +13,9 @@ default:
 doctor:
     @scripts/doctor.sh
 
-# Build the Lab, then verify it
-up:
-    @scripts/up.sh
+# Build the Lab, then verify it; REVISION=<branch> builds it from a branch other than main
+up *args:
+    @scripts/up.sh {{ args }}
 
 # Destroy the Lab (the Host's Secret Store and Lab CA are kept)
 down:

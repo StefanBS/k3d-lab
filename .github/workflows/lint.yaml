@@ -13,14 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: extractions/setup-just@v4
-      # The same shellcheck release as locally: the runner's preinstalled one is older
-      # and reports some findings under different codes.
-      - name: Install shellcheck
-        env:
-          SHELLCHECK_VERSION: v0.11.0
-        run: |
-          curl -sSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" |
-            tar -xJ --strip-components=1 -C "$RUNNER_TEMP" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      # Installs every tool in mise.toml, at the versions the Host uses.
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.9.17
       - run: just lint

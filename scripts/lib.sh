@@ -6,6 +6,12 @@ set -euo pipefail
 
 LAB_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
+# The tools come from mise.toml, at the versions CI uses, whatever the caller's PATH
+# holds. Without mise, the scripts use PATH as it is, and doctor says what's missing.
+if command -v mise >/dev/null; then
+  eval "$(cd "$LAB_ROOT" && mise env --shell bash)"
+fi
+
 # ADR 0001: the k3d Nodes run on Docker CE. Never trust the caller's DOCKER_HOST,
 # which may still point at Podman in shells started before the switch.
 export DOCKER_HOST=unix:///var/run/docker.sock
@@ -16,6 +22,8 @@ LAB_NETWORK=k3d-$LAB_NAME
 LAB_BRIDGE=br-k3d-lab
 LAB_SUBNET=172.28.0.0/16
 LAB_GATEWAY=172.28.0.1
+# ArgoCD reads the Lab from here, without credentials.
+LAB_REPO=https://github.com/StefanBS/k3d-lab.git
 
 log() { printf '==> %s\n' "$*" >&2; }
 die() {
@@ -23,14 +31,41 @@ die() {
   exit 1
 }
 
+# For the scripts that report one line per check: doctor and lint print with these,
+# verify with its own check(). Each counts its failures in fails, and exits non-zero
+# if there are any.
+fails=0
+ok() { printf 'OK    %s\n' "$1"; }
+warn() { printf 'WARN  %s\n' "$1"; }
+fail() {
+  printf 'FAIL  %s\n' "$1"
+  fails=$((fails + 1))
+}
+
 # kubectl, always against the Lab, whatever the current context is.
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
 
-# Reads a top-level scalar from a flat YAML file (yq isn't a prerequisite),
-# dropping a trailing comment and surrounding quotes.
-yaml_get() {
-  sed -n "s/^$2:[[:space:]]*//p" "$1" | head -n1 |
-    sed -e 's/[[:space:]]#.*$//' -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+# Every component folder, as <group>/<name>: one ArgoCD Application each.
+component_dirs() {
+  local file
+  for file in "$LAB_ROOT"/{platform,workloads}/*/component.yaml; do
+    [[ -f $file ]] || continue # an empty group leaves its glob unexpanded
+    file=${file#"$LAB_ROOT"/}
+    echo "${file%/component.yaml}"
+  done
+}
+
+# The arguments that make `helm template` or `helm upgrade --install` render a component
+# the way ArgoCD does: its pinned chart, namespace and values. One per line, for mapfile.
+component_helm_args() {
+  local dir=$LAB_ROOT/$1
+  local component=$dir/component.yaml
+  printf '%s\n' \
+    "$(yq '.chart' "$component")" \
+    --repo "$(yq '.repoURL' "$component")" \
+    --version "$(yq '.version' "$component")" \
+    --namespace "$(yq '.namespace' "$component")" \
+    --values "$dir/values.yaml"
 }

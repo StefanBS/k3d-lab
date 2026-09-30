@@ -1,0 +1,4 @@
+# The root Application that `just up` applies overrides both, so ArgoCD reads the
+# Platform and Workloads from the same Git revision as this chart.
+repoURL: https://github.com/StefanBS/k3d-lab.git
+revision: main

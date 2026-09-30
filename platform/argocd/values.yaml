@@ -1,0 +1,25 @@
+configs:
+  params:
+    # Plain HTTP until the Gateway terminates TLS in front of it.
+    server.insecure: true
+# Nothing logs in through SSO or needs notifications in the Lab, so neither runs.
+dex:
+  enabled: false
+notifications:
+  enabled: false
+# Modest requests for a Host short on RAM; every component runs one replica.
+controller:
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+repoServer:
+  resources:
+    requests: {cpu: 25m, memory: 128Mi}
+server:
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+applicationSet:
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+redis:
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
