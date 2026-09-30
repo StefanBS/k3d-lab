@@ -41,4 +41,7 @@ if [[ $gpu_node != *" True" ]]; then
   [[ -z $gpu_node ]] || warn "the GPU Node ${gpu_node%% *} is Joined but NotReady; its checks are skipped"
   args+=(--selector '!k3d-lab/gpu')
 fi
-exec chainsaw test "${args[@]}" "$@"
+# Go's test runner announces every check as it starts, pauses and resumes it, even with
+# --quiet. The PASS or FAIL for each check says all of that. With pipefail, the
+# pipeline fails if Chainsaw does.
+chainsaw test "${args[@]}" "$@" | grep --line-buffered -Ev '^=== (RUN|PAUSE|CONT) '
