@@ -9,11 +9,6 @@ source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/host.sh"
 
 pending=0
-podman_socket=unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock
-# What sets DOCKER_HOST to Podman in a shell startup file, and the marker this
-# script comments it out with, so you can find and restore it.
-podman_export='^[[:space:]]*(export[[:space:]]+)?(DOCKER_HOST|DOCKER_SOCK)=.*podman'
-disabled_marker='# disabled by k3d-lab ADR 0001 (use docker contexts): '
 
 log "Lab CA"
 if [[ -f $LAB_CA_CERT && -f $LAB_CA_KEY ]]; then
@@ -48,39 +43,6 @@ for ((i = 0; i < ${#ROOT_STEPS[@]}; i += 2)); do
   fi
 done
 
-log "Docker CLI contexts"
-if ! docker_ce_installed; then
-  # Until then, docker may be podman-docker's shim, which answers for Podman.
-  warn "not yet: the Docker contexts need Docker CE's CLI"
-  pending=$((pending + 1))
-elif docker context inspect podman >/dev/null 2>&1; then
-  ok "'docker --context podman' reaches Podman; the default context is Docker CE"
-else
-  changed "Creating the 'podman' Docker context ($podman_socket)"
-  docker context create podman --docker "host=$podman_socket" >/dev/null
-fi
-
-# Shell startup files and systemd's user environment that point docker at Podman.
-# Disabled rather than deleted, so they can be restored.
-for rc in ~/.bashrc ~/.bash_profile ~/.profile ~/.zshrc ~/.bashrc.d/*; do
-  [[ -f $rc ]] || continue
-  if grep -Eq "$podman_export" "$rc"; then
-    changed "Disabling the DOCKER_HOST export in $rc (open shells keep it until you log in again)"
-    sed -Ei "s|$podman_export|$disabled_marker&|" "$rc"
-  fi
-done
-for conf in ~/.config/environment.d/*.conf; do
-  [[ -f $conf ]] || continue # no files leaves the glob unexpanded
-  if grep -Eq '^DOCKER_HOST=.*podman' "$conf"; then
-    changed "Disabling $conf, which sets DOCKER_HOST to Podman"
-    mv "$conf" "$conf.bak-k3d-lab-disabled"
-  fi
-done
-if systemctl --user show-environment 2>/dev/null | grep -Eq '^DOCKER_HOST=.*podman'; then
-  changed "Unsetting DOCKER_HOST in systemd's user environment"
-  systemctl --user unset-environment DOCKER_HOST
-fi
-ok "nothing points docker at Podman by default"
 # The group database has it, but this login session was started without it.
 if owner_in_docker_group && ! in_docker_group; then
   warn "this session isn't in the docker group yet: log in again to use docker and k3d without sudo"

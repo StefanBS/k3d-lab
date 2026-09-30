@@ -30,14 +30,6 @@ fi
 
 # Each fix_<check> does one step of ROOT_STEPS (host.sh), and says what it changes.
 
-fix_podman_docker_removed() {
-  changed "Removing podman-docker, which conflicts with docker-ce (Podman itself stays)"
-  local conflicting
-  mapfile -t conflicting < <(podman_docker_installed)
-  ((${#conflicting[@]} == 0)) || dnf -y remove "${conflicting[@]}"
-  [[ ! -L /var/run/docker.sock ]] || rm /var/run/docker.sock
-}
-
 fix_docker_ce_installed() {
   changed "Installing Docker CE"
   [[ -f /etc/yum.repos.d/docker-ce.repo ]] ||

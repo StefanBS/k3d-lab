@@ -4,7 +4,7 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 
 ## Prerequisites
 
-- **Docker CE**, running as root, alongside any Podman setup ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)). The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
+- **Docker CE**, running as root ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)); `just host-setup` installs it. The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
 - **[mise](https://mise.jdx.dev/installing-mise.html)**, activated in your shell. It installs every other tool (`k3d`, `kubectl`, `helm`, `just`, `yq`, `shellcheck`, `kubeconform`) at the versions pinned in `mise.toml`, the same ones CI uses. Once, in this repo:
 
   ```sh
@@ -25,7 +25,7 @@ just host-setup
 
 It prepares what outlives any Lab and is safe to re-run: a run with nothing to do says so.
 
-- **Docker CE alongside Podman** ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)): `podman-docker` removed, Docker CE installed with its data in `/home/docker-data` (labelled for SELinux like `/var/lib/docker`), and Docker CLI contexts in place of `DOCKER_HOST` exports: `default` is Docker CE, `docker --context podman` is Podman. The exports it finds in your shell startup files are commented out, not deleted.
+- **Docker CE** ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)): installed with its data in `/home/docker-data` (labelled for SELinux like `/var/lib/docker`), started at boot, and usable without sudo through the `docker` group. If `podman-docker` is installed, `dnf` refuses Docker CE until you remove it (`sudo dnf remove podman-docker`); Podman itself can stay.
 - **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `lab.localhost` (where every Lab UI lives), `k3d.internal`, the Lab's subnet and loopback.
 
 `host-setup` never escalates privileges. It checks the steps that need root and, if any are left, asks you to run them yourself, then run `just host-setup` again:

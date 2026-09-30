@@ -15,7 +15,7 @@ if ((EUID != 0)) && command -v mise >/dev/null; then
 fi
 
 # ADR 0001: the k3d Nodes run on Docker CE. Never trust the caller's DOCKER_HOST,
-# which may still point at Podman in shells started before the switch.
+# which may point at another engine, such as Podman or rootless Docker.
 export DOCKER_HOST=unix:///var/run/docker.sock
 
 LAB_NAME=lab

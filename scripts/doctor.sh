@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # Checks that the Host has what the Lab needs. Installs nothing; prints hints instead.
 
-# Saved before lib.sh pins DOCKER_HOST to Docker CE: the Podman check below needs the
-# caller's own value.
-caller_docker_host=${DOCKER_HOST:-}
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
@@ -30,17 +27,6 @@ if engine=$(docker version --format '{{.Server.Platform.Name}}' 2>/dev/null) && 
   ok "Docker CE is running ($DOCKER_HOST)"
 else
   fail "Docker CE isn't reachable at $DOCKER_HOST (ADR 0001): https://docs.docker.com/engine/install/fedora/"
-fi
-
-# Where a plain `docker` in the caller's shell goes: DOCKER_HOST wins over the current context.
-caller_endpoint=$caller_docker_host
-if [[ -z $caller_endpoint ]]; then
-  caller_context=$(env -u DOCKER_HOST docker context show 2>/dev/null) || caller_context=""
-  caller_endpoint=$(env -u DOCKER_HOST docker context inspect "$caller_context" \
-    --format '{{.Endpoints.docker.Host}}' 2>/dev/null) || caller_endpoint=""
-fi
-if [[ $caller_endpoint == *podman* ]]; then
-  warn "plain 'docker' in your shell goes to Podman ($caller_endpoint); the Lab's recipes ignore that, but 'docker' commands won't see the Lab (unset DOCKER_HOST or log in again, and use 'docker context use default')"
 fi
 
 # k3s evicts pods and taints the node when its image filesystem drops below 15% free,

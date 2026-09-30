@@ -9,16 +9,12 @@
 LAB_OWNER=${SUDO_USER:-$USER}
 
 DOCKER_CE_PACKAGES=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin)
-# podman-docker declares Conflicts: docker-ce (ADR 0001), and these come with it.
-# Rootless Podman itself stays.
-PODMAN_DOCKER_PACKAGES=(podman-docker docker-compose docker-compose-switch moby-filesystem)
 DOCKER_DAEMON_JSON=/etc/docker/daemon.json
 
 # The steps that need root, in the order host-setup-root.sh does them: a check, then
 # what it means. host-setup.sh only runs the checks; host-setup-root.sh runs
 # fix_<check> for each one that fails.
 ROOT_STEPS=(
-  podman_docker_removed "podman-docker isn't installed"
   docker_ce_installed "Docker CE is installed"
   docker_data_root_labelled "SELinux labels $DOCKER_DATA_ROOT like /var/lib/docker"
   docker_data_root_set "Docker CE keeps its data in $DOCKER_DATA_ROOT"
@@ -33,13 +29,6 @@ changed() {
   log "$1"
   changes=$((changes + 1))
 }
-
-# The ones of PODMAN_DOCKER_PACKAGES that are installed, one per line.
-podman_docker_installed() {
-  rpm -q --qf '%{NAME}\n' "${PODMAN_DOCKER_PACKAGES[@]}" 2>/dev/null | grep -v 'not installed'
-}
-# Also its symlink to rootful Podman's socket, where Docker CE creates a real one.
-podman_docker_removed() { [[ -z $(podman_docker_installed) && ! -L /var/run/docker.sock ]]; }
 
 docker_ce_installed() { rpm -q "${DOCKER_CE_PACKAGES[@]}" >/dev/null 2>&1; }
 
