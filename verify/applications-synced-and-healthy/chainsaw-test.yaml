@@ -1,0 +1,30 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: applications-synced-and-healthy
+spec:
+  description: >-
+    Every ArgoCD Application is Synced and Healthy. The root Application is among them,
+    and it isn't Healthy while an ApplicationSet fails to generate its Applications.
+  steps:
+    - try:
+        # The error below passes when there are no Applications at all.
+        - assert:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Application
+              metadata:
+                name: root
+                namespace: argocd
+        - error:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Application
+              metadata:
+                namespace: argocd
+              (status.sync.status != 'Synced' || status.health.status != 'Healthy'): true
+      catch:
+        - script:
+            content: >-
+              kubectl -n argocd get applications
+              -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status

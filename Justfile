@@ -29,9 +29,9 @@ up *args:
 down:
     @scripts/down.sh
 
-# Check how the running Lab behaves
-verify:
-    @scripts/verify.sh
+# Check how the running Lab behaves; `just verify <check>...` runs only those checks
+verify *args:
+    @scripts/verify.sh {{ args }}
 
 # Static checks; needs no Lab
 lint:

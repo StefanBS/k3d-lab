@@ -35,6 +35,11 @@ render_gitops() {
   helm template gitops gitops --kube-version "$k8s_version" >"$manifests"
 }
 
+# The probes that verify's checks deploy are plain manifests: nothing to render.
+render_probes() {
+  cp verify/lib/probes.yaml "$manifests"
+}
+
 # Schemas are cached between runs: the CRDs catalog is pinned, so they never change
 # under the same URL.
 kubeconform_cache=${XDG_CACHE_HOME:-$HOME/.cache}/kubeconform
@@ -91,6 +96,24 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
 done
 lint_rendering gitops render_gitops
+
+# Chainsaw only checks each file against its schema. The step templates have none, so
+# a broken one shows up when `just verify` loads the checks that use it.
+log "Verify checks"
+# lint_chainsaw <test|configuration> <file>
+lint_chainsaw() {
+  local out
+  if out=$(chainsaw lint "$1" -f "$2" 2>&1); then
+    ok "$2 is a valid Chainsaw $1"
+  else
+    fail "$2 isn't a valid Chainsaw $1:"$'\n'"$out"
+  fi
+}
+lint_chainsaw configuration verify/.chainsaw.yaml
+for file in verify/*/chainsaw-test.yaml; do
+  lint_chainsaw test "$file"
+done
+lint_rendering verify/lib/probes.yaml render_probes
 
 ((fails == 0)) || die "lint found $fails problem(s)"
 log "Lint passed"

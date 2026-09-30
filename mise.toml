@@ -11,3 +11,5 @@ just = "1.50.0"
 yq = "4.53.3"
 shellcheck = "0.11.0"
 kubeconform = "0.8.0"
+# Runs `just verify`'s checks (ADR 0004). Not in mise's registry, so named by its aqua package.
+"aqua:kyverno/chainsaw" = "0.2.15"

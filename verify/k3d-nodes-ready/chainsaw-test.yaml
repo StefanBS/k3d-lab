@@ -1,0 +1,25 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: k3d-nodes-ready
+spec:
+  description: >-
+    Every k3d Node is Ready. The GPU Node isn't one of them: it may be powered off while
+    Joined, and the wrapper, scripts/verify.sh, reports on it.
+  steps:
+    - try:
+        # The error below passes when there are no k3d Nodes at all.
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Node
+              (metadata.labels."k3d-lab/gpu" == null): true
+        - error:
+            resource:
+              apiVersion: v1
+              kind: Node
+              (metadata.labels."k3d-lab/gpu" == null): true
+              (status.conditions[?type == 'Ready'] | [0].status != 'True'): true
+      catch:
+        - script:
+            content: kubectl get nodes
