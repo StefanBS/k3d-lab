@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Checks that the Host has what the Lab needs. Installs nothing; prints hints instead.
 
-# Saved before lib.sh pins DOCKER_HOST to Docker CE: the Podman check below needs the
-# caller's own value.
-caller_docker_host=${DOCKER_HOST:-}
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=host.sh
+source "$(dirname "$0")/host.sh"
 
 # The variable names a .env-style file assigns, sorted.
 env_keys() {
@@ -25,31 +24,52 @@ else
 fi
 
 if engine=$(docker version --format '{{.Server.Platform.Name}}' 2>/dev/null) && [[ $engine == Docker* ]]; then
-  ok "Docker CE is running ($DOCKER_HOST)"
+  ok "Docker CE answers at $DOCKER_HOST"
 else
   fail "Docker CE isn't reachable at $DOCKER_HOST (ADR 0001): https://docs.docker.com/engine/install/fedora/"
 fi
 
-# Where a plain `docker` in the caller's shell goes: DOCKER_HOST wins over the current context.
-caller_endpoint=$caller_docker_host
-if [[ -z $caller_endpoint ]]; then
-  caller_context=$(env -u DOCKER_HOST docker context show 2>/dev/null) || caller_context=""
-  caller_endpoint=$(env -u DOCKER_HOST docker context inspect "$caller_context" \
-    --format '{{.Endpoints.docker.Host}}' 2>/dev/null) || caller_endpoint=""
-fi
-if [[ $caller_endpoint == *podman* ]]; then
-  warn "plain 'docker' in your shell goes to Podman ($caller_endpoint); the Lab's recipes ignore that, but 'docker' commands won't see the Lab (unset DOCKER_HOST or log in again, and use 'docker context use default')"
+# k3s evicts pods and taints the node when its image filesystem drops below 15% free,
+# and the k3d Nodes keep theirs in Docker's data directory (ADR 0001).
+# Where host-setup put it, when Docker CE can't say.
+data_root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null) || data_root=$DOCKER_DATA_ROOT
+if [[ ! -d $data_root ]]; then
+  warn "Docker's data directory $data_root doesn't exist yet: run 'just host-setup'"
+else
+  read -r avail size < <(df --output=avail,size --block-size=1G "$data_root" | tail -1)
+  free_pct=$((100 * avail / size))
+  if ((free_pct < 20)); then
+    warn "Docker's data directory $data_root has only ${avail} GiB free (${free_pct}%); k3s evicts pods below 15%"
+  else
+    ok "Docker's data directory $data_root has ${avail} GiB free (${free_pct}%)"
+  fi
 fi
 
-env_file=$LAB_ROOT/.env
-if [[ ! -f $env_file ]]; then
+# What host-setup does, including the steps that need root.
+if [[ -f $LAB_CA_CERT ]]; then
+  ok "the Lab CA exists ($LAB_CA_DIR)"
+else
+  warn "the Lab CA is missing ($LAB_CA_CERT): run 'just host-setup'"
+fi
+# shellcheck disable=SC2329  # called by run_root_steps
+not_set_up() { warn "not yet: $2 (run 'just host-setup')"; }
+run_root_steps not_set_up
+
+if [[ ! -f $LAB_ENV_FILE ]]; then
   warn ".env is missing: copy .env.example and fill it in (only the GPU Node recipes need it)"
 else
-  missing=$(comm -23 <(env_keys "$LAB_ROOT/.env.example") <(env_keys "$env_file"))
+  missing=$(comm -23 <(env_keys "$LAB_ROOT/.env.example") <(env_keys "$LAB_ENV_FILE"))
   if [[ -n $missing ]]; then
-    warn ".env is missing keys from .env.example: $(echo "$missing" | paste -sd' ')"
+    warn ".env is missing keys from .env.example: $(paste -sd' ' <<<"$missing")"
   else
     ok ".env has every key in .env.example"
+  fi
+  # The GPU Node routes the Lab's subnet through this address (ADR 0002).
+  lan_ip=$(host_lan_ip)
+  if [[ $(sed -n 's/^HOST_LAN_IP=//p' "$LAB_ENV_FILE") == "$lan_ip" ]]; then
+    ok "HOST_LAN_IP in .env is the Host's address ($lan_ip)"
+  else
+    warn "HOST_LAN_IP in .env isn't the Host's address ($lan_ip): run 'just host-wizard' before joining the GPU Node"
   fi
 fi
 

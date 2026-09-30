@@ -31,7 +31,7 @@ git ls-remote --exit-code "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revisio
 export K3D_FIX_MOUNTS=1
 
 log "Creating the Lab network $LAB_NETWORK ($LAB_SUBNET)"
-if docker network inspect "$LAB_NETWORK" >/dev/null 2>&1; then
+if lab_network_exists; then
   # The Server must be the first container on the network to get its fixed address.
   [[ $(docker network inspect -f '{{len .Containers}}' "$LAB_NETWORK") -eq 0 ]] ||
     die "network $LAB_NETWORK still has containers attached; run 'just down' first"

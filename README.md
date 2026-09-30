@@ -4,7 +4,7 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 
 ## Prerequisites
 
-- **Docker CE**, running as root, alongside any Podman setup ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)). The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
+- **Docker CE**, running as root ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)); `just host-setup` installs it. The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
 - **[mise](https://mise.jdx.dev/installing-mise.html)**, activated in your shell. It installs every other tool (`k3d`, `kubectl`, `helm`, `just`, `yq`, `shellcheck`, `kubeconform`) at the versions pinned in `mise.toml`, the same ones CI uses. Once, in this repo:
 
   ```sh
@@ -15,13 +15,36 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 
 `just doctor` checks all of this and prints hints for anything missing.
 
+## Preparing the Host
+
+Once per Host, run:
+
+```sh
+just host-setup
+```
+
+It prepares what outlives any Lab and is safe to re-run: a run with nothing to do says so.
+
+- **Docker CE** ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)): installed with its data in `/home/docker-data` (labelled for SELinux like `/var/lib/docker`), started at boot, and usable without sudo through the `docker` group. If `podman-docker` is installed, `dnf` refuses Docker CE until you remove it (`sudo dnf remove podman-docker`); Podman itself can stay.
+- **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `lab.localhost` (where every Lab UI lives), `k3d.internal`, the Lab's subnet and loopback.
+
+`host-setup` never escalates privileges. It checks the steps that need root and, if any are left, asks you to run them yourself, then run `just host-setup` again:
+
+```sh
+sudo scripts/host-setup-root.sh
+```
+
+`just host-wizard` walks you through the steps only you can do: for now, reserving the Host's LAN address on your router, which the GPU Node needs. It saves the address to `.env`.
+
+`just down` never touches any of this.
+
 ## Everyday commands
 
 | Command | What it does |
 |---|---|
-| `just doctor` | Checks the Host has what the Lab needs. Installs nothing. |
+| `just doctor` | Checks the Host has what the Lab needs: the tools, every `host-setup` step, free space in Docker's data directory, and that `HOST_LAN_IP` in `.env` is still the Host's address. Installs nothing. |
 | `just up` | Builds the Lab, then runs `just verify`. Refuses if a Lab already exists. `just up REVISION=<branch>` builds it from a pushed branch instead of `main`. |
-| `just verify` | Checks how the running Lab behaves: one PASS/FAIL/WARN line per check, non-zero exit on any FAIL. |
+| `just verify` | Checks how the running Lab behaves: one PASS/FAIL line per check, non-zero exit on any FAIL. |
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
 

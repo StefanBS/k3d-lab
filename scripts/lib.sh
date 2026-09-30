@@ -13,7 +13,7 @@ if command -v mise >/dev/null; then
 fi
 
 # ADR 0001: the k3d Nodes run on Docker CE. Never trust the caller's DOCKER_HOST,
-# which may still point at Podman in shells started before the switch.
+# which may point at another engine, such as Podman or rootless Docker.
 export DOCKER_HOST=unix:///var/run/docker.sock
 
 LAB_NAME=lab
@@ -21,9 +21,12 @@ LAB_CONTEXT=k3d-$LAB_NAME
 LAB_NETWORK=k3d-$LAB_NAME
 LAB_BRIDGE=br-k3d-lab
 LAB_SUBNET=172.28.0.0/16
+LAB_SUBNET_NETMASK=255.255.0.0 # LAB_SUBNET's /16, for the Lab CA's name constraints
 LAB_GATEWAY=172.28.0.1
 # ArgoCD reads the Lab from here, without credentials.
 LAB_REPO=https://github.com/StefanBS/k3d-lab.git
+# Machine-specific values, never committed (.env.example lists them).
+LAB_ENV_FILE=$LAB_ROOT/.env
 
 log() { printf '==> %s\n' "$*" >&2; }
 die() {
@@ -31,9 +34,9 @@ die() {
   exit 1
 }
 
-# For the scripts that report one line per check: doctor and lint print with these,
-# verify with its own check(). Each counts its failures in fails, and exits non-zero
-# if there are any.
+# For the scripts that report one line per check: doctor, lint and the host-setup
+# scripts print with these, verify with its own check(). doctor and lint count their
+# failures in fails, and exit non-zero if there are any.
 fails=0
 ok() { printf 'OK    %s\n' "$1"; }
 warn() { printf 'WARN  %s\n' "$1"; }
@@ -46,6 +49,11 @@ fail() {
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
+lab_network_exists() { docker network inspect "$LAB_NETWORK" >/dev/null 2>&1; }
+
+# The Host's route to the LAN, and its address there (HOST_LAN_IP, ADR 0002).
+host_route() { ip -4 route get 1.1.1.1; }
+host_lan_ip() { host_route | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
 
 # Every component folder, as <group>/<name>: one ArgoCD Application each.
 component_dirs() {
