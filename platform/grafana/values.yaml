@@ -1,5 +1,5 @@
 # Anyone can look without logging in; changing things takes the admin login, whose
-# password `just up` generates into the Secret grafana-admin. `just creds` prints it.
+# password `just up` generates into the Secret named here. `just creds` prints it.
 admin:
   existingSecret: grafana-admin
 grafana.ini:

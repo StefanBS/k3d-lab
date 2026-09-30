@@ -33,9 +33,7 @@ pod_on_node() {
   echo "$pod"
 }
 
-nodes=$(kubectl get nodes \
-  -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' |
-  awk '$2 == "True" { print $1 }')
+nodes=$("$(dirname "$0")/ready-nodes.sh")
 [[ -n $nodes ]] || {
   echo "FAIL  no Ready nodes"
   exit 1

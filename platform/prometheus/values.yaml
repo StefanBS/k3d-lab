@@ -1,6 +1,8 @@
 # Only the server runs, and it scrapes nothing itself: Alloy is the Lab's only collector,
 # and remote-writes to it at http://prometheus-server.monitoring.svc/api/v1/write.
 server:
+  # Setting extraFlags replaces the chart's default, web.enable-lifecycle, which its
+  # config reloader needs.
   extraFlags:
     - web.enable-lifecycle
     - web.enable-remote-write-receiver

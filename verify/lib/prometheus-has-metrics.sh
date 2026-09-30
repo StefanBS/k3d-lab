@@ -10,18 +10,17 @@ set -euo pipefail
 # The jobs Alloy scrapes on each node (platform/alloy/values.yaml).
 node_jobs=(kubelet cadvisor node-exporter)
 
-# Prints the result of a PromQL query as "<label values>" lines, through the API server's
-# proxy to Prometheus' Service.
+# Usage: query <PromQL> <yq expression>
+# Runs the query through the API server's proxy to Prometheus' Service, and prints what
+# the yq expression makes of the JSON response.
 query() {
-  local encoded
-  encoded=$(Q=$1 yq -n 'strenv(Q) | @uri')
+  local promql=$1 expression=$2 encoded
+  encoded=$(Q=$promql yq -n 'strenv(Q) | @uri')
   kubectl get --raw "/api/v1/namespaces/monitoring/services/prometheus-server:http/proxy/api/v1/query?query=$encoded" |
-    yq -p json "$2"
+    yq -p json "$expression"
 }
 
-nodes=$(kubectl get nodes \
-  -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' |
-  awk '$2 == "True" { print $1 }')
+nodes=$("$(dirname "$0")/ready-nodes.sh")
 [[ -n $nodes ]] || {
   echo "FAIL  no Ready nodes"
   exit 1
@@ -30,13 +29,13 @@ nodes=$(kubectl get nodes \
 for attempt in {1..24}; do
   missing=()
   # "<node> <job>" for every target that's up.
-  up=$(query 'up == 1' '.data.result[].metric | .node + " " + .job' 2>&1) || up=""
+  up_targets=$(query 'up == 1' '.data.result[].metric | .node + " " + .job' 2>&1) || up_targets=""
   for node in $nodes; do
     for job in "${node_jobs[@]}"; do
-      grep -qx "$node $job" <<<"$up" || missing+=("$node: $job")
+      grep -qx "$node $job" <<<"$up_targets" || missing+=("$node: $job")
     done
   done
-  grep -q ' kube-state-metrics$' <<<"$up" || missing+=("kube-state-metrics")
+  grep -q ' kube-state-metrics$' <<<"$up_targets" || missing+=("kube-state-metrics")
   ((${#missing[@]})) || break
   ((attempt < 24)) && sleep 5
 done
