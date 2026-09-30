@@ -15,17 +15,26 @@ trap 'rm -f "$manifests"' EXIT
 
 # The ApplicationSets template these fields into each component's Application.
 lint_component_folder() {
-  local dir=$1 key
-  for key in chart repoURL version namespace; do
+  local dir=$1 key keys=(namespace) file=kustomization.yaml
+  if component_has_chart "$dir"; then
+    keys+=(repoURL version)
+    file=values.yaml
+  fi
+  for key in "${keys[@]}"; do
     # -e: fails when the key is missing or null.
     yq -e ".$key" "$dir/component.yaml" >/dev/null 2>&1 || fail "$dir/component.yaml: '$key' is missing"
   done
-  [[ -f $dir/values.yaml ]] || fail "$dir/values.yaml is missing"
+  [[ -f $dir/$file ]] || fail "$dir/$file is missing"
 }
 
-# Renders a component into $manifests the way ArgoCD does: its pinned chart and values.
+# Renders a component into $manifests the way ArgoCD does: its pinned chart and values,
+# or its kustomization.
 render_component() {
   local args
+  if ! component_has_chart "$1"; then
+    kubectl kustomize "$1" >"$manifests"
+    return
+  fi
   mapfile -t args < <(component_helm_args "$1")
   helm template "${1##*/}" "${args[@]}" --include-crds --kube-version "$k8s_version" >"$manifests"
 }

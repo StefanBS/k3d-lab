@@ -6,6 +6,11 @@
 # check runs. The rest go to `chainsaw test`, such as --pause-on-failure.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=host.sh
+source "$(dirname "$0")/host.sh"
+
+# The checks that call the Lab from the Host trust only the Lab CA.
+export LAB_CA_CERT
 
 # Checked here, because Chainsaw passes when a filter matches no check: a typo would
 # otherwise look like success.

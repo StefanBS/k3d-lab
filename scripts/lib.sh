@@ -51,6 +51,16 @@ kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
 lab_network_exists() { docker network inspect "$LAB_NETWORK" >/dev/null 2>&1; }
 
+# The Host's ports that k3d publishes the Lab's Gateway on (k3d/cluster.yaml).
+LAB_HOST_PORTS=(80 443)
+
+# Prints the Host's listening sockets on any of LAB_HOST_PORTS, one per line.
+lab_host_ports_taken() {
+  local filter port
+  for port in "${LAB_HOST_PORTS[@]}"; do filter+="${filter:+ or }sport = :$port"; done
+  ss -ltnH "( $filter )" | awk '{ print $4 }'
+}
+
 # The Host's route to the LAN, and its address there (HOST_LAN_IP, ADR 0002).
 host_route() { ip -4 route get 1.1.1.1; }
 host_lan_ip() { host_route | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
@@ -64,6 +74,10 @@ component_dirs() {
     echo "${file%/component.yaml}"
   done
 }
+
+# Whether a component folder installs a chart; otherwise its kustomization.yaml is the
+# component (the Platform and Workloads ApplicationSets decide the same way).
+component_has_chart() { [[ $(yq '.chart' "$LAB_ROOT/$1/component.yaml") != null ]]; }
 
 # The arguments that make `helm template` or `helm upgrade --install` render a component
 # the way ArgoCD does: its pinned chart, namespace and values. One per line, for mapfile.

@@ -1,0 +1,24 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: https-ingress
+spec:
+  description: >-
+    From the Host, the ArgoCD UI answers at https://argocd.lab.localhost with a
+    certificate that the Lab CA alone vouches for, and plain HTTP redirects to HTTPS.
+    The Gateway listens on the Host's ports 80 and 443 through k3d.
+  steps:
+    - try:
+        # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
+        # verify.sh exports LAB_CA_CERT.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" -o /dev/null https://argocd.lab.localhost/
+        - script:
+            content: >-
+              curl -sS --retry 5 --retry-all-errors --retry-delay 2
+              -o /dev/null -w '%{http_code} %{redirect_url}' http://argocd.lab.localhost/
+            check:
+              ($error == null): true
+              ($stdout): 301 https://argocd.lab.localhost/

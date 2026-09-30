@@ -1,0 +1,7 @@
+# The Gateway API CRDs, at the version Cilium supports (its Gateway API docs name it).
+# `just up` applies these before installing Cilium, which only runs its Gateway
+# controller if the CRDs exist when it starts.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.1/standard-install.yaml

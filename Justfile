@@ -29,6 +29,10 @@ up *args:
 down:
     @scripts/down.sh
 
+# Print the Lab's UIs and how to log in to them
+creds:
+    @scripts/creds.sh
+
 # Check how the running Lab behaves; `just verify <check>...` runs only those checks
 verify *args:
     @scripts/verify.sh {{ args }}

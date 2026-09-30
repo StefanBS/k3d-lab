@@ -1,7 +1,20 @@
+global:
+  domain: argocd.lab.localhost
 configs:
   params:
-    # Plain HTTP until the Gateway terminates TLS in front of it.
+    # Plain HTTP behind the Lab's Gateway, which terminates TLS in front of it.
     server.insecure: true
+server:
+  httproute:
+    enabled: true
+    parentRefs:
+      - name: lab
+        namespace: gateway
+        sectionName: https
+    hostnames:
+      - argocd.lab.localhost
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
 # Nothing logs in through SSO or needs notifications in the Lab, so neither runs.
 dex:
   enabled: false
@@ -14,9 +27,6 @@ controller:
 repoServer:
   resources:
     requests: {cpu: 25m, memory: 128Mi}
-server:
-  resources:
-    requests: {cpu: 10m, memory: 64Mi}
 applicationSet:
   resources:
     requests: {cpu: 10m, memory: 64Mi}

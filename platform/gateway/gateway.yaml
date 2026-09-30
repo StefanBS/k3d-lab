@@ -1,0 +1,64 @@
+# The Lab's one way in: every UI is served by name at https://<name>.lab.localhost.
+# Cilium runs it on the Server's host network (platform/cilium/values.yaml), and k3d
+# publishes the Server's ports 80 and 443 on the Host's loopback (k3d/cluster.yaml).
+# A component exposes its UI with an HTTPRoute whose parentRef is this Gateway's
+# https listener.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: lab
+spec:
+  gatewayClassName: cilium
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: "*.lab.localhost"
+      # Only the redirect below.
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.lab.localhost"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: lab-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+# One wildcard certificate for every UI, from the Lab CA, which the Host already trusts.
+# A new Lab gets a new certificate, trusted all the same.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lab-tls
+spec:
+  secretName: lab-tls
+  dnsNames:
+    - "*.lab.localhost"
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: lab-ca
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: https-redirect
+spec:
+  parentRefs:
+    - name: lab
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

@@ -4,6 +4,8 @@
 # of LAB_REPO, main by default.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=host.sh
+source "$(dirname "$0")/host.sh"
 
 revision=main
 for arg; do
@@ -24,6 +26,10 @@ install_component() {
 }
 
 lab_exists && die "a Lab already exists; run 'just down' first"
+[[ -f $LAB_CA_CERT && -f $LAB_CA_KEY ]] || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host-setup'"
+taken=$(lab_host_ports_taken)
+[[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
+$taken"
 git ls-remote --exit-code "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" >/dev/null ||
   die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
 
@@ -55,12 +61,23 @@ expected_ip=$(yq '.k8sServiceHost' "$LAB_ROOT/platform/cilium/values.yaml")
 [[ $server_ip == "$expected_ip" ]] ||
   die "the Server got $server_ip, but Cilium's values expect $expected_ip; run 'just down' and try again"
 
+# Cilium only runs its Gateway controller if the Gateway API CRDs exist when it starts.
+log "Installing the Gateway API CRDs"
+kc apply --server-side -k "$LAB_ROOT/platform/gateway-api" >/dev/null
+
 install_component cilium
 
 log "Waiting for every node to be Ready"
 kc wait --for=condition=Ready nodes --all --timeout=5m >/dev/null
 
 install_component argocd
+
+# The Lab CA's key never goes in Git: cert-manager's lab-ca ClusterIssuer
+# (platform/cert-manager/values.yaml) signs with it from this Secret (ADR 0003).
+log "Loading the Lab CA into cert-manager"
+cert_manager_ns=$(yq '.namespace' "$LAB_ROOT/platform/cert-manager/component.yaml")
+kc create namespace "$cert_manager_ns" >/dev/null
+kc -n "$cert_manager_ns" create secret tls lab-ca --cert "$LAB_CA_CERT" --key "$LAB_CA_KEY" >/dev/null
 
 # From here on, Git is the only source of truth: ArgoCD takes over Cilium and itself,
 # and installs everything else.
