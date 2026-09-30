@@ -16,12 +16,6 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
 
-changes=0
-changed() {
-  log "$1"
-  changes=$((changes + 1))
-}
-
 # Installs whichever of the given packages are missing.
 dnf_install() {
   local pkg missing=()
@@ -39,7 +33,7 @@ if podman_docker_removed; then
   ok "podman-docker isn't installed"
 else
   changed "Removing podman-docker, which conflicts with docker-ce (Podman itself stays)"
-  mapfile -t conflicting < <(rpm -q --qf '%{NAME}\n' podman-docker docker-compose docker-compose-switch moby-filesystem 2>/dev/null | grep -v 'not installed')
+  mapfile -t conflicting < <(podman_docker_installed)
   dnf -y remove "${conflicting[@]}"
 fi
 
@@ -71,22 +65,23 @@ if docker_data_root_set; then
   ok "Docker CE keeps its data in $DOCKER_DATA_ROOT"
 else
   changed "Moving Docker CE's data to $DOCKER_DATA_ROOT"
-  [[ ! -e $DOCKER_DATA_ROOT ]] || die "$DOCKER_DATA_ROOT already exists but Docker CE doesn't use it: move it aside first"
   systemctl stop docker.socket docker 2>/dev/null || true
+  # daemon.json is written last, so a run that fails partway resumes here: rsync picks
+  # up where it stopped.
   if [[ -d /var/lib/docker ]]; then
     # Anything Docker already stored moves with it. The old directory is kept until you
     # delete it yourself, and it's never pruned: it may hold images nothing else has.
     dnf_install rsync
     need=$(du -sx --block-size=1 /var/lib/docker | cut -f1)
+    [[ ! -d $DOCKER_DATA_ROOT ]] || need=$((need - $(du -sx --block-size=1 "$DOCKER_DATA_ROOT" | cut -f1)))
     free=$(df --output=avail --block-size=1 /home | tail -1)
     ((free > need + 20 * 1024 ** 3)) || die "/home needs $((need / 1024 ** 3)) GiB plus 20 GiB free for the move"
     # -X keeps overlay2's trusted.* xattrs, -A ACLs, -H hardlinks, -S sparse files.
     rsync -aHAXS --numeric-ids /var/lib/docker/ "$DOCKER_DATA_ROOT/"
     mv /var/lib/docker /var/lib/docker.pre-move
     log "The old data is in /var/lib/docker.pre-move; once the Lab works, free it with: sudo rm -rf /var/lib/docker.pre-move"
-  else
-    install -d -m 0710 "$DOCKER_DATA_ROOT"
   fi
+  install -d -m 0710 "$DOCKER_DATA_ROOT"
   restorecon -R "$DOCKER_DATA_ROOT"
   install -d /etc/docker
   printf '{\n  "data-root": "%s"\n}\n' "$DOCKER_DATA_ROOT" >"$DOCKER_DAEMON_JSON"

@@ -228,10 +228,6 @@ fi
 
 stage "Save the Host's address to .env"
 say "The GPU Node recipes read it from HOST_LAN_IP."
-if [[ ! -f $ENV_FILE ]]; then
-  cp "$(dirname "$ENV_FILE")/.env.example" "$ENV_FILE"
-  note "created .env from .env.example; fill in the GPU Node's values before joining it"
-fi
 write_env HOST_LAN_IP "$lan_ip"
 
 finish

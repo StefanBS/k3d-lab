@@ -8,14 +8,9 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
 
-changes=0
-changed() {
-  log "$1"
-  changes=$((changes + 1))
-}
 pending=0
-# root_step <description> <check> [args...]
-root_step() {
+# check_root_step <description> <check> [args...]: host-setup-root.sh does the step.
+check_root_step() {
   local description=$1
   shift
   if "$@"; then
@@ -47,24 +42,25 @@ else
       -subj "/CN=k3d-lab Lab CA" \
       -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
       -addext "keyUsage=critical,keyCertSign,cRLSign" \
-      -addext "nameConstraints=critical,permitted;DNS:localtest.me,permitted;DNS:k3d.internal,permitted;IP:${LAB_SUBNET%/*}/255.255.0.0,permitted;IP:127.0.0.0/255.0.0.0" \
+      -addext "nameConstraints=critical,permitted;DNS:localtest.me,permitted;DNS:k3d.internal,permitted;IP:${LAB_SUBNET%/*}/$LAB_SUBNET_NETMASK,permitted;IP:127.0.0.0/255.0.0.0" \
       2>/dev/null
   )
   chmod 0644 "$LAB_CA_CERT"
 fi
 
 log "Root steps (sudo scripts/host-setup-root.sh)"
-root_step "podman-docker isn't installed" podman_docker_removed
-root_step "Docker CE is installed" docker_ce_installed
-root_step "Docker CE keeps its data in $DOCKER_DATA_ROOT" docker_data_root_set
-root_step "SELinux labels $DOCKER_DATA_ROOT like /var/lib/docker" docker_data_root_labelled
-root_step "Docker CE is running and starts at boot" docker_ce_running
-root_step "$USER is in the docker group" in_docker_group "$USER"
-root_step "the Host trusts the Lab CA" lab_ca_trusted
+check_root_step "podman-docker isn't installed" podman_docker_removed
+check_root_step "Docker CE is installed" docker_ce_installed
+check_root_step "Docker CE keeps its data in $DOCKER_DATA_ROOT" docker_data_root_set
+check_root_step "SELinux labels $DOCKER_DATA_ROOT like /var/lib/docker" docker_data_root_labelled
+check_root_step "Docker CE is running and starts at boot" docker_ce_running
+check_root_step "$USER is in the docker group" in_docker_group "$USER"
+check_root_step "the Host trusts the Lab CA" lab_ca_trusted
 
 log "Docker CLI contexts"
-if ! command -v docker >/dev/null; then
-  warn "not yet: the docker CLI comes with Docker CE"
+if ! docker_ce_installed; then
+  # Until then, docker may be podman-docker's shim, which answers for Podman.
+  warn "not yet: the Docker contexts need Docker CE's CLI"
   pending=$((pending + 1))
 elif docker context inspect podman >/dev/null 2>&1; then
   ok "'docker --context podman' reaches Podman; the default context is Docker CE"
@@ -75,9 +71,9 @@ fi
 
 # Shell startup files and systemd's user environment that point docker at Podman.
 # Disabled rather than deleted, so they can be restored.
-for rc in ~/.bashrc ~/.bash_profile ~/.profile ~/.zshrc; do
+for rc in ~/.bashrc ~/.bash_profile ~/.profile ~/.zshrc ~/.bashrc.d/*; do
   [[ -f $rc ]] || continue
-  pattern='^[[:space:]]*export[[:space:]]+(DOCKER_HOST|DOCKER_SOCK)=.*podman'
+  pattern='^[[:space:]]*(export[[:space:]]+)?(DOCKER_HOST|DOCKER_SOCK)=.*podman'
   if grep -Eq "$pattern" "$rc"; then
     changed "Disabling the DOCKER_HOST export in $rc (open shells keep it until you log in again)"
     sed -Ei "s|$pattern|$disabled_marker&|" "$rc"
@@ -95,6 +91,10 @@ if systemctl --user show-environment 2>/dev/null | grep -Eq '^DOCKER_HOST=.*podm
   systemctl --user unset-environment DOCKER_HOST
 fi
 ok "nothing points docker at Podman by default"
+# The group database has it, but this login session was started without it.
+if in_docker_group "$USER" && ! id -nG | tr ' ' '\n' | grep -qx docker; then
+  warn "this session isn't in the docker group yet: log in again to use docker and k3d without sudo"
+fi
 
 # Only the GPU Node needs this (ADR 0002), and only you can make the reservation.
 log "Host LAN address"

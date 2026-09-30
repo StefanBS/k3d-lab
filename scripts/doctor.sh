@@ -45,7 +45,11 @@ fi
 
 # k3s evicts pods and taints the node when its image filesystem drops below 15% free,
 # and the k3d Nodes keep theirs in Docker's data directory (ADR 0001).
-if data_root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null); then
+# Where host-setup put it, when Docker CE can't say.
+data_root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null) || data_root=$DOCKER_DATA_ROOT
+if [[ ! -d $data_root ]]; then
+  warn "Docker's data directory $data_root doesn't exist yet: run 'just host-setup'"
+else
   read -r avail size < <(df --output=avail,size --block-size=1G "$data_root" | tail -1)
   free_pct=$((100 * avail / size))
   if ((free_pct < 20)); then
