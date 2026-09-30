@@ -15,10 +15,10 @@ spec:
             content: >-
               curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
               --cacert "$LAB_CA_CERT" -o /dev/null https://argocd.lab.localhost/
+        # Cilium's Envoy spells out the default port, :443, which browsers treat as the same URL.
         - script:
-            content: >-
-              curl -sS --retry 5 --retry-all-errors --retry-delay 2
-              -o /dev/null -w '%{http_code} %{redirect_url}' http://argocd.lab.localhost/
-            check:
-              ($error == null): true
-              ($stdout): 301 https://argocd.lab.localhost/
+            content: |
+              out=$(curl -sS --retry 5 --retry-all-errors --retry-delay 2 \
+                -o /dev/null -w '%{http_code} %{redirect_url}' http://argocd.lab.localhost/)
+              echo "$out"
+              echo "$out" | grep -Eqx '301 https://argocd\.lab\.localhost(:443)?/'
