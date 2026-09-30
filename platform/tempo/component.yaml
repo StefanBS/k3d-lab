@@ -1,0 +1,5 @@
+# Where this Platform component's chart comes from.
+chart: tempo
+repoURL: https://grafana-community.github.io/helm-charts
+version: 3.1.0
+namespace: monitoring

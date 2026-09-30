@@ -1,0 +1,27 @@
+# One Tempo process does everything, with its traces on a 5 Gi volume. Alloy forwards
+# every trace to it over OTLP gRPC at tempo.monitoring.svc:4317; Grafana queries it at
+# http://tempo.monitoring.svc:3200.
+tempo:
+  retention: 168h
+  # Turns every trace into two sets of metrics, remote-written to Prometheus: the
+  # service graph (traces_service_graph_*), the calls between services, and span
+  # metrics (traces_spanmetrics_*), the rate, errors and duration of each service's
+  # spans.
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: http://prometheus-server.monitoring.svc/api/v1/write
+    # On the volume, so samples not yet written survive a restart.
+    storage:
+      path: /var/tempo/generator
+  overrides:
+    defaults:
+      metrics_generator:
+        processors:
+          - service-graphs
+          - span-metrics
+  # Modest requests for a Host short on RAM.
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+persistence:
+  enabled: true
+  size: 5Gi

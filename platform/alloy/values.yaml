@@ -6,6 +6,8 @@
 # endpoints, belong to no node, so nothing scrapes them.
 # It also reads the logs of every pod on its node and pushes them to Loki, each labelled
 # with its namespace, pod, container and node.
+# And it receives traces over OTLP, from the pods on its own node, and forwards them to
+# Tempo, each tagged with the namespace and pod that sent it.
 alloy:
   configMap:
     content: |
@@ -145,6 +147,46 @@ alloy:
           url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
         }
       }
+
+      // Pods send traces to alloy.monitoring.svc: 4317 for gRPC, 4318 for HTTP.
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        output {
+          traces = [otelcol.processor.k8sattributes.this_node.input]
+        }
+      }
+
+      // Tags each trace with the namespace and pod that sent it, found by the sender's
+      // IP, as k8s.namespace.name and k8s.pod.name. Grafana links a span to its logs
+      // with them. Only this node's pods send here, so only those are watched.
+      otelcol.processor.k8sattributes "this_node" {
+        filter {
+          node = sys.env("K8S_NODE_NAME")
+        }
+        output {
+          traces = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      otelcol.processor.batch "default" {
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.monitoring.svc:4317"
+          tls {
+            insecure = true
+          }
+        }
+      }
   # The node's /var/log, read-only, for the pods' logs.
   mounts:
     varlog: true
@@ -154,12 +196,18 @@ alloy:
     extra:
       - {name: storage, mountPath: /var/lib/alloy}
   storagePath: /var/lib/alloy
+  extraPorts:
+    - {name: otlp-grpc, port: 4317, targetPort: 4317, protocol: TCP, appProtocol: grpc}
+    - {name: otlp-http, port: 4318, targetPort: 4318, protocol: TCP}
   # Modest requests for a Host short on RAM.
   resources:
     requests: {cpu: 25m, memory: 128Mi}
 configReloader:
   resources:
     requests: {cpu: 5m, memory: 16Mi}
+# A pod's traces go to the Alloy on its own node, which knows its pods.
+service:
+  internalTrafficPolicy: Local
 controller:
   type: daemonset
   volumes:

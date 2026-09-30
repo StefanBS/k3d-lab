@@ -1,0 +1,21 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: traces-reach-tempo
+spec:
+  description: >-
+    The probe client on every Ready node, the GPU Node included when Joined, sends a
+    trace to Alloy's OTLP endpoint. Tempo returns each one, tagged with the pod that
+    sent it, and Prometheus holds the service graph and span metrics Tempo made of them.
+  steps:
+    - use:
+        template: ../lib/deploy-probes.yaml
+    - try:
+        - script:
+            content: >-
+              ../lib/on-ready-nodes.sh "$NAMESPACE" app=client
+              -- sh -c "$(cat ../lib/send-trace.sh)" send-trace "$NAMESPACE"
+        - script:
+            content: ../lib/tempo-has-traces.sh "$NAMESPACE"
+        - script:
+            content: ../lib/prometheus-has-trace-metrics.sh "$NAMESPACE"
