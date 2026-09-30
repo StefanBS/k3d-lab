@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # Builds the Lab from scratch, then runs verify.
 # Usage: up.sh [REVISION=<branch or tag>]. ArgoCD reads the Lab from that revision
-# of LAB_REPO, main by default.
+# of LAB_REPO. By default, that's the branch checked out here, since verify runs the
+# checks from this checkout: a Lab built from another branch would fail checks it was
+# never meant to pass.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
 
-revision=main
+revision=$(git -C "$LAB_ROOT" branch --show-current)
 for arg; do
   case $arg in
     REVISION=?*) revision=${arg#REVISION=} ;;
     *) die "unknown argument '$arg'; usage: just up [REVISION=<branch>]" ;;
   esac
 done
+[[ -n $revision ]] || die "no branch is checked out; check one out, or pass REVISION=<branch or tag>"
 
 # Installs a Platform component that ArgoCD can't install itself: the same chart,
 # version and values that ArgoCD then manages it with.
@@ -21,7 +24,7 @@ install_component() {
   local name=$1 args
   mapfile -t args < <(component_helm_args "platform/$name")
   log "Installing $name"
-  helm upgrade --install "$name" "${args[@]}" --create-namespace \
+  quietly helm upgrade --install "$name" "${args[@]}" --create-namespace \
     --kube-context "$LAB_CONTEXT" --wait --timeout 10m
 }
 
@@ -30,8 +33,13 @@ lab_ca_exists || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host-setup'"
 taken=$(lab_host_ports_taken)
 [[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
 $taken"
-git ls-remote --exit-code "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" >/dev/null ||
-  die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
+remote_commit=$(git ls-remote "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" | awk 'NR == 1 { print $1 }')
+[[ -n $remote_commit ]] || die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
+# ArgoCD reads what's pushed, while verify runs the checks as they are here.
+if [[ $revision == "$(git -C "$LAB_ROOT" branch --show-current)" &&
+  $remote_commit != "$(git -C "$LAB_ROOT" rev-parse HEAD)" ]]; then
+  warn "$revision here isn't the commit $LAB_REPO has; the Lab is built from what's pushed"
+fi
 
 # Makes / rshared inside the k3d Nodes, which Cilium's bpffs mount needs.
 export K3D_FIX_MOUNTS=1
@@ -53,7 +61,7 @@ fi
 log "Creating the k3d cluster"
 # k3d runs every /bin/k3d-entrypoint-*.sh at each k3d Node start. Mounted here rather
 # than in cluster.yaml, which would need the repo's absolute path.
-k3d cluster create --config "$LAB_ROOT/k3d/cluster.yaml" \
+quietly k3d cluster create --config "$LAB_ROOT/k3d/cluster.yaml" \
   --volume "$LAB_ROOT/k3d/entrypoint-route-localnet.sh:/bin/k3d-entrypoint-route-localnet.sh:ro@all"
 
 server_ip=$(docker inspect -f "{{(index .NetworkSettings.Networks \"$LAB_NETWORK\").IPAddress}}" "k3d-$LAB_NAME-server-0")

@@ -34,6 +34,15 @@ die() {
   exit 1
 }
 
+# Runs a command, showing its output only if it fails. For tools like k3d and helm,
+# whose progress logs and release notes would bury the Lab's own messages.
+quietly() {
+  local out status=0
+  out=$("$@" 2>&1) || status=$?
+  ((status == 0)) || printf '%s\n' "$out" >&2
+  return "$status"
+}
+
 # For the scripts that report one line per check: doctor, lint and the host-setup
 # scripts print with these. doctor and lint count their failures in fails, and exit
 # non-zero if there are any.

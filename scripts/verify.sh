@@ -26,6 +26,8 @@ lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
 kc get --raw /readyz --request-timeout=10s >/dev/null || die "the Lab doesn't answer"
 
 args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" --kube-context "$LAB_CONTEXT")
+# Only failures, their errors and the summary: a passing step says nothing.
+args+=(--quiet)
 [[ -t 1 ]] || args+=(--no-color)
 # Chainsaw names each check chainsaw/<check>, and matches the regex against that.
 ((${#checks[@]} == 0)) || args+=(--include-test-regex "^chainsaw/($(IFS='|' && echo "${checks[*]}"))\$")

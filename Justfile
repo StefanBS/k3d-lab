@@ -21,7 +21,7 @@ host-setup:
 host-wizard:
     @scripts/host-wizard.sh
 
-# Build the Lab, then verify it; REVISION=<branch> builds it from a branch other than main
+# Build the Lab from the pushed branch checked out here, then verify it; REVISION=<branch> picks another
 up *args:
     @scripts/up.sh {{ args }}
 
