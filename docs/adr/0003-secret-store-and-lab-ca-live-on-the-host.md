@@ -18,3 +18,5 @@ The Lab is disposable: `just down && just up` recreates it from scratch. Real Wo
 - The Host holds the only state that survives the Lab. `just vault-backup` archives OpenBao's data directory and its unseal key.
 - The unseal key sits next to the data it protects, so encryption at rest is mostly cosmetic. That is acceptable for a Lab.
 - `just down` never touches OpenBao or the CA.
+- Every Lab UI lives at `*.lab.localhost`. `.localhost` is reserved for loopback (RFC 6761), so browsers, `curl` and the Host's resolver send it to `127.0.0.1` without DNS, offline too. It's one level deeper than `*.localhost` because browsers reject wildcard certificates directly below a top-level name. `localtest.me` was the first choice, but it's a privately owned public domain that needs internet DNS and can be blocked by DNS rebinding protection.
+- The Lab CA carries name constraints: it can only sign for `lab.localhost`, `k3d.internal`, the Lab's subnet and loopback. The Host trusts it everywhere and its key isn't encrypted, so a leaked key can only impersonate the Lab. A name outside these means generating and trusting a new CA.

@@ -26,7 +26,7 @@ just host-setup
 It prepares what outlives any Lab and is safe to re-run: a run with nothing to do says so.
 
 - **Docker CE alongside Podman** ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)): `podman-docker` removed, Docker CE installed with its data in `/home/docker-data` (labelled for SELinux like `/var/lib/docker`), and Docker CLI contexts in place of `DOCKER_HOST` exports: `default` is Docker CE, `docker --context podman` is Podman. The exports it finds in your shell startup files are commented out, not deleted.
-- **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `localtest.me`, `k3d.internal`, the Lab's subnet and loopback.
+- **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `lab.localhost` (where every Lab UI lives), `k3d.internal`, the Lab's subnet and loopback.
 
 `host-setup` never escalates privileges. It checks the steps that need root and, if any are left, asks you to run them yourself, then run `just host-setup` again:
 

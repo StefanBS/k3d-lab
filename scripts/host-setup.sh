@@ -42,7 +42,7 @@ else
       -subj "/CN=k3d-lab Lab CA" \
       -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
       -addext "keyUsage=critical,keyCertSign,cRLSign" \
-      -addext "nameConstraints=critical,permitted;DNS:localtest.me,permitted;DNS:k3d.internal,permitted;IP:${LAB_SUBNET%/*}/$LAB_SUBNET_NETMASK,permitted;IP:127.0.0.0/255.0.0.0" \
+      -addext "nameConstraints=critical,permitted;DNS:lab.localhost,permitted;DNS:k3d.internal,permitted;IP:${LAB_SUBNET%/*}/$LAB_SUBNET_NETMASK,permitted;IP:127.0.0.0/255.0.0.0" \
       2>/dev/null
   )
   chmod 0644 "$LAB_CA_CERT"
