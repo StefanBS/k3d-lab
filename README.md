@@ -63,8 +63,9 @@ The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA
 |---|---|
 | ArgoCD | https://argocd.lab.localhost |
 | Grafana | https://grafana.lab.localhost |
+| Argo Rollouts | https://rollouts.lab.localhost |
 
-`just creds` prints each UI's admin login. Grafana also lets anyone look without logging in.
+`just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard has no login at all.
 
 A component adds its UI with an HTTPRoute for its own `<name>.lab.localhost`, whose `parentRefs` is the `https` listener of the Gateway `lab` in the namespace `gateway`.
 
@@ -110,6 +111,24 @@ A Workload sends its traces over OTLP to `alloy.monitoring.svc`: port 4317 for g
 - **Alloy** receives traces only from the pods on its own node: the Service `alloy` routes each pod to the Alloy there. It tags every span with the `k8s.namespace.name` and `k8s.pod.name` of the pod that sent it, found by the pod's IP, and forwards it to Tempo.
 - **Tempo** (`platform/tempo/`) comes from the `grafana-community` chart. It runs as one process and keeps 7 days of traces on a 5 Gi volume. Its metrics generator turns every trace into a service graph (`traces_service_graph_*`) and span metrics (`traces_spanmetrics_*`, per `service` and `span_name`), which it remote-writes to Prometheus.
 - **Grafana** links a span to its pod's logs in Loki, through those two tags, and to its service's span metrics in Prometheus. Its service graph shows who calls whom.
+
+## Progressive delivery
+
+**Argo Rollouts** (`platform/argo-rollouts/`) releases Workloads by canary, and its dashboard at https://rollouts.lab.localhost shows every Rollout. Anyone on the Host can promote or abort a Rollout there. A canary's traffic is split for real, by weight, at the Lab's Gateway: Rollouts' Gateway API plugin sets the weights of the Rollout's HTTPRoute, which Cilium applies. ArgoCD ignores those weights, and only those, when it compares an HTTPRoute with Git.
+
+The demo Rollout (`workloads/rollouts-demo/`) is podinfo, at https://rollouts-demo.lab.localhost. A small load generator sends it about 5 requests per second through the Gateway. A canary goes through these steps:
+
+1. 20% of the traffic goes to the new version, then the analysis runs.
+2. 50%, then the analysis.
+3. 80%, then the analysis.
+4. 100%: the new version becomes the stable one.
+
+The analysis (`error-rate`, in `analysis.yaml`) asks Prometheus what share of the new version's requests failed, from podinfo's own metrics. It measures 3 times, 30s apart, after waiting 1 minute for samples. More than one measurement at 5% or above, or with no requests to measure, aborts the canary: all traffic goes back to the stable version, and the Rollout is Degraded until Git changes again.
+
+To try it, push a change to the branch the Lab tracks, and watch the dashboard, or the page itself, which shows the version that answered:
+
+- **A canary that completes:** change `newTag` in `workloads/rollouts-demo/kustomization.yaml`.
+- **A canary that's rolled back:** also set `PODINFO_RANDOM_ERROR` to `"true"` in `rollout.yaml`, and a third of the new version's requests fail. Revert both to make the Rollout Healthy again.
 
 ## Machine-specific values
 

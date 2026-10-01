@@ -1,0 +1,33 @@
+# Steady requests to the demo through the Lab's Gateway, about 5 per second, so the
+# analysis always has traffic to measure. Only the Gateway splits traffic by weight, so
+# they go there rather than to a Service. The Gateway's certificate is from the Lab
+# CA, which isn't in this image; nothing secret travels here, so it isn't verified.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: load}
+  template:
+    metadata:
+      labels: {app: load}
+    spec:
+      # The loop ignores SIGTERM, so deleting the pod would otherwise wait 30s.
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: load
+          image: curlimages/curl:8.22.0
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                curl -sk -o /dev/null --max-time 2 \
+                  --connect-to rollouts-demo.lab.localhost:443:cilium-gateway-lab.gateway.svc:443 \
+                  https://rollouts-demo.lab.localhost/
+                sleep 0.2
+              done
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}

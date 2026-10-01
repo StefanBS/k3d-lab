@@ -40,6 +40,8 @@ spec:
           - CreateNamespace=true
           # Some CRDs, ArgoCD's own among them, are too big for client-side apply.
           - ServerSideApply=true
+          # A sync keeps the ignored differences below as they are live.
+          - RespectIgnoreDifferences=true
         # Applications sync in no particular order, Platform and Workloads alike. One
         # that needs another's CRDs fails until they exist, so it retries forever: once
         # retries run out, ArgoCD never syncs the same commit again by itself.
@@ -49,6 +51,14 @@ spec:
             duration: 10s
             factor: 2
             maxDuration: 3m
+      # During a canary, Argo Rollouts shifts traffic by setting an HTTPRoute's backend
+      # weights. Reverting them would undo the canary, so they're the one thing that may
+      # differ from Git.
+      ignoreDifferences:
+        - group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          jqPathExpressions:
+            - .spec.rules[].backendRefs[]?.weight
   # The sources depend on whether component.yaml names a chart, which the template
   # itself can't test: with missingkey=error, a missing .chart fails it.
   templatePatch: |

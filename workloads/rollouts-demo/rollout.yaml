@@ -1,0 +1,92 @@
+# Each canary step sends a share of the HTTPRoute's traffic to the new version, then
+# runs the error-rate analysis (analysis.yaml) against it before going further. A failed
+# analysis aborts the canary: all traffic goes back to the stable version.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: rollouts-demo
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels: {app: rollouts-demo}
+  strategy:
+    canary:
+      stableService: rollouts-demo-stable
+      canaryService: rollouts-demo-canary
+      trafficRouting:
+        plugins:
+          argoproj-labs/gatewayAPI:
+            httpRoute: rollouts-demo
+      steps:
+        - setWeight: 20
+        - analysis: &analysis
+            templates:
+              - templateName: error-rate
+            args:
+              - name: pod-template-hash
+                valueFrom:
+                  podTemplateHashValue: Latest
+        - setWeight: 50
+        - analysis: *analysis
+        - setWeight: 80
+        - analysis: *analysis
+  template:
+    metadata:
+      labels: {app: rollouts-demo}
+    spec:
+      containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo
+          env:
+            # The metrics and the probes have their own port, so only the demo's own
+            # traffic counts towards its error rate.
+            - {name: PODINFO_PORT_METRICS, value: "9797"}
+            # A deliberately failing version: set this to "true", and a third of the
+            # requests fail.
+            - {name: PODINFO_RANDOM_ERROR, value: "false"}
+          ports:
+            - {name: http, containerPort: 9898}
+            - {name: metrics, containerPort: 9797}
+          readinessProbe:
+            httpGet: {path: /healthz, port: metrics}
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+---
+# Rollouts points each Service at its version's pods, by adding the pod-template hash
+# to its selector.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollouts-demo-stable
+spec:
+  selector: {app: rollouts-demo}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollouts-demo-canary
+spec:
+  selector: {app: rollouts-demo}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+# Rollouts sets these weights during a canary; between canaries, all traffic goes to
+# the stable version. ArgoCD ignores the weights (gitops/templates/applicationsets.yaml).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rollouts-demo
+spec:
+  parentRefs:
+    - name: lab
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - rollouts-demo.lab.localhost
+  rules:
+    - backendRefs:
+        - {name: rollouts-demo-stable, port: 80, weight: 100}
+        - {name: rollouts-demo-canary, port: 80, weight: 0}
