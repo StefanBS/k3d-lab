@@ -9,7 +9,7 @@ spec:
     - name: pod-template-hash
   metrics:
     - name: error-rate
-      # Alloy scrapes every 30s, and a rate needs two samples of the new pods.
+      # A rate needs two samples of the new pods, which are scraped every 10s.
       initialDelay: 1m
       interval: 30s
       count: 3
@@ -20,11 +20,12 @@ spec:
       provider:
         prometheus:
           address: http://prometheus-server.monitoring.svc
-          # With no failed requests, the numerator has no series at all: it's 0 then.
+          # A failed request is any 4xx or 5xx: the load generator never sends a bad
+          # request. With none, the numerator has no series at all: it's 0 then.
           query: |
-            (sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}", status=~"5.."}[2m])) or vector(0))
+            (sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}", status=~"[45].."}[1m])) or vector(0))
             /
-            sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}"}[2m]))
+            sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}"}[1m]))
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
@@ -37,3 +38,6 @@ spec:
   podTargetLabels: [rollouts-pod-template-hash]
   podMetricsEndpoints:
     - port: metrics
+      # More often than Alloy's 30s default, so a new version's error rate is known
+      # soon after it starts.
+      interval: 10s

@@ -42,7 +42,7 @@ spec:
             # The metrics and the probes have their own port, so only the demo's own
             # traffic counts towards its error rate.
             - {name: PODINFO_PORT_METRICS, value: "9797"}
-            # A deliberately failing version: set this to "true", and a third of the
+            # A deliberately failing version: set this to "true", and about a fifth of the
             # requests fail.
             - {name: PODINFO_RANDOM_ERROR, value: "true"}
           ports:
