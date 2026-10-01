@@ -5,8 +5,8 @@ metadata:
 spec:
   description: >-
     From the Host, Grafana answers at https://grafana.lab.localhost with a certificate
-    from the Lab CA. Anonymous viewers find its Prometheus and Loki datasources healthy,
-    and the dashboards from Git (platform/grafana-dashboards/) loaded.
+    from the Lab CA. Anonymous viewers find its Prometheus, Loki and Tempo datasources
+    healthy, and the dashboards from Git (platform/grafana-dashboards/) loaded.
   steps:
     - try:
         # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
@@ -19,7 +19,7 @@ spec:
         - script:
             content: |
               bad=0
-              for uid in prometheus loki; do
+              for uid in prometheus loki tempo; do
                 out=$(curl -sS --retry 5 --retry-all-errors --retry-delay 2 \
                   "https://grafana.lab.localhost/api/datasources/uid/$uid/health")
                 echo "$uid: $out"

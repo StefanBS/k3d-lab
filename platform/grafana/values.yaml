@@ -28,6 +28,38 @@ datasources:
         uid: loki
         type: loki
         url: http://loki.monitoring.svc:3100
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        url: http://tempo.monitoring.svc:3200
+        jsonData:
+          # A span's logs: its pod's, in Loki, from a minute before it to a minute
+          # after. Alloy tags every span with the namespace and pod that sent it.
+          tracesToLogsV2:
+            datasourceUid: loki
+            spanStartTimeShift: -1m
+            spanEndTimeShift: 1m
+            tags:
+              - {key: k8s.namespace.name, value: namespace}
+              - {key: k8s.pod.name, value: pod}
+          # A span's metrics: its service's span metrics, which Tempo writes to
+          # Prometheus. Grafana would read a single $ as an environment variable.
+          tracesToMetrics:
+            datasourceUid: prometheus
+            spanStartTimeShift: -5m
+            spanEndTimeShift: 5m
+            tags:
+              - {key: service.name, value: service}
+            queries:
+              - name: Requests per second
+                query: sum by (span_name) (rate(traces_spanmetrics_calls_total{$$__tags}[1m]))
+              - name: Errors per second
+                query: sum by (span_name) (rate(traces_spanmetrics_calls_total{$$__tags, status_code="STATUS_CODE_ERROR"}[1m]))
+          # The service graph that Tempo writes to Prometheus.
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true
 # Loads every ConfigMap labelled grafana_dashboard in this namespace, as
 # platform/grafana-dashboards/ makes them.
 sidecar:
