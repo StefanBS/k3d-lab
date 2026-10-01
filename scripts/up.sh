@@ -93,19 +93,19 @@ kc -n "$cert_manager_ns" create secret tls lab-ca --cert "$LAB_CA_CERT" --key "$
 # has a new API CA, so the auth is pointed at it here. OpenBao keeps no token of the
 # Lab's: it checks each login's token with a TokenReview made with that same token.
 log "Pointing the Secret Store's Kubernetes auth at the Lab"
-bao() { quietly "$LAB_ROOT/scripts/bao.sh" "$@"; }
-bao_enabled auth kubernetes || bao auth enable kubernetes
+bao_quietly() { quietly "$LAB_ROOT/scripts/bao.sh" "$@"; }
+bao_enabled auth kubernetes || bao_quietly auth enable kubernetes
 # Read-only, and only Workloads' secrets: lab/workloads/<workload>/<key>.
-bao policy write eso - <<'EOF'
+bao_quietly policy write eso - <<'EOF'
 path "lab/data/workloads/*" { capabilities = ["read"] }
 path "lab/metadata/workloads/*" { capabilities = ["read", "list"] }
 EOF
 eso_ns=$(yq '.namespace' "$LAB_ROOT/platform/external-secrets/component.yaml")
-bao write auth/kubernetes/role/eso \
+bao_quietly write auth/kubernetes/role/eso \
   bound_service_account_names=external-secrets bound_service_account_namespaces="$eso_ns" \
   token_policies=eso token_ttl=1h
 kc config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' |
-  base64 -d | bao write auth/kubernetes/config \
+  base64 -d | bao_quietly write auth/kubernetes/config \
   kubernetes_host="https://$server_ip:6443" kubernetes_ca_cert=- disable_local_ca_jwt=true
 # The ClusterSecretStore trusts the Secret Store's certificate through this.
 kc create namespace "$eso_ns" >/dev/null

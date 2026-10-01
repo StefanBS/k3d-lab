@@ -54,6 +54,17 @@ fail() {
   fails=$((fails + 1))
 }
 
+# retry <tries> <command>...: runs the command once a second until it succeeds, giving
+# up after that many tries.
+retry() {
+  local tries=$1
+  shift
+  until "$@"; do
+    ((--tries > 0)) || return 1
+    sleep 1
+  done
+}
+
 # kubectl, always against the Lab, whatever the current context is.
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 

@@ -1,21 +1,22 @@
 # The Host's one-time setup (ADRs 0001 and 0003): where it puts things, and what "done"
 # means for each step. Sourced after lib.sh by host-setup.sh and doctor.sh, which check
 # these as the owner, and by host-setup-root.sh, which fixes the ones that need root.
-# up.sh and verify.sh source it for the Lab CA. Sharing them keeps them agreeing on
-# what's left to do. Each check needs no root and
-# no Docker socket.
+# up.sh and verify.sh source it for the Lab CA and the Secret Store, and bao.sh and
+# vault-backup.sh for the Secret Store. Sharing them keeps them agreeing on what's left
+# to do. Each check needs no root and no Docker socket.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the variables here are used by the scripts that source this file
 
 # The Lab's owner, also when host-setup-root.sh runs under sudo.
 LAB_OWNER=${SUDO_USER:-$USER}
+LAB_OWNER_HOME=$(getent passwd "$LAB_OWNER" | cut -d: -f6)
 
 # ADR 0001: Docker CE's data directory, on /home because the root volume is small.
 DOCKER_DATA_ROOT=/home/docker-data
 
 # ADR 0003: the Lab CA, generated once by host-setup in the owner's home, outside the
 # repo, and trusted by the Host through the anchor (Fedora's ca-trust).
-LAB_HOST_DIR=$(getent passwd "$LAB_OWNER" | cut -d: -f6)/.local/share/k3d-lab
+LAB_HOST_DIR=$LAB_OWNER_HOME/.local/share/k3d-lab
 LAB_CA_DIR=$LAB_HOST_DIR/ca
 LAB_CA_CERT=$LAB_CA_DIR/ca.crt
 LAB_CA_KEY=$LAB_CA_DIR/ca.key
@@ -36,7 +37,7 @@ SECRET_STORE_TLS_KEY=$SECRET_STORE_DIR/tls.key
 SECRET_STORE_CA_CERT=$SECRET_STORE_DIR/ca.crt
 SECRET_STORE_IMAGE=ghcr.io/openbao/openbao:2.7.1
 SECRET_STORE_UNIT=k3d-lab-secret-store
-SECRET_STORE_QUADLET=$(getent passwd "$LAB_OWNER" | cut -d: -f6)/.config/containers/systemd/$SECRET_STORE_UNIT.container
+SECRET_STORE_QUADLET=$LAB_OWNER_HOME/.config/containers/systemd/$SECRET_STORE_UNIT.container
 SECRET_STORE_PORT=8200
 # How the Lab reaches the Host: its gateway on the Lab network (platform/host-dns/).
 SECRET_STORE_HOST=host.k3d.internal
@@ -118,17 +119,6 @@ secret_store_firewalled() {
   local rule
   for rule in "${SECRET_STORE_FIREWALL_RULES[@]}"; do
     firewall-cmd -q --policy "$SECRET_STORE_FIREWALL_POLICY" --query-rich-rule "$rule" 2>/dev/null || return 1
-  done
-}
-
-# retry <tries> <command>...: runs the command once a second until it succeeds, giving
-# up after that many tries.
-retry() {
-  local tries=$1
-  shift
-  until "$@"; do
-    ((--tries > 0)) || return 1
-    sleep 1
   done
 }
 

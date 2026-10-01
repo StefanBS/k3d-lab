@@ -105,6 +105,12 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
 done
 lint_rendering gitops render_gitops
+# Git can't read lib.sh, so the Lab's gateway is written out where CoreDNS needs it.
+if [[ $(yq '.data["host-k3d-internal.server"]' platform/host-dns/coredns-custom.yaml) == *" $LAB_GATEWAY host.k3d.internal"* ]]; then
+  ok "platform/host-dns resolves host.k3d.internal to LAB_GATEWAY ($LAB_GATEWAY)"
+else
+  fail "platform/host-dns/coredns-custom.yaml doesn't resolve host.k3d.internal to LAB_GATEWAY ($LAB_GATEWAY)"
+fi
 
 # Chainsaw only checks each file against its schema. The step templates have none, so
 # a broken one shows up when `just verify` loads the checks that use it.

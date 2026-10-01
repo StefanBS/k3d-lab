@@ -18,7 +18,7 @@ archive=$1
 [[ -f $SECRET_STORE_INIT ]] || die "the Secret Store isn't set up yet; run 'just host-setup'"
 
 # Started again however the archiving ends.
-restart() {
+start_secret_store() {
   systemctl --user start "$SECRET_STORE_UNIT"
   retry 30 secret_store_unsealed || die "the Secret Store didn't come back unsealed; see: journalctl --user -u $SECRET_STORE_UNIT"
   log "The Secret Store is running again"
@@ -26,7 +26,7 @@ restart() {
 if secret_store_running; then
   log "Stopping the Secret Store"
   systemctl --user stop "$SECRET_STORE_UNIT"
-  trap restart EXIT
+  trap start_secret_store EXIT
 fi
 
 log "Archiving $SECRET_STORE_DIR to $archive"
