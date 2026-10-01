@@ -40,7 +40,7 @@ spec:
           - CreateNamespace=true
           # Some CRDs, ArgoCD's own among them, are too big for client-side apply.
           - ServerSideApply=true
-          # A sync keeps the ignored differences below as they are live.
+          # A sync keeps the ignored differences below (ignoreDifferences) as they are live.
           - RespectIgnoreDifferences=true
         # Applications sync in no particular order, Platform and Workloads alike. One
         # that needs another's CRDs fails until they exist, so it retries forever: once
@@ -51,10 +51,16 @@ spec:
             duration: 10s
             factor: 2
             maxDuration: 3m
-      # During a canary, Argo Rollouts shifts traffic by setting an HTTPRoute's backend
-      # weights. Reverting them would undo the canary, so they're the one thing that may
-      # differ from Git.
+      # Argo Rollouts changes two things that Git also sets, and reverting either would
+      # undo a canary: it points a Rollout's Services at one version each, by adding the
+      # pod-template hash to their selectors, and it shifts traffic by setting the
+      # weights of an HTTPRoute's backends. A selector is replaced whole on every apply,
+      # so the hash would otherwise be dropped at every sync.
       ignoreDifferences:
+        - group: ""
+          kind: Service
+          jqPathExpressions:
+            - .spec.selector["rollouts-pod-template-hash"]
         - group: gateway.networking.k8s.io
           kind: HTTPRoute
           jqPathExpressions:
