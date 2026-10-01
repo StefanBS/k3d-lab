@@ -80,7 +80,7 @@ The root Application syncs two ApplicationSets from `gitops/`: **Platform**, one
 
 A component with no upstream chart, such as the Lab's own Gateway, leaves `chart`, `repoURL` and `version` out of `component.yaml`, and holds a `kustomization.yaml` instead of `values.yaml`.
 
-Every Application syncs automatically, with pruning and self-heal: a change made by hand with `kubectl` is undone. Applications sync in no particular order, Platform and Workloads alike. One that needs CRDs another component installs fails, and retries until they exist.
+Every Application syncs automatically, with pruning and self-heal: a change made by hand with `kubectl` is undone. There are two exceptions, in every Application, because Argo Rollouts sets them during a canary (see Progressive delivery): the backend weights of an HTTPRoute, and the `rollouts-pod-template-hash` key of a Service's selector. ArgoCD neither reports nor reverts them. Applications sync in no particular order, Platform and Workloads alike. One that needs CRDs another component installs fails, and retries until they exist.
 
 `just lint` renders every component with its pinned chart and values, or its kustomization, and validates the output with `kubeconform`.
 
@@ -114,7 +114,7 @@ A Workload sends its traces over OTLP to `alloy.monitoring.svc`: port 4317 for g
 
 ## Progressive delivery
 
-**Argo Rollouts** (`platform/argo-rollouts/`) releases Workloads by canary, and its dashboard at https://rollouts.lab.localhost shows every Rollout. Anyone on the Host can promote or abort a Rollout there. A canary's traffic is split for real, by weight, at the Lab's Gateway: Rollouts' Gateway API plugin sets the weights of the Rollout's HTTPRoute, which Cilium applies. ArgoCD ignores those weights, and only those, when it compares an HTTPRoute with Git.
+**Argo Rollouts** (`platform/argo-rollouts/`) releases Workloads by canary, and its dashboard at https://rollouts.lab.localhost shows every Rollout. Anyone on the Host can promote or abort a Rollout there. A canary's traffic is split for real, by weight, at the Lab's Gateway: Rollouts' Gateway API plugin sets the weights of the Rollout's HTTPRoute, which Cilium applies. ArgoCD leaves those weights alone, as it does the version that Rollouts adds to each of the Rollout's Services' selectors (see GitOps).
 
 The demo Rollout (`workloads/rollouts-demo/`) is podinfo, at https://rollouts-demo.lab.localhost. A small load generator sends it 5 requests per second through the Gateway. A canary goes through these steps:
 
@@ -128,7 +128,7 @@ The analysis (`error-rate`, in `analysis.yaml`) asks Prometheus what share of th
 To try it, push a change to the branch the Lab tracks, and watch the dashboard, or the page itself, which shows the version that answered:
 
 - **A canary that completes:** change `newTag` in `workloads/rollouts-demo/kustomization.yaml`.
-- **A canary that's rolled back:** also set `PODINFO_RANDOM_ERROR` to `"true"` in `rollout.yaml`, and about a fifth of the new version's requests fail. Revert both to make the Rollout Healthy again.
+- **A canary that's rolled back:** set `PODINFO_RANDOM_ERROR` to `"true"` in `rollout.yaml`, with or without a new tag. That alone is a new version, and about a fifth of its requests fail. Revert it to make the Rollout Healthy again.
 
 ## Machine-specific values
 
