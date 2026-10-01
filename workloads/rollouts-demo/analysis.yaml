@@ -15,13 +15,14 @@ spec:
       count: 3
       # One bad measurement is let through, such as a first one with too few samples.
       failureLimit: 1
-      # No result means no samples, and NaN means no requests: neither proves anything.
+      # No result means no requests to measure, which proves nothing.
       successCondition: len(result) > 0 && result[0] < 0.05
       provider:
         prometheus:
           address: http://prometheus-server.monitoring.svc
+          # With no failed requests, the numerator has no series at all: it's 0 then.
           query: |
-            sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}", status=~"5.."}[2m]))
+            (sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}", status=~"5.."}[2m])) or vector(0))
             /
             sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}"}[2m]))
 ---
