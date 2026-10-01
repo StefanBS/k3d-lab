@@ -15,7 +15,7 @@ spec:
       count: 3
       # One bad measurement is let through, such as a first one with too few samples.
       failureLimit: 1
-      # No result means no requests to measure, which proves nothing.
+      # No result means no samples yet, and NaN means no requests: neither proves anything.
       successCondition: len(result) > 0 && result[0] < 0.05
       provider:
         prometheus:
