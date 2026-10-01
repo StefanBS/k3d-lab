@@ -1,0 +1,9 @@
+# Lets pods resolve host.k3d.internal, the Host's address on the Lab network, where the
+# Secret Store listens (ADR 0003). k3d writes that name into CoreDNS's NodeHosts, but
+# k3s resets NodeHosts whenever its CoreDNS addon is applied again, such as when a k3d
+# Node restarts. k3s's CoreDNS imports *.server files from this ConfigMap instead,
+# and leaves it alone.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - coredns-custom.yaml

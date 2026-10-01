@@ -83,6 +83,21 @@ fix_lab_ca_trusted() {
   update-ca-trust extract
 }
 
+fix_secret_store_firewalled() {
+  changed "Letting only $LAB_SUBNET reach port $SECRET_STORE_PORT (firewalld policy $SECRET_STORE_FIREWALL_POLICY)"
+  local policy=(--permanent --policy "$SECRET_STORE_FIREWALL_POLICY") rule
+  firewall-cmd -q --permanent --info-policy "$SECRET_STORE_FIREWALL_POLICY" >/dev/null 2>&1 ||
+    firewall-cmd -q --permanent --new-policy "$SECRET_STORE_FIREWALL_POLICY"
+  # Traffic from any zone to the Host itself, before any zone's own rules.
+  firewall-cmd -q "${policy[@]}" --set-priority -100
+  firewall-cmd -q "${policy[@]}" --add-ingress-zone ANY
+  firewall-cmd -q "${policy[@]}" --add-egress-zone HOST
+  for rule in "${SECRET_STORE_FIREWALL_RULES[@]}"; do
+    firewall-cmd -q "${policy[@]}" --add-rich-rule "$rule"
+  done
+  firewall-cmd -q --reload
+}
+
 fix() { "fix_$1"; }
 run_root_steps fix
 

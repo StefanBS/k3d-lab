@@ -1,0 +1,42 @@
+# ESO logs in to the Secret Store on the Host with Kubernetes auth (ADR 0003). OpenBao
+# holds no token of the Lab's: it checks ESO's own short-lived token with a
+# TokenReview made with that same token, which this ClusterRole allows.
+systemAuthDelegator: true
+# Every Workload's ExternalSecret reads from here, with
+# secretStoreRef {kind: ClusterSecretStore, name: secret-store}, and remoteRef.key
+# workloads/<workload>/<key>: a secret at lab/workloads/<workload>/<key> in OpenBao.
+# `just up` creates the ConfigMap lab-ca, and points OpenBao's Kubernetes auth at the
+# new Lab, with the role eso: read-only, on lab/workloads/* alone.
+extraObjects:
+  - |
+    apiVersion: external-secrets.io/v1
+    kind: ClusterSecretStore
+    metadata:
+      name: secret-store
+    spec:
+      provider:
+        vault:
+          server: https://host.k3d.internal:8200
+          path: lab
+          version: v2
+          caProvider:
+            type: ConfigMap
+            name: lab-ca
+            namespace: external-secrets
+            key: ca.crt
+          auth:
+            kubernetes:
+              mountPath: kubernetes
+              role: eso
+              serviceAccountRef:
+                name: external-secrets
+                namespace: external-secrets
+# Modest requests for a Host short on RAM.
+resources:
+  requests: {cpu: 10m, memory: 64Mi}
+webhook:
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+certController:
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
