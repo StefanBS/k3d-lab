@@ -8,4 +8,4 @@ resources:
   - load.yaml
 images:
   - name: ghcr.io/stefanprodan/podinfo
-    newTag: 6.15.0
+    newTag: 6.14.1
