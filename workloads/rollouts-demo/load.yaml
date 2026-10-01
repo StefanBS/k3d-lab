@@ -1,4 +1,4 @@
-# Steady requests to the demo through the Lab's Gateway, about 5 per second, so the
+# Steady requests to the demo through the Lab's Gateway, about 2 per second, so the
 # analysis always has traffic to measure. Only the Gateway splits traffic by weight, so
 # they go there rather than to a Service. The Gateway's certificate is from the Lab
 # CA, which isn't in this image; nothing secret travels here, so it isn't verified.

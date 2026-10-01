@@ -116,7 +116,7 @@ A Workload sends its traces over OTLP to `alloy.monitoring.svc`: port 4317 for g
 
 **Argo Rollouts** (`platform/argo-rollouts/`) releases Workloads by canary, and its dashboard at https://rollouts.lab.localhost shows every Rollout. Anyone on the Host can promote or abort a Rollout there. A canary's traffic is split for real, by weight, at the Lab's Gateway: Rollouts' Gateway API plugin sets the weights of the Rollout's HTTPRoute, which Cilium applies. ArgoCD ignores those weights, and only those, when it compares an HTTPRoute with Git.
 
-The demo Rollout (`workloads/rollouts-demo/`) is podinfo, at https://rollouts-demo.lab.localhost. A small load generator sends it about 5 requests per second through the Gateway. A canary goes through these steps:
+The demo Rollout (`workloads/rollouts-demo/`) is podinfo, at https://rollouts-demo.lab.localhost. A small load generator sends it about 2 requests per second through the Gateway. A canary goes through these steps:
 
 1. 20% of the traffic goes to the new version, then the analysis runs.
 2. 50%, then the analysis.

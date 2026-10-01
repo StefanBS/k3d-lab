@@ -1,4 +1,6 @@
 controller:
+  # The chart runs two, for failover the Lab doesn't need.
+  replicas: 1
   # Shifts a canary's traffic by setting the weights of its HTTPRoute's backends, which
   # the Lab's Gateway (Cilium) applies. The chart's providerRBAC already lets the
   # controller edit HTTPRoutes. The controller downloads the plugin when it starts.
