@@ -1,0 +1,34 @@
+# Steady requests to the demo through the Lab's Gateway, 5 per second, so the
+# analysis always has traffic to measure. Only the Gateway splits traffic by weight, so
+# they go there rather than to a Service. The Gateway's certificate is from the Lab
+# CA, which isn't in this image; nothing secret travels here, so it isn't verified.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: load}
+  template:
+    metadata:
+      labels: {app: load}
+    spec:
+      # The shell ignores SIGTERM, so deleting the pod would otherwise wait 30s.
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: load
+          image: curlimages/curl:8.22.0
+          command:
+            - sh
+            - -c
+            # One curl sends 1000 requests over the same connection, which Envoy still
+            # routes one by one; a failed request doesn't stop it.
+            - |
+              while true; do
+                curl -sk -o /dev/null --rate 5/s --max-time 300 \
+                  --connect-to rollouts-demo.lab.localhost:443:cilium-gateway-lab.gateway.svc:443 \
+                  'https://rollouts-demo.lab.localhost/?n=[1-1000]'
+              done
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}

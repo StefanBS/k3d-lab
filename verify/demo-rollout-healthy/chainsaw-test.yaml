@@ -1,0 +1,35 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: demo-rollout-healthy
+spec:
+  description: >-
+    The demo Rollout (workloads/rollouts-demo/) is Healthy: fully promoted, with all of
+    its traffic on the stable version. From the Host, the demo answers through the
+    Gateway at https://rollouts-demo.lab.localhost, and the Argo Rollouts dashboard at
+    https://rollouts.lab.localhost, both with a certificate from the Lab CA.
+  steps:
+    - try:
+        # A canary in progress is Progressing, and one the analysis aborted is Degraded.
+        - assert:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Rollout
+              metadata:
+                name: rollouts-demo
+                namespace: rollouts-demo
+              status:
+                phase: Healthy
+        # --cacert replaces the Host's trust store, so only the Lab CA can make these
+        # pass. verify.sh exports LAB_CA_CERT.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" -o /dev/null https://rollouts-demo.lab.localhost/
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" -o /dev/null https://rollouts.lab.localhost/
+      catch:
+        - script:
+            content: kubectl -n rollouts-demo get rollout rollouts-demo -o yaml | yq .status

@@ -1,0 +1,26 @@
+controller:
+  # The chart runs two, for failover the Lab doesn't need.
+  replicas: 1
+  # Shifts a canary's traffic by setting the weights of its HTTPRoute's backends, which
+  # the Lab's Gateway (Cilium) applies. The chart's providerRBAC already lets the
+  # controller edit HTTPRoutes. The controller downloads the plugin when it starts, and
+  # refuses it unless it has the checksum GitHub publishes for the release's asset.
+  trafficRouterPlugins:
+    - name: argoproj-labs/gatewayAPI
+      location: https://github.com/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi/releases/download/v0.17.0/gatewayapi-plugin-linux-amd64
+      sha256: 1904ca787d33107c140521899d61fff030ee75d99908bd175fca5a4647759061
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+# Shows every Rollout and lets anyone on the Host promote or abort one: it has no login.
+dashboard:
+  enabled: true
+  httproute:
+    enabled: true
+    parentRefs:
+      - name: lab
+        namespace: gateway
+        sectionName: https
+    hostnames:
+      - rollouts.lab.localhost
+  resources:
+    requests: {cpu: 5m, memory: 32Mi}

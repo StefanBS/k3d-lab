@@ -1,0 +1,43 @@
+# Gates each canary step on the share of the new version's requests that fail, from
+# podinfo's own metrics, which Alloy scrapes through the PodMonitor below.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: error-rate
+spec:
+  args:
+    - name: pod-template-hash
+  metrics:
+    - name: error-rate
+      # A rate needs two samples of the new pods, which are scraped every 10s.
+      initialDelay: 1m
+      interval: 30s
+      count: 3
+      # One bad measurement is let through, such as a first one with too few samples.
+      failureLimit: 1
+      # No result means no samples yet, and NaN means no requests: neither proves anything.
+      successCondition: len(result) > 0 && result[0] < 0.05
+      provider:
+        prometheus:
+          address: http://prometheus-server.monitoring.svc
+          # A failed request is any 4xx or 5xx: the load generator never sends a bad
+          # request. With none, the numerator has no series at all: it's 0 then.
+          query: |
+            (sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}", status=~"[45].."}[1m])) or vector(0))
+            /
+            sum(rate(http_requests_total{namespace="rollouts-demo", rollouts_pod_template_hash="{{args.pod-template-hash}}"}[1m]))
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: rollouts-demo
+spec:
+  selector:
+    matchLabels: {app: rollouts-demo}
+  # Tells the versions apart: each has its own hash.
+  podTargetLabels: [rollouts-pod-template-hash]
+  podMetricsEndpoints:
+    - port: metrics
+      # More often than Alloy's 30s default, so a new version's error rate is known
+      # soon after it starts.
+      interval: 10s
