@@ -77,14 +77,15 @@ expected_ip=$(yq '.k8sServiceHost' "$LAB_ROOT/platform/cilium/values.yaml")
 # can't be this one (ADR 0002). So each k3d Node is reconnected, stopped, with the
 # address it already has: k3s has already put that address in its certificates.
 log "Pinning the k3d Nodes' addresses"
-mapfile -t node_addresses < <(docker network inspect "$LAB_NETWORK" \
-  -f '{{range .Containers}}{{.Name}} {{.IPv4Address}}{{"\n"}}{{end}}' | sed '/^$/d')
+# Each k3d Node's name and CIDR address, one per line.
+nodes=$(docker network inspect "$LAB_NETWORK" \
+  -f '{{range .Containers}}{{.Name}} {{.IPv4Address}}{{"\n"}}{{end}}')
 quietly k3d cluster stop "$LAB_NAME"
-for node_address in "${node_addresses[@]}"; do
-  read -r node address <<<"$node_address"
+while read -r node cidr; do
+  [[ -n $node ]] || continue
   docker network disconnect "$LAB_NETWORK" "$node"
-  docker network connect --ip "${address%/*}" "$LAB_NETWORK" "$node"
-done
+  docker network connect --ip "${cidr%/*}" "$LAB_NETWORK" "$node"
+done <<<"$nodes"
 quietly k3d cluster start "$LAB_NAME"
 
 # Cilium only runs its Gateway controller if the Gateway API CRDs exist when it starts.
