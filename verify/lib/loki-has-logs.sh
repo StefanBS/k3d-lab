@@ -8,41 +8,29 @@
 # Run by logs-reach-loki, whose script steps point kubectl at the Lab through a context
 # named chainsaw.
 set -euo pipefail
+# shellcheck source=checks.sh
+source "$(dirname "$0")/checks.sh"
 
 namespace=$1
 
 # Usage: query <LogQL>
-# Runs the query through the API server's proxy to Loki's Service, over the last hour,
-# and prints the lines it found, one per line. The chart names Loki's one HTTP port,
-# API included, http-metrics.
+# Runs the query against Loki, over the last hour, and prints the lines it found, one per
+# line. The chart names Loki's one HTTP port, API included, http-metrics.
 query() {
-  local encoded
-  encoded=$(Q=$1 yq -n 'strenv(Q) | @uri')
-  kubectl get --raw "/api/v1/namespaces/monitoring/services/loki:http-metrics/proxy/loki/api/v1/query_range?query=$encoded" |
+  monitoring_get loki:http-metrics "loki/api/v1/query_range?query=$(uri_encode "$1")" |
     yq -p json '.data.result[].values[][1]'
 }
 
-nodes=$("$(dirname "$0")/ready-nodes.sh")
-[[ -n $nodes ]] || {
-  echo "FAIL  no Ready nodes"
-  exit 1
-}
-
-for attempt in {1..24}; do
-  missing=()
-  for node in $nodes; do
+# Prints each node whose line Loki doesn't hold yet.
+missing_logs() {
+  local node line found
+  for node in "${nodes[@]}"; do
     line="k3d-lab probe on $node"
     found=$(query "{namespace=\"$namespace\", container=\"client\", node=\"$node\"} |= \"$line\"" 2>&1) || found=""
-    grep -qxF "$line" <<<"$found" || missing+=("$node")
+    grep -qxF "$line" <<<"$found" || echo "$node"
   done
-  ((${#missing[@]})) || break
-  ((attempt < 24)) && sleep 5
-done
-
-for node in $nodes; do
-  [[ " ${missing[*]} " == *" $node "* ]] || echo "OK    $node"
-done
-((${#missing[@]} == 0)) || {
-  printf 'FAIL  no logs from %s\n' "${missing[@]}"
-  exit 1
 }
+
+require_ready_nodes
+retry missing_logs
+report 'no logs from %s' "${nodes[@]}"
