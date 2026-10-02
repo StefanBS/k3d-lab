@@ -1,9 +1,0 @@
-# Ollama, serving LLMs on the GPU Node's RX 7800 XT through ROCm, at
-# https://ollama.lab.localhost. Its models live on the GPU Node, so they outlive the Lab.
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - ollama.yaml
-images:
-  - name: docker.io/ollama/ollama
-    newTag: 0.35.0-rocm
