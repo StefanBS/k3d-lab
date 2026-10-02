@@ -173,9 +173,12 @@ report_gpu_devices() {
 }
 
 install_k3s() {
-  local token=$1 skip_selinux=true
-  selinux_enabled && skip_selinux=false
-  log "Installing the k3s agent $SERVER_VERSION (SELinux policy: $([[ $skip_selinux == true ]] && echo skipped || echo installed))"
+  local token=$1 skip_selinux=true policy=skipped
+  if selinux_enabled; then
+    skip_selinux=false
+    policy=installed
+  fi
+  log "Installing the k3s agent $SERVER_VERSION (SELinux policy: $policy)"
   # Never enabled at boot: a reboot always leaves the GPU Node Left (ADR 0002).
   curl -sfL https://get.k3s.io |
     INSTALL_K3S_VERSION=$SERVER_VERSION INSTALL_K3S_EXEC=agent \
@@ -186,6 +189,8 @@ install_k3s() {
   systemctl daemon-reload
 }
 
+# What's mounted in k3s's run directory or the kubelet's, one mount point per line.
+k3s_mounts() { findmnt -rn -o TARGET | grep -E "^($K3S_RUN|/var/lib/kubelet)(/|\$)"; }
 cilium_links() { ip -br link | awk '$1 ~ /^(lxc|cilium_)/ { sub(/@.*/, "", $1); print $1 }'; }
 # The xtables tools that are installed, as <save command> <restore command> lines.
 xtables_tools() {
@@ -205,7 +210,7 @@ stop_agent() {
   # k3s-killall.sh unmounts what's in it, but leaves containerd's state for the
   # containers it killed. A reboot clears it, so the agent starts fine without it.
   # Only once nothing is mounted there.
-  if ! findmnt -rn -o TARGET | grep -q "^$K3S_RUN\(/\|$\)"; then rm -rf "$K3S_RUN"; fi
+  if [[ $(k3s_mounts) != *"$K3S_RUN"* ]]; then rm -rf "$K3S_RUN"; fi
 }
 
 clean_cilium() {
@@ -255,7 +260,7 @@ live_leftovers() {
     count=$("$save" 2>/dev/null | grep -c CILIUM) || true
     ((count == 0)) || echo "$save: $count CILIUM lines"
   done < <(xtables_tools)
-  findmnt -rn -o TARGET | grep -E '^(/run/k3s|/var/lib/kubelet)(/|$)' | sed 's/^/k3s mount: /' || true
+  k3s_mounts | sed 's/^/k3s mount: /' || true
 }
 
 # What purge removes and leave keeps, one line each.
@@ -304,7 +309,6 @@ cmd_join() {
     stop_agent
     clean_cilium
     remove_install
-    state=none
   fi
 
   set_route

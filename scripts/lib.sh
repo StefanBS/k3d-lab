@@ -25,8 +25,15 @@ LAB_SUBNET_NETMASK=255.255.0.0 # LAB_SUBNET's /16, for the Lab CA's name constra
 LAB_GATEWAY=172.28.0.1
 # ArgoCD reads the Lab from here, without credentials.
 LAB_REPO=https://github.com/StefanBS/k3d-lab.git
-# Machine-specific values, never committed (.env.example lists them).
+# Machine-specific values, never committed (.env.example lists them). Loaded here, so
+# the scripts see them also when run without just.
 LAB_ENV_FILE=$LAB_ROOT/.env
+if [[ -f $LAB_ENV_FILE ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$LAB_ENV_FILE"
+  set +a
+fi
 
 log() { printf '==> %s\n' "$*" >&2; }
 die() {
@@ -43,7 +50,7 @@ quietly() {
   return "$status"
 }
 
-# need_env <name>...: fails unless .env (loaded by the Justfile) sets each variable.
+# need_env <name>...: fails unless .env sets each variable.
 need_env() {
   local name
   for name; do

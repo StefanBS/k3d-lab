@@ -9,12 +9,15 @@ source "$(dirname "$0")/lib.sh"
 # Runs gpu-node.sh as root on the GPU Node: run_on_gpu_node <stdin> <subcommand> [<VAR=value>...]
 # The script goes over stdin, then the first argument, which only join reads: so the
 # token is never in a command line on either machine. Every gpu-node.sh run gets the
-# Lab's subnet and the GPU Node's address, and the Lab's CA hash while a Lab exists.
+# Lab's subnet and the GPU Node's address; status also gets the Lab's CA hash while a
+# Lab exists (join reads it from the token).
 run_on_gpu_node() {
   local input=$1 subcommand=$2 vars ca_hash
   shift 2
   vars=(LAB_SUBNET="$LAB_SUBNET" GPU_NODE_IP="$GPU_NODE_IP" "$@")
-  if ca_hash=$(lab_ca_hash 2>/dev/null) && [[ -n $ca_hash ]]; then vars+=(LAB_CA_HASH="$ca_hash"); fi
+  if [[ $subcommand == status ]] && ca_hash=$(lab_ca_hash 2>/dev/null) && [[ -n $ca_hash ]]; then
+    vars+=(LAB_CA_HASH="$ca_hash")
+  fi
   { cat "$LAB_ROOT/scripts/gpu-node.sh" && printf '%s\n' "$input"; } |
     gpu_ssh "sudo env $(printf '%q ' "${vars[@]}")bash -s -- $subcommand"
 }
@@ -36,13 +39,13 @@ daemonsets_ready() {
     awk '$1 != $2 || $1 != $3 { bad = 1 } END { exit bad }'
 }
 
-# Fails, listing them, if the GPU Node has anything a Left GPU Node mustn't, or, with
-# purge, anything the join added.
+# check_left leave|purge: fails, listing them, if the GPU Node has anything a Left GPU
+# Node mustn't, or, after a purge, anything the join added.
 check_left() {
-  local purge=$1 status bad
+  local mode=$1 status bad
   status=$(run_on_gpu_node "" status)
   bad=$(grep -e '^agent: running' -e '^leftover: ' <<<"$status") || true
-  [[ $purge == false ]] || bad+=$(grep -e '^installed: ' -e '^install: [^n]' <<<"$status") || true
+  [[ $mode == leave ]] || bad+=$(grep -e '^installed: ' -e '^install: [^n]' <<<"$status") || true
   [[ -z $bad ]] || die "the GPU Node still has:
 $bad"
 }
@@ -87,13 +90,13 @@ cmd_join() {
 }
 
 cmd_leave() {
-  local purge=false node=""
+  local mode=leave node=""
   case ${1:-} in
     '') ;;
-    purge) purge=true ;;
+    purge) mode=purge ;;
     *) die "unknown argument '$1'; usage: just gpu-leave [purge]" ;;
   esac
-  need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
+  need_env GPU_NODE_IP GPU_NODE_SSH
   if lab_exists; then
     node=$(gpu_node_in_lab)
     node=${node%% *}
@@ -103,13 +106,11 @@ cmd_leave() {
     if [[ -n $node ]]; then
       log "Deleting the GPU Node's Node object, $node"
       kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
-    fi
-    if [[ -n $node ]]; then
       warn "can't reach the GPU Node as $GPU_NODE_SSH: the next 'just gpu-join' cleans it up"
     else
       warn "the GPU Node isn't in the Lab, and can't be reached as $GPU_NODE_SSH to check the machine"
     fi
-    [[ $purge == false ]] || die "nothing purged on the GPU Node"
+    [[ $mode == leave ]] || die "nothing purged on the GPU Node"
     return
   fi
 
@@ -118,27 +119,30 @@ cmd_leave() {
     kc drain -l "$GPU_NODE_LABEL_KEY" --ignore-daemonsets --delete-emptydir-data --force --timeout=60s >/dev/null 2>&1 ||
       warn "$node didn't drain within 60s; its pods are stopped with the agent"
   fi
-  if [[ $purge == true ]]; then run_on_gpu_node "" purge; else run_on_gpu_node "" leave; fi
+  run_on_gpu_node "" "$mode"
   # Only once the agent is stopped, or it would register again.
   if [[ -n $node ]]; then
     log "Deleting the Node object $node"
     kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
   fi
-  check_left "$purge"
-  log "The GPU Node is Left$([[ $purge == true ]] && echo ", and purged")"
+  check_left "$mode"
+  log "The GPU Node is Left$([[ $mode == purge ]] && echo ", and purged")"
 }
 
 # The Lab's view and the machine's: a NotReady Node object means the GPU Node is off,
 # unless the machine answers with its agent stopped, as after a reboot.
 cmd_status() {
-  local node="" machine="" line
-  need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
+  local lab=false node="" machine="" line
+  need_env GPU_NODE_IP GPU_NODE_SSH
   if gpu_node_reachable; then
     machine=$(run_on_gpu_node "" status)
   fi
-  if lab_exists; then node=$(gpu_node_in_lab); fi
+  if lab_exists; then
+    lab=true
+    node=$(gpu_node_in_lab)
+  fi
 
-  if ! lab_exists; then
+  if [[ $lab == false ]]; then
     echo "Lab: none"
   elif [[ -z $node ]]; then
     echo "Lab: the GPU Node is Left"
