@@ -1,0 +1,145 @@
+# A DaemonSet on the GPU Node rather than a Deployment (ADR 0006): while the GPU Node is
+# Left, it wants no pod at all, so ArgoCD still calls it Healthy. There's one GPU, so an
+# update stops the old pod before starting the new one, which is the DaemonSet's default.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: qwen-image
+spec:
+  selector:
+    matchLabels: {app: qwen-image}
+  template:
+    metadata:
+      labels: {app: qwen-image}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      # The GPU's devices are world-accessible (gpu-join reports it), so no root.
+      # The UID is no one's on the GPU Node; the files it writes there are its own.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        # In its own folder of the GPU Node's model directory, which gpu-join makes
+        # writable to every GPU Workload (scripts/gpu-node.sh).
+        # Downloads each weight file once, about 14.5 GB in all, resuming a download the
+        # last pod didn't finish, and keeps it only if its checksum matches. Each is
+        # pinned to a commit of its Hugging Face repo.
+        - name: weights
+          image: curlimages/curl
+          command: [sh, -euc]
+          args:
+            - |
+              mkdir -p /models/qwen-image
+              cd /models/qwen-image
+              fetch() {
+                [ -f "$1" ] && return
+                echo "Downloading $1"
+                curl -fsSL --retry 5 -C - -o "$1.part" "https://huggingface.co/$2"
+                echo "$3  $1.part" | sha256sum -c -
+                mv "$1.part" "$1"
+              }
+              # The denoiser at 8 bits, nearly lossless against BF16.
+              fetch qwen_image_2.1-Q8_0.gguf \
+                leejet/Qwen-Image-2.1-GGUF/resolve/cc11433936a06e9765f7c0c0b1f0436cfd2b9856/qwen_image_2.1-Q8_0.gguf \
+                f8b244b00937f0e444a40dbf7866460871b89b30142594973b6012d1b471dc0a
+              fetch Qwen3VL-8B-Instruct-Q4_K_M.gguf \
+                Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/f982a07559d4a2f6c8744d840bf6fccab30eea96/Qwen3VL-8B-Instruct-Q4_K_M.gguf \
+                67d1659bfe71b89d50b45a4ad1a9e5b997e5bb16ce5da66a6a6167abd569e9e2
+              # Its vision weights, which image editing needs.
+              fetch mmproj-Qwen3VL-8B-Instruct-F16.gguf \
+                Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/f982a07559d4a2f6c8744d840bf6fccab30eea96/mmproj-Qwen3VL-8B-Instruct-F16.gguf \
+                ca524100ebf825c9a870db1c580d03879e0da0ab2541697e2458e64891cf9d38
+              fetch qwen_image_2.1_vae_bf16.safetensors \
+                Comfy-Org/Qwen-Image-2.1/resolve/cb504a4090723e43f17ad01cec0359490e2de613/vae/qwen_image_2.1_vae_bf16.safetensors \
+                bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+      containers:
+        - name: sd-server
+          image: ghcr.io/leejet/stable-diffusion.cpp
+          command: [/sd-server]
+          args:
+            - --listen-ip=0.0.0.0
+            - --listen-port=1234
+            - --diffusion-model=/models/qwen-image/qwen_image_2.1-Q8_0.gguf
+            - --llm=/models/qwen-image/Qwen3VL-8B-Instruct-Q4_K_M.gguf
+            - --llm_vision=/models/qwen-image/mmproj-Qwen3VL-8B-Instruct-F16.gguf
+            - --vae=/models/qwen-image/qwen_image_2.1_vae_bf16.safetensors
+            # The weights, about 14.5 GB, stay in RAM, and each stage's go to VRAM only
+            # while it runs, which leaves the 16 GB mostly to the image itself.
+            - --offload-to-cpu
+            - --diffusion-fa
+            # Defaults a request can override, from sd.cpp's and Unsloth's examples.
+            - --width=1024
+            - --height=1024
+            - --steps=20
+            - --cfg-scale=6.0
+            - --sampling-method=euler
+          env:
+            # Mesa keeps its shader cache in $HOME/.cache; nothing there needs to last.
+            - {name: HOME, value: /home/sd}
+          ports:
+            - {name: http, containerPort: 1234}
+          # It listens only once the weights are loaded into RAM.
+          startupProbe:
+            httpGet: {path: /v1/models, port: http}
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /v1/models, port: http}
+          livenessProbe:
+            httpGet: {path: /v1/models, port: http}
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 16Gi}
+            limits:
+              amd.com/gpu: 1
+          volumeMounts:
+            - {name: models, mountPath: /models, readOnly: true}
+            - {name: home, mountPath: /home/sd}
+      volumes:
+        # The GPU Node's model directory, MODEL_DIR in scripts/gpu-node.sh.
+        - name: models
+          hostPath:
+            path: /var/lib/k3d-lab/models
+            type: Directory
+        - name: home
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qwen-image
+spec:
+  selector: {app: qwen-image}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: qwen-image
+spec:
+  parentRefs:
+    - name: lab
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - qwen-image.lab.localhost
+  rules:
+    - backendRefs:
+        - {name: qwen-image, port: 80}
+      # A generation outlasts the Gateway's default timeout, which would cut it off.
+      timeouts:
+        request: 15m

@@ -1,0 +1,41 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: qwen-image
+  # Runs only while the GPU Node is Joined and Ready (scripts/verify.sh).
+  labels:
+    k3d-lab/gpu: amd
+spec:
+  description: >-
+    Qwen-Image (workloads/qwen-image/) runs on the GPU Node, answers from the Host at
+    https://qwen-image.lab.localhost through the Gateway, and found the RX 7800 XT
+    through Vulkan when it started, rather than Mesa's software renderer.
+  steps:
+    - try:
+        # The pod on the GPU Node, which downloads about 14.5 GB of weights on its first run.
+        - assert:
+            timeout: 30m
+            resource:
+              apiVersion: apps/v1
+              kind: DaemonSet
+              metadata:
+                name: qwen-image
+                namespace: qwen-image
+              status:
+                desiredNumberScheduled: 1
+                numberReady: 1
+        # verify.sh exports LAB_CA_CERT.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" https://qwen-image.lab.localhost/v1/models
+        # ggml logs the Vulkan devices it found once, at startup.
+        - script:
+            content: >-
+              kubectl -n qwen-image logs ds/qwen-image | grep 'ggml_vulkan: 0 = ' | grep -q '7800 XT'
+      catch:
+        - script:
+            content: >-
+              kubectl -n qwen-image get pods -o wide;
+              kubectl -n qwen-image logs ds/qwen-image -c weights --tail 20;
+              kubectl -n qwen-image logs ds/qwen-image | grep -E 'ggml_vulkan|error|failed'

@@ -93,7 +93,14 @@
     },
     {
       groupName: 'GPU',
-      matchDepNames: ['amd-gpu', 'docker.io/rocm/k8s-device-plugin', 'docker.io/ollama/ollama'],
+      matchDepNames: ['amd-gpu', 'docker.io/rocm/k8s-device-plugin'],
+    },
+    {
+      // sd.cpp's image is a moving tag that changes with every commit to its master, so
+      // its digest is updated once a week rather than several times a day.
+      groupName: 'Qwen-Image',
+      matchDepNames: ['ghcr.io/leejet/stable-diffusion.cpp'],
+      schedule: ['* 0-5 * * 1'],
     },
     {
       groupName: 'Rollouts demo',

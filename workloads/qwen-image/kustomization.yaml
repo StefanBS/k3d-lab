@@ -1,0 +1,14 @@
+# Qwen-Image-2.1, generating images on the GPU Node's RX 7800 XT through Vulkan, with
+# stable-diffusion.cpp's sd-server, at https://qwen-image.lab.localhost. Its weights live
+# on the GPU Node, so they outlive the Lab.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - qwen-image.yaml
+images:
+  # sd.cpp publishes only moving tags, so the digest is the pin.
+  - name: ghcr.io/leejet/stable-diffusion.cpp
+    newTag: master-vulkan
+    digest: sha256:5a13acccd7ccc85443d4a635c1e21f58c5fdc2cb6771d1064c6152c1602b909f
+  - name: curlimages/curl
+    newTag: 8.22.0
