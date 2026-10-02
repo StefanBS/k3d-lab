@@ -194,7 +194,7 @@ Once, after `just host-wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` i
 | `just gpu-leave purge` | Also removes k3s, its files and the route. Only the `k3dlab` user, its key and the model directory stay. |
 | `just gpu-status` | Shows the GPU Node's state in the Lab and on the machine, with anything left behind. |
 
-The agent is never enabled at boot. After any reboot the GPU Node is Left, and the GPU is entirely yours until the next `gpu-join`. While it's Joined but powered off, `just verify` WARNs about it and skips its checks. DaemonSet pods missing only from it don't count against an Application's health.
+The agent is never enabled at boot. After any reboot the GPU Node is Left, and the GPU is entirely yours until the next `gpu-join`. While it's Joined but powered off, `just verify` WARNs about it and skips its checks. The Platform's DaemonSets stop counting it while it's off, so every Application stays Healthy.
 
 ## Machine-specific values
 

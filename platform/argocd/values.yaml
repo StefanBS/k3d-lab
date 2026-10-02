@@ -8,9 +8,6 @@ configs:
     # defaults that CRD schemas fill in, such as Gateway API's parentRefs group and
     # kind, keep Applications OutOfSync forever.
     controller.diff.server.side: true
-    # Keep each resource's health in its Application, as before ArgoCD 3: verify's
-    # applications-healthy.sh tells a GPU Node that's off from a real failure by it.
-    controller.resource.health.persist: true
 server:
   httproute:
     enabled: true
