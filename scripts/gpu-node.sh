@@ -27,6 +27,7 @@ K3S_SERVICE_ENV=/etc/systemd/system/$K3S_SERVICE.service.env
 K3S_CONFIG=/etc/rancher/k3s/config.yaml
 K3S_KILLALL=/usr/local/bin/k3s-killall.sh
 K3S_UNINSTALL=/usr/local/bin/k3s-agent-uninstall.sh
+K3S_RUN=/run/k3s
 # What join creates beyond k3s's own install, and its uninstaller leaves (the prototype's
 # FINDINGS.md, on branch prototype/gpu-node-join: each was checked to be the join's,
 # with no rpm owner).
@@ -201,6 +202,10 @@ stop_agent() {
   else
     systemctl stop "$K3S_SERVICE" 2>/dev/null || true
   fi
+  # k3s-killall.sh unmounts what's in it, but leaves containerd's state for the
+  # containers it killed. A reboot clears it, so the agent starts fine without it.
+  # Only once nothing is mounted there.
+  if ! findmnt -rn -o TARGET | grep -q "^$K3S_RUN\(/\|$\)"; then rm -rf "$K3S_RUN"; fi
 }
 
 clean_cilium() {
@@ -245,6 +250,7 @@ live_leftovers() {
   for pin in "${CILIUM_PINS[@]}"; do [[ ! -e $pin ]] || echo "Cilium BPF pins: $pin"; done
   ! mountpoint -q "$CILIUM_CGROUP" || echo "Cilium cgroup2 mount: $CILIUM_CGROUP"
   [[ ! -e $CILIUM_RUN ]] || echo "Cilium state: $CILIUM_RUN"
+  [[ ! -e $K3S_RUN ]] || echo "k3s state: $K3S_RUN"
   while read -r save restore; do
     count=$("$save" 2>/dev/null | grep -c CILIUM) || true
     ((count == 0)) || echo "$save: $count CILIUM lines"
