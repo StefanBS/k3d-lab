@@ -163,7 +163,7 @@ spec:
         property: <field>
 ```
 
-- **How ESO logs in:** with OpenBao's Kubernetes auth, as the role `eso`, which can only read `lab/workloads/*`. `just up` points that auth at each new Lab, and nothing in the Lab holds a token of OpenBao's: OpenBao checks each of ESO's short-lived tokens with a TokenReview made with that same token. ESO reaches OpenBao at `https://host.k3d.internal:8200`, the Host's address on the Lab network, which only ESO's controller resolves (through its pod's `hostAliases`), and trusts its certificate through the Lab CA.
+- **How ESO logs in:** with OpenBao's Kubernetes auth, as the role `eso`, which can only read `lab/workloads/*`. `just up` points that auth at each new Lab, and nothing in the Lab holds a token of OpenBao's: OpenBao checks each of ESO's short-lived tokens with a TokenReview made with that same token, and accepts only tokens meant for it (the audience `k3d-lab-secret-store`), so no other token of ESO's service account can log in. ESO reaches OpenBao at `https://host.k3d.internal:8200`, the Host's address on the Lab network, which only ESO's controller resolves (through its pod's `hostAliases`), and trusts its certificate through the Lab CA.
 - **What's kept on the Host:** `~/.local/share/k3d-lab/secret-store/` holds OpenBao's Raft data, its unseal key, and `init.json` with the root token and recovery key. The unseal key sits next to the data, so encryption at rest is mostly for show. `just bao` uses the root token.
 
 ### Backup and restore
