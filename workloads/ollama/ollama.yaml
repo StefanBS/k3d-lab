@@ -52,6 +52,7 @@ spec:
             - {name: models, mountPath: /models}
             - {name: home, mountPath: /home/ollama}
       volumes:
+        # The GPU Node's model directory, MODEL_DIR in scripts/gpu-node.sh.
         - name: models
           hostPath:
             path: /var/lib/k3d-lab/models
