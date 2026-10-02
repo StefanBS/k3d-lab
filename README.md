@@ -67,6 +67,7 @@ The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA
 | ArgoCD | https://argocd.lab.localhost |
 | Grafana | https://grafana.lab.localhost |
 | Argo Rollouts | https://rollouts.lab.localhost |
+| Ollama (API, while the GPU Node is Joined) | https://ollama.lab.localhost |
 
 `just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard has no login at all.
 
@@ -200,7 +201,18 @@ The agent is never enabled at boot. After any reboot the GPU Node is Left, and t
 
 A GPU Workload requests the GPU as `amd.com/gpu: 1` and tolerates the `amd.com/gpu:NoSchedule` taint. AMD's device plugin (`platform/amd-gpu/`) advertises the GPU, and its node labeller adds `amd.com/gpu.*` labels describing it. Both run only on the GPU Node. Nothing ROCm-related is installed on the GPU Node, so a GPU Workload's image brings ROCm. The GPU's devices are world-accessible there, so a GPU Workload can run as non-root without `supplementalGroups`; `gpu-join` warns if that changes.
 
-`just verify` checks the GPU, while the GPU Node is Joined, with the smallest GPU Workload there is: a Job that runs `rocminfo` (`verify/lib/rocminfo.yaml`), which must find the RX 7800 XT (`gfx1101`).
+There's one GPU, advertised as one `amd.com/gpu`, so only one GPU Workload runs at a time; another stays Pending until the GPU is free.
+
+### Ollama
+
+Ollama (`workloads/ollama/`) serves LLMs on the GPU through ROCm, at https://ollama.lab.localhost, and holds the GPU while the GPU Node is Joined. It keeps its models in `/var/lib/k3d-lab/models/ollama` on the GPU Node, which every leave and purge keep, so a model is downloaded once and survives rebuilding the Lab. A model unloads after 5 minutes unused, giving its VRAM back; `gpu-leave` frees all of it.
+
+```bash
+curl https://ollama.lab.localhost/api/pull -d '{"model": "qwen2.5:0.5b"}'
+curl https://ollama.lab.localhost/api/generate -d '{"model": "qwen2.5:0.5b", "prompt": "Hi", "stream": false}'
+```
+
+It's a DaemonSet on the GPU Node, so while the GPU Node is Left it has no pod at all, and its Application stays Healthy. `just verify` checks, while the GPU Node is Joined, that the GPU is advertised and that Ollama answers through the Gateway and found the RX 7800 XT (`gfx1101`).
 
 ## Machine-specific values
 
