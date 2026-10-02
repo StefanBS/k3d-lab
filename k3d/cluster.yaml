@@ -6,7 +6,7 @@ metadata:
   name: lab
 servers: 1
 agents: 1
-image: rancher/k3s:v1.36.4-k3s1
+image: rancher/k3s:v1.37.1-k3s1
 # Created by `just up` beforehand: fixed subnet, routable from the GPU Node (ADR 0002).
 network: k3d-lab
 kubeAPI:
