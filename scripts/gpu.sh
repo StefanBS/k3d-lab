@@ -125,18 +125,29 @@ cmd_leave() {
   log "The GPU Node is Left$([[ $purge == true ]] && echo ", and purged")"
 }
 
+# The Lab's view and the machine's: a NotReady Node object means the GPU Node is off,
+# unless the machine answers with its agent stopped, as after a reboot.
 cmd_status() {
-  local node
-  if ! lab_exists; then
-    echo "Lab: none"
-  elif node=$(gpu_node_in_lab) && [[ -n $node ]]; then
-    echo "Lab: the GPU Node is Joined as ${node% *}, $([[ $node == *" True" ]] && echo Ready || echo "NotReady (off?)")"
-  else
-    echo "Lab: the GPU Node is Left"
-  fi
+  local node="" machine="" line
   need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
   if gpu_node_reachable; then
-    run_on_gpu_node "" status | sed 's/^/GPU Node: /'
+    machine=$(run_on_gpu_node "" status)
+  fi
+  if lab_exists; then node=$(gpu_node_in_lab); fi
+
+  if ! lab_exists; then
+    echo "Lab: none"
+  elif [[ -z $node ]]; then
+    echo "Lab: the GPU Node is Left"
+  elif [[ $node == *" True" ]]; then
+    echo "Lab: the GPU Node is Joined as ${node% *}, Ready"
+  elif [[ $machine == "agent: stopped"* ]]; then
+    echo "Lab: the GPU Node's agent is stopped, as after a reboot, so it's Left; ${node% *} stays NotReady until 'just gpu-join'"
+  else
+    echo "Lab: the GPU Node is Joined as ${node% *}, NotReady: it's off"
+  fi
+  if [[ -n $machine ]]; then
+    while read -r line; do echo "GPU Node: $line"; done <<<"$machine"
   else
     echo "GPU Node: can't log in as $GPU_NODE_SSH"
   fi
