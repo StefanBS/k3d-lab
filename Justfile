@@ -39,8 +39,8 @@ bao *args:
     @scripts/bao.sh "$@"
 
 # Archive the Secret Store's data, unseal key and root token into a directory or to an archive path
-vault-backup path:
-    @scripts/vault-backup.sh {{ quote(path) }}
+secret-store-backup path:
+    @scripts/secret-store-backup.sh {{ quote(path) }}
 
 # Walk through the GPU Node step only you can do: creating the user the Host logs in as
 gpu-wizard:

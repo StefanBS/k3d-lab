@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Archives the Secret Store (ADR 0003): its data, its unseal key and its root token,
 # everything in SECRET_STORE_DIR. The archive can read every secret, so keep it safe.
-# Usage: vault-backup.sh <path>. A directory gets a new archive named by the date and time;
+# Usage: secret-store-backup.sh <path>. A directory gets a new archive named by the date and time;
 # any other path is the archive itself, which must not exist yet.
 # OpenBao stops while it's archived, so the data can't change underneath: a few seconds
 # in which the Lab can't read secrets, though the Secrets ESO already made stay.
@@ -10,7 +10,7 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
 
-(($# == 1)) || die "usage: just vault-backup <directory or archive path>"
+(($# == 1)) || die "usage: just secret-store-backup <directory or archive path>"
 archive=$1
 [[ ! -d $archive ]] || archive=$archive/k3d-lab-secret-store-$(date +%Y%m%d-%H%M%S).tar.gz
 [[ ! -e $archive ]] || die "$archive already exists"

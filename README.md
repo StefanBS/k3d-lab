@@ -52,7 +52,7 @@ sudo scripts/host-setup.sh
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. A Joined GPU Node leaves first, if it's reachable. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
 | `just bao <args>` | Runs the `bao` CLI against the Secret Store, as its root. |
-| `just vault-backup <path>` | Archives the Secret Store, to a new file in `<path>` if it's a directory. See Secrets. |
+| `just secret-store-backup <path>` | Archives the Secret Store, to a new file in `<path>` if it's a directory. See Secrets. |
 
 The Lab's kube context is `k3d-lab`. `just up` adds it to your kubeconfig without switching to it.
 
@@ -186,7 +186,7 @@ spec:
 
 ### Backup and restore
 
-`just vault-backup <path>` stops OpenBao for a few seconds, archives that whole directory, and starts it again. The archive can read every secret, so keep it somewhere safe.
+`just secret-store-backup <path>` stops OpenBao for a few seconds, archives that whole directory, and starts it again. The archive can read every secret, so keep it somewhere safe.
 
 To restore an archive, on this Host or a new one:
 
