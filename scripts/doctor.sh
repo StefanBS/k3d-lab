@@ -65,6 +65,17 @@ fi
 not_set_up() { warn "not yet: $2 (run 'just host-setup')"; }
 run_root_steps not_set_up
 
+# ADR 0003: up needs it, and ESO reads from it in every Lab.
+if ! secret_store_installed; then
+  warn "the Secret Store isn't set up yet: run 'just host-setup'"
+elif ! secret_store_running; then
+  fail "the Secret Store isn't running: see 'systemctl --user status $SECRET_STORE_UNIT'"
+elif ! secret_store_unsealed; then
+  fail "the Secret Store is running but sealed: see 'journalctl --user -u $SECRET_STORE_UNIT'"
+else
+  ok "the Secret Store is running and unsealed"
+fi
+
 if [[ ! -f $LAB_ENV_FILE ]]; then
   warn ".env is missing: copy .env.example and fill it in (only the GPU Node recipes need it)"
 else

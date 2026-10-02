@@ -30,6 +30,7 @@ install_component() {
 
 lab_exists && die "a Lab already exists; run 'just down' first"
 lab_ca_exists || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host-setup'"
+secret_store_unsealed || die "the Secret Store isn't running and unsealed; run 'just host-setup'"
 taken=$(lab_host_ports_taken)
 [[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
 $taken"
@@ -86,6 +87,31 @@ log "Loading the Lab CA into cert-manager"
 cert_manager_ns=$(yq '.namespace' "$LAB_ROOT/platform/cert-manager/component.yaml")
 kc create namespace "$cert_manager_ns" >/dev/null
 kc -n "$cert_manager_ns" create secret tls lab-ca --cert "$LAB_CA_CERT" --key "$LAB_CA_KEY" >/dev/null
+
+# ESO reads Workloads' secrets from the Secret Store on the Host, which trusts the Lab
+# through Kubernetes auth (ADR 0003, platform/external-secrets/values.yaml). Every Lab
+# has a new API CA, so the auth is pointed at it here. OpenBao keeps no token of the
+# Lab's: it checks each login's token with a TokenReview made with that same token.
+log "Pointing the Secret Store's Kubernetes auth at the Lab"
+bao_quietly() { quietly "$LAB_ROOT/scripts/bao.sh" "$@"; }
+bao_enabled auth kubernetes || bao_quietly auth enable kubernetes
+# Read-only, and only Workloads' secrets: lab/workloads/<workload>/<key>.
+bao_quietly policy write eso - <<'EOF'
+path "lab/data/workloads/*" { capabilities = ["read"] }
+path "lab/metadata/workloads/*" { capabilities = ["read", "list"] }
+EOF
+eso_ns=$(yq '.namespace' "$LAB_ROOT/platform/external-secrets/component.yaml")
+eso_audience=$(yq '.extraObjects[0]' "$LAB_ROOT/platform/external-secrets/values.yaml" |
+  yq '.spec.provider.vault.auth.kubernetes.serviceAccountRef.audiences[0]')
+bao_quietly write auth/kubernetes/role/eso \
+  bound_service_account_names=external-secrets bound_service_account_namespaces="$eso_ns" \
+  audience="$eso_audience" token_policies=eso token_ttl=1h
+kc config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' |
+  base64 -d | bao_quietly write auth/kubernetes/config \
+  kubernetes_host="https://$server_ip:6443" kubernetes_ca_cert=- disable_local_ca_jwt=true
+# The ClusterSecretStore trusts the Secret Store's certificate through this.
+kc create namespace "$eso_ns" >/dev/null
+kc -n "$eso_ns" create configmap lab-ca --from-file=ca.crt="$LAB_CA_CERT" >/dev/null
 
 # Grafana's admin password never goes in Git either: each Lab gets a new one, which
 # Grafana reads from this Secret (platform/grafana/values.yaml) and `just creds` prints.

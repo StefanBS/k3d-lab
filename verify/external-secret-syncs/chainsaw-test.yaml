@@ -1,0 +1,55 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: external-secret-syncs
+spec:
+  description: >-
+    An ExternalSecret syncs a value from the Secret Store on the Host (ADR 0003) into a
+    Kubernetes Secret: ESO logs in to OpenBao at host.k3d.internal:8200 with Kubernetes
+    auth, over TLS from the Lab CA. The check writes its own value, unique to its
+    namespace, under lab/workloads/verify/, and deletes it afterwards.
+  steps:
+    - try:
+        - assert:
+            resource:
+              apiVersion: external-secrets.io/v1
+              kind: ClusterSecretStore
+              metadata:
+                name: secret-store
+              (status.conditions[?type == 'Ready'] | [0].status): 'True'
+        # Script steps run in this check's folder.
+        - script:
+            content: ../../scripts/bao.sh kv put -mount=lab "workloads/verify/$NAMESPACE" value="$NAMESPACE"
+        - apply:
+            resource:
+              apiVersion: external-secrets.io/v1
+              kind: ExternalSecret
+              metadata:
+                name: probe
+              spec:
+                secretStoreRef:
+                  kind: ClusterSecretStore
+                  name: secret-store
+                target:
+                  name: probe
+                data:
+                  - secretKey: value
+                    remoteRef:
+                      key: (join('/', ['workloads/verify', $namespace]))
+                      property: value
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: probe
+              data:
+                value: (base64_encode($namespace))
+      catch:
+        - script:
+            content: kubectl -n "$NAMESPACE" get externalsecret probe -o yaml | yq .status
+        - script:
+            content: kubectl get clustersecretstore secret-store -o yaml | yq .status
+      finally:
+        - script:
+            content: ../../scripts/bao.sh kv metadata delete -mount=lab "workloads/verify/$NAMESPACE"

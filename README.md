@@ -29,6 +29,7 @@ It prepares what outlives any Lab and is safe to re-run: a run with nothing to d
 
 - **Docker CE** ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)): installed with its data in `/home/docker-data` (labelled for SELinux like `/var/lib/docker`), started at boot, and usable without sudo through the `docker` group. If `podman-docker` is installed, `dnf` refuses Docker CE until you remove it (`sudo dnf remove podman-docker`); Podman itself can stay.
 - **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `lab.localhost` (where every Lab UI lives), `k3d.internal`, the Lab's subnet and loopback.
+- **The Secret Store** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): OpenBao, as the rootless Podman Quadlet `k3d-lab-secret-store` (a user service of yours, started at boot through lingering), with all its state in `~/.local/share/k3d-lab/secret-store/`. It unseals itself at every start, with OpenBao's `static` seal and a key generated once, and serves TLS from the Lab CA on port 8200. A firewalld policy lets only the Lab's subnet, `172.28.0.0/16`, reach that port, so it's closed to the LAN; the Secret Store only starts once that policy is in place. See Secrets.
 
 `host-setup` never escalates privileges. It checks the steps that need root and, if any are left, asks you to run them yourself, then run `just host-setup` again:
 
@@ -44,12 +45,14 @@ sudo scripts/host-setup-root.sh
 
 | Command | What it does |
 |---|---|
-| `just doctor` | Checks the Host has what the Lab needs: the tools, every `host-setup` step, free space in Docker's data directory, and that `HOST_LAN_IP` in `.env` is still the Host's address. Installs nothing. |
+| `just doctor` | Checks the Host has what the Lab needs: the tools, every `host-setup` step, that the Secret Store is running and unsealed, free space in Docker's data directory, and that `HOST_LAN_IP` in `.env` is still the Host's address. Installs nothing. |
 | `just up` | Builds the Lab, then runs `just verify`. Refuses if a Lab already exists. ArgoCD builds it from the branch checked out here, as pushed, since `verify` runs the checks from this checkout; `just up REVISION=<branch>` picks another pushed branch or tag. |
 | `just creds` | Prints each of the Lab's UIs with its URL and login. The passwords are new with every Lab. |
 | `just verify` | Checks how the running Lab behaves, with one Chainsaw test per check in `verify/`: a PASS or FAIL for each, and a non-zero exit on any FAIL. `just verify <check>...` runs only those checks, named by their folders; any Chainsaw flags go after them. |
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
+| `just bao <args>` | Runs the `bao` CLI against the Secret Store, as its root. |
+| `just vault-backup <path>` | Archives the Secret Store, to a new file in `<path>` if it's a directory. See Secrets. |
 
 The Lab's kube context is `k3d-lab`. `just up` adds it to your kubeconfig without switching to it.
 
@@ -129,6 +132,54 @@ To try it, push a change to the branch the Lab tracks, and watch the dashboard, 
 
 - **A canary that completes:** change `newTag` in `workloads/rollouts-demo/kustomization.yaml`.
 - **A canary that's rolled back:** set `PODINFO_RANDOM_ERROR` to `"true"` in `rollout.yaml`, with or without a new tag. That alone is a new version, and about a fifth of its requests fail. Revert it to make the Rollout Healthy again.
+
+## Secrets
+
+Workloads get their secrets as Kubernetes Secrets from **External Secrets Operator** (`platform/external-secrets/`), which reads them from the Secret Store on the Host. Secrets never go in Git, and survive `just down`.
+
+Each secret lives in OpenBao's KV v2 mount `lab/`, at `lab/workloads/<workload>/<key>`, and holds one or more fields. Write one with:
+
+```sh
+just bao kv put -mount=lab workloads/<workload>/<key> <field>=<value>
+```
+
+A Workload asks for it with an ExternalSecret in its own folder, in Git, from the ClusterSecretStore `secret-store`:
+
+```yaml
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: <secret>
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: secret-store
+  target:
+    name: <secret>  # the Kubernetes Secret ESO creates
+  data:
+    - secretKey: <key in the Secret>
+      remoteRef:
+        key: workloads/<workload>/<key>
+        property: <field>
+```
+
+- **How ESO logs in:** with OpenBao's Kubernetes auth, as the role `eso`, which can only read `lab/workloads/*`. `just up` points that auth at each new Lab, and nothing in the Lab holds a token of OpenBao's: OpenBao checks each of ESO's short-lived tokens with a TokenReview made with that same token, and accepts only tokens meant for it (the audience `k3d-lab-secret-store`), so no other token of ESO's service account can log in. ESO reaches OpenBao at `https://host.k3d.internal:8200`, the Host's address on the Lab network, which only ESO's controller resolves (through its pod's `hostAliases`), and trusts its certificate through the Lab CA.
+- **What's kept on the Host:** `~/.local/share/k3d-lab/secret-store/` holds OpenBao's Raft data, its unseal key, and `init.json` with the root token and recovery key. The unseal key sits next to the data, so encryption at rest is mostly for show. `just bao` uses the root token.
+
+### Backup and restore
+
+`just vault-backup <path>` stops OpenBao for a few seconds, archives that whole directory, and starts it again. The archive can read every secret, so keep it somewhere safe.
+
+To restore an archive, on this Host or a new one:
+
+```sh
+systemctl --user stop k3d-lab-secret-store
+mv ~/.local/share/k3d-lab/secret-store ~/.local/share/k3d-lab/secret-store.old
+tar -xzf <archive> -C ~/.local/share/k3d-lab
+just host-setup
+```
+
+`host-setup` starts OpenBao on the restored data, and renews its certificate if the Lab CA is a new one. Once it works, delete `secret-store.old`.
 
 ## Machine-specific values
 

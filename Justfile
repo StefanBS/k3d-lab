@@ -33,6 +33,15 @@ down:
 creds:
     @scripts/creds.sh
 
+# Run the bao CLI against the Secret Store as its root, e.g. `just bao kv put -mount=lab workloads/<workload>/<key> <field>=<value>`
+[positional-arguments]
+bao *args:
+    @scripts/bao.sh "$@"
+
+# Archive the Secret Store's data, unseal key and root token into a directory or to an archive path
+vault-backup path:
+    @scripts/vault-backup.sh {{ quote(path) }}
+
 # Check how the running Lab behaves; `just verify <check>...` runs only those checks
 verify *args:
     @scripts/verify.sh {{ args }}

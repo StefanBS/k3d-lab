@@ -105,6 +105,13 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
 done
 lint_rendering gitops render_gitops
+# Git can't read lib.sh, so the Lab's gateway is written out where ESO needs it.
+eso_host=$(yq '.hostAliases[] | select(.hostnames[] == "host.k3d.internal") | .ip' platform/external-secrets/values.yaml)
+if [[ $eso_host == "$LAB_GATEWAY" ]]; then
+  ok "ESO resolves host.k3d.internal to LAB_GATEWAY ($LAB_GATEWAY)"
+else
+  fail "platform/external-secrets/values.yaml resolves host.k3d.internal to '$eso_host', not LAB_GATEWAY ($LAB_GATEWAY)"
+fi
 
 # Chainsaw only checks each file against its schema. The step templates have none, so
 # a broken one shows up when `just verify` loads the checks that use it.

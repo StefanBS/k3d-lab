@@ -2,8 +2,8 @@
 
 The Lab is disposable: `just down && just up` recreates it from scratch. Real Workloads such as LLMs still need secrets that outlive it, and browsers and OpenBao need a CA that is trusted once rather than on every rebuild. So both live on the Host, not in the cluster.
 
-- **The Secret Store** is OpenBao, running as a rootless Podman Quadlet (a user systemd unit) with file storage. It unseals automatically from a key file on the Host, and the firewall lets only the Lab's Docker subnet reach it.
-- **External Secrets Operator** logs in to OpenBao with Kubernetes auth. `just up` re-points that auth at each new cluster.
+- **The Secret Store** is OpenBao, running as a rootless Podman Quadlet (a user systemd unit) with single-node Raft storage: OpenBao 2.7 dropped file storage, and Raft still keeps everything in one directory. It unseals automatically from a key file on the Host with the `static` seal, and a firewalld policy lets only the Lab's Docker subnet reach it. The policy runs before every zone, because the Lab's bridge is in Docker's zone, which accepts everything, while Fedora Workstation's default zone accepts every port above 1024 from the LAN.
+- **External Secrets Operator** logs in to OpenBao with Kubernetes auth. `just up` re-points that auth at each new cluster. OpenBao holds no token of the Lab's: it reviews each login's token with that same token.
 - **The Lab CA** is generated once by `just host-setup` and trusted by the Host. `just up` loads it into cert-manager as a CA issuer. The same CA signs OpenBao's certificate.
 
 ## Considered Options
