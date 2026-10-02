@@ -101,9 +101,11 @@ path "lab/data/workloads/*" { capabilities = ["read"] }
 path "lab/metadata/workloads/*" { capabilities = ["read", "list"] }
 EOF
 eso_ns=$(yq '.namespace' "$LAB_ROOT/platform/external-secrets/component.yaml")
+eso_audience=$(yq '.extraObjects[0]' "$LAB_ROOT/platform/external-secrets/values.yaml" |
+  yq '.spec.provider.vault.auth.kubernetes.serviceAccountRef.audiences[0]')
 bao_quietly write auth/kubernetes/role/eso \
   bound_service_account_names=external-secrets bound_service_account_namespaces="$eso_ns" \
-  token_policies=eso token_ttl=1h
+  audience="$eso_audience" token_policies=eso token_ttl=1h
 kc config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' |
   base64 -d | bao_quietly write auth/kubernetes/config \
   kubernetes_host="https://$server_ip:6443" kubernetes_ca_cert=- disable_local_ca_jwt=true
