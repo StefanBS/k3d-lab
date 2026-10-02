@@ -1,5 +1,5 @@
 # Where this Platform component's chart comes from.
 chart: argo-cd
 repoURL: https://argoproj.github.io/argo-helm
-version: 10.9.4
+version: 10.9.6
 namespace: argocd
