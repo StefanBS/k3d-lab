@@ -67,7 +67,7 @@ The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA
 | ArgoCD | https://argocd.lab.localhost |
 | Grafana | https://grafana.lab.localhost |
 | Argo Rollouts | https://rollouts.lab.localhost |
-| Qwen-Image (web UI and API, while the GPU Node is Joined) | https://qwen-image.lab.localhost |
+| ComfyUI (while the GPU Node is Joined) | https://comfyui.lab.localhost |
 
 `just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard has no login at all.
 
@@ -220,21 +220,19 @@ A GPU Workload requests the GPU as `amd.com/gpu: 1` and tolerates the `amd.com/g
 
 There's one GPU, advertised as one `amd.com/gpu`, so only one GPU Workload runs at a time; another stays Pending until the GPU is free.
 
-### Qwen-Image
+### ComfyUI
 
-Qwen-Image (`workloads/qwen-image/`) generates and edits images with [Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1) on the GPU, through stable-diffusion.cpp's `sd-server` on Vulkan, and holds the GPU while the GPU Node is Joined. https://qwen-image.lab.localhost serves its web UI, an OpenAI-style API under `/v1/` and sd.cpp's own under `/sdcpp/v1/`.
+ComfyUI (`workloads/comfyui/`) generates and edits images with [Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1) on the GPU through ROCm, at https://comfyui.lab.localhost, and holds the GPU while the GPU Node is Joined. It runs text to image, editing with up to 10 reference images, and Alibaba PAI's Fun ControlNet Union, all measured at 1024×1024; ControlNet was tried with line art only. Start from the Qwen-Image-2.1 templates in its workflow browser; its API takes the same workflows, exported in API format, at `/prompt`. [The benchmarks](docs/benchmarks/qwen-image-2.1.md) compare it with stable-diffusion.cpp, which it replaced for being about 2.7 times as fast.
 
-Its weights fit the RX 7800 XT's 16 GB: the denoiser in GGUF Q8_0 (7.7 GB, nearly lossless), the Qwen3-VL-8B text encoder in Q4_K_M (5 GB) with its vision weights for editing, and the BF16 VAE. They stay in the GPU Node's RAM, and each stage's go to VRAM only while it runs (`--offload-to-cpu`). Its first pod downloads them, about 14.5 GB, into `/var/lib/k3d-lab/models/qwen-image` on the GPU Node, which every leave and purge keep, so they're downloaded once and survive rebuilding the Lab. Each is pinned to a commit and checked against its checksum.
+- **The weights** are Comfy-Org's int8 ConvRot denoiser, text encoder and ControlNet, and the BF16 VAE, 21 GB in all. Its first pod downloads them into `/var/lib/k3d-lab/models/comfyui/weights` on the GPU Node, each pinned to a commit and checked against its checksum.
+- **The install** runs on `rocm/pytorch`, pinned by digest, which brings PyTorch and ROCm. A setup container installs ComfyUI at a pinned commit and the exact packages in `config/requirements.txt` into `/var/lib/k3d-lab/models/comfyui/runtime`, once: a later start with the same commit and lock reuses it.
+- **What it saves**, your workflows and settings (`user/`) and its images (`output/`), stays in `/var/lib/k3d-lab/models/comfyui` too. Uploaded images last only as long as the pod.
+- **`--reserve-vram 3`** keeps 3 GB of VRAM free. Without it, a 1024×1024 ControlNet job corrupts the VAE in ComfyUI's dynamic VRAM, and every later job comes out NaN until a restart. A NaN guard (`config/nan_guard.py`) fails any job whose denoiser or VAE produces NaN, rather than saving a black or noise image.
+- **Memory:** it keeps the models it has loaded in RAM, up to 21.4 GiB, and its limit is 24 GiB, so an overrun stops ComfyUI rather than one of the GPU Node's own processes.
 
-```bash
-curl https://qwen-image.lab.localhost/v1/images/generations \
-  -d '{"prompt": "a neon shop sign that reads \"k3d-lab\", rainy night", "size": "1024x1024"}' |
-  jq -r '.data[0].b64_json' | base64 -d > out.png
-```
+Every leave and purge keep `/var/lib/k3d-lab/models`, so the weights, the install and what it saved outlive the Lab. The model is under the Qwen Research License, for non-commercial use.
 
-`/v1/images/edits` takes up to 10 reference images as multipart `image[]` fields. Requests default to 1024×1024, 20 steps, CFG 6 and Euler. The model is under the Qwen Research License, for non-commercial use.
-
-It's a DaemonSet on the GPU Node ([ADR 0006](docs/adr/0006-gpu-workloads-are-daemonsets-on-the-gpu-node.md)), so while the GPU Node is Left it has no pod at all, and its Application stays Healthy. `just verify` checks, while the GPU Node is Joined, that the GPU is advertised and that Qwen-Image answers through the Gateway and found the RX 7800 XT through Vulkan.
+It's a DaemonSet on the GPU Node ([ADR 0006](docs/adr/0006-gpu-workloads-are-daemonsets-on-the-gpu-node.md)), so while the GPU Node is Left it has no pod at all, and its Application stays Healthy. `just verify` checks, while the GPU Node is Joined, that the GPU is advertised, and that ComfyUI answers through the Gateway, loaded the NaN guard and uses the RX 7800 XT.
 
 ## Machine-specific values
 

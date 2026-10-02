@@ -1,2 +1,2 @@
 # No chart: the kustomization.yaml beside this is the component.
-namespace: qwen-image
+namespace: comfyui

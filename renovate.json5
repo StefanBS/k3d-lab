@@ -11,6 +11,15 @@
   },
   customManagers: [
     {
+      description: 'A commit of a branch, on the line below a `# renovate: datasource=git-refs depName=... branch=...` comment',
+      customType: 'regex',
+      managerFilePatterns: ['/\\.sh$/'],
+      matchStrings: [
+        '# renovate: datasource=git-refs depName=(?<depName>\\S+) branch=(?<currentValue>\\S+)\\n[^\\n]*=(?<currentDigest>[0-9a-f]{40})\\n',
+      ],
+      datasourceTemplate: 'git-refs',
+    },
+    {
       description: "A component's chart (platform/ and workloads/)",
       customType: 'regex',
       managerFilePatterns: ['/^(platform|workloads)/[^/]+/component\\.yaml$/'],
@@ -96,11 +105,20 @@
       matchDepNames: ['amd-gpu', 'docker.io/rocm/k8s-device-plugin'],
     },
     {
-      // sd.cpp's image is a moving tag that changes with every commit to its master, so
-      // its digest is updated once a week rather than several times a day.
-      groupName: 'Qwen-Image',
-      matchDepNames: ['ghcr.io/leejet/stable-diffusion.cpp'],
+      // ComfyUI follows its master branch, and its Python packages are locked to what it
+      // was measured with, so they come together once a week. Its ROCm PyTorch image only
+      // takes new digests of the same tag: a new tag changes PyTorch or ROCm.
+      groupName: 'ComfyUI',
+      matchFileNames: ['workloads/comfyui/**'],
       schedule: ['* 0-5 * * 1'],
+      prBodyNotes: [
+        "**Before merging:** a new ComfyUI commit can change its `requirements.txt`. Install it over the locked packages, run `pip check`, and update `workloads/comfyui/config/requirements.txt` with the result (`pip freeze`).",
+      ],
+    },
+    {
+      matchDepNames: ['docker.io/rocm/pytorch'],
+      matchUpdateTypes: ['major', 'minor', 'patch'],
+      enabled: false,
     },
     {
       groupName: 'Rollouts demo',

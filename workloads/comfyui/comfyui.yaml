@@ -1,0 +1,143 @@
+# A DaemonSet on the GPU Node rather than a Deployment (ADR 0006): while the GPU Node is
+# Left, it wants no pod at all, so ArgoCD still calls it Healthy. There's one GPU, so an
+# update stops the old pod before starting the new one, which is the DaemonSet's default.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: comfyui
+spec:
+  selector:
+    matchLabels: {app: comfyui}
+  template:
+    metadata:
+      labels: {app: comfyui}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      # The GPU's devices are world-accessible (gpu-join reports it), so no root.
+      # The UID is no one's on the GPU Node; the files it writes there are its own.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: weights
+          image: curlimages/curl
+          command: [sh, /config/weights.sh]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+            - {name: config, mountPath: /config, readOnly: true}
+        - name: setup
+          image: docker.io/rocm/pytorch
+          command: [bash, /config/setup.sh]
+          env:
+            # UID 10001 has no passwd entry, so getpass and PyTorch's caches need these.
+            - {name: HOME, value: /work/home}
+            - {name: USER, value: comfyui}
+            - {name: TORCHINDUCTOR_CACHE_DIR, value: /work/torchinductor}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+            - {name: config, mountPath: /config, readOnly: true}
+            - {name: work, mountPath: /work}
+      containers:
+        - name: comfyui
+          image: docker.io/rocm/pytorch
+          command: [bash, -euc]
+          args:
+            - |
+              mkdir -p /models/comfyui/user /models/comfyui/output /work/input /work/temp
+              cd /models/comfyui/runtime
+              # --reserve-vram 3 keeps 3 GB of VRAM free: without it, a 1024x1024
+              # ControlNet job corrupts the VAE in dynamic VRAM, and every later job's
+              # image is NaN (docs/benchmarks/qwen-image-2.1.md).
+              exec venv/bin/python ComfyUI/main.py --listen 0.0.0.0 --port 8188 \
+                --extra-model-paths-config /config/extra_model_paths.yaml \
+                --user-directory /models/comfyui/user --output-directory /models/comfyui/output \
+                --input-directory /work/input --temp-directory /work/temp \
+                --reserve-vram 3
+          env:
+            # UID 10001 has no passwd entry, so getpass and PyTorch's caches need these.
+            - {name: HOME, value: /work/home}
+            - {name: USER, value: comfyui}
+            - {name: TORCHINDUCTOR_CACHE_DIR, value: /work/torchinductor}
+          ports:
+            - {name: http, containerPort: 8188}
+          # It listens once it has loaded its nodes; the models load per job.
+          startupProbe:
+            httpGet: {path: /system_stats, port: http}
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /system_stats, port: http}
+          livenessProbe:
+            httpGet: {path: /system_stats, port: http}
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            # It keeps every model it has loaded in RAM, up to 21.4 GiB when a job has used
+            # them all. The limit keeps an overrun inside the pod, rather than letting the
+            # kernel pick among the GPU Node's own processes.
+            requests: {cpu: 500m, memory: 22Gi}
+            limits:
+              memory: 24Gi
+              amd.com/gpu: 1
+          volumeMounts:
+            - {name: models, mountPath: /models}
+            - {name: config, mountPath: /config, readOnly: true}
+            - {name: work, mountPath: /work}
+      volumes:
+        # The GPU Node's model directory, MODEL_DIR in scripts/gpu-node.sh: weights,
+        # install, saved workflows and output, in comfyui/.
+        - name: models
+          hostPath:
+            path: /var/lib/k3d-lab/models
+            type: Directory
+        - name: config
+          configMap:
+            name: comfyui
+            items:
+              - {key: setup.sh, path: setup.sh}
+              - {key: weights.sh, path: weights.sh}
+              - {key: requirements.txt, path: requirements.txt}
+              - {key: extra_model_paths.yaml, path: extra_model_paths.yaml}
+              - {key: nan_guard.py, path: custom_nodes/nan_guard.py}
+        # Uploads, temporary files and caches: nothing there needs to last.
+        - name: work
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: comfyui
+spec:
+  selector: {app: comfyui}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: comfyui
+spec:
+  parentRefs:
+    - name: lab
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - comfyui.lab.localhost
+  rules:
+    - backendRefs:
+        - {name: comfyui, port: 80}
