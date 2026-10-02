@@ -2,7 +2,7 @@
 # that prepares it, each with a check for "done" and a fix. Sourced after lib.sh by
 # host-setup.sh, which fixes the steps (yours as the owner, root's under sudo), and by
 # doctor.sh, which reports them. up.sh and verify.sh source it for the Lab CA and the
-# Secret Store, and bao.sh and vault-backup.sh for the Secret Store. Each check needs no
+# Secret Store, and bao.sh and secret-store-backup.sh for the Secret Store. Each check needs no
 # root and no Docker socket.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the variables here are used by the scripts that source this file
@@ -24,7 +24,7 @@ LAB_CA_KEY=$LAB_CA_DIR/ca.key
 LAB_CA_ANCHOR=/etc/pki/ca-trust/source/anchors/k3d-lab-ca.crt
 
 # ADR 0003: the Secret Store, OpenBao as a rootless Podman Quadlet of the owner's. All of
-# its state lives in SECRET_STORE_DIR, which vault-backup archives: the Raft data, the
+# its state lives in SECRET_STORE_DIR, which secret-store-backup archives: the Raft data, the
 # unseal key, the root token, and its TLS certificate from the Lab CA.
 SECRET_STORE_DIR=$LAB_HOST_DIR/secret-store
 SECRET_STORE_UNSEAL_KEY=$SECRET_STORE_DIR/unseal.key
@@ -287,7 +287,7 @@ fix_owner_lingers() {
 secret_store_unseal_key_exists() { [[ -f $SECRET_STORE_UNSEAL_KEY ]]; }
 blocked_secret_store_unseal_key_exists() {
   ! secret_store_unseal_key_exists && [[ -e $SECRET_STORE_DATA ]] &&
-    echo "$SECRET_STORE_DATA exists, but its unseal key doesn't; restore $SECRET_STORE_UNSEAL_KEY from a vault-backup, or delete $SECRET_STORE_DIR to start over (its secrets are lost)"
+    echo "$SECRET_STORE_DATA exists, but its unseal key doesn't; restore $SECRET_STORE_UNSEAL_KEY from a secret-store-backup, or delete $SECRET_STORE_DIR to start over (its secrets are lost)"
 }
 fix_secret_store_unseal_key_exists() {
   changed "Generating the Secret Store's unseal key"
@@ -352,7 +352,7 @@ fix_secret_store_config_current() {
 }
 
 # keep-id maps the owner to the image's openbao user (100:1000), so the owner owns
-# every file OpenBao writes, and vault-backup can read them.
+# every file OpenBao writes, and secret-store-backup can read them.
 secret_store_quadlet() {
   cat <<EOF
 # Written by 'just host-setup' (scripts/host-setup.sh); changes here are overwritten.
