@@ -26,6 +26,10 @@ _Avoid_: online, active, attached
 The GPU Node's state when it's not registered with the current Lab, so its GPU belongs entirely to its owner. It's the state after every reboot, until the next join.
 _Avoid_: offline, detached, removed
 
+**Stale install**:
+A k3s install on the GPU Node that belongs to an earlier Lab, which no longer exists. The GPU Node is Left; the next join cleans the install up before joining.
+_Avoid_: old install, leftover node
+
 **Server**:
 A node running the k3s control plane. The Lab has exactly one, and it is a k3d Node.
 _Avoid_: master, control-plane node
