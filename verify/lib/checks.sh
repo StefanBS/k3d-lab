@@ -3,16 +3,23 @@
 # named chainsaw, so this calls plain kubectl, not scripts/lib.sh's kc (ADR 0004).
 # shellcheck shell=bash
 
+# A command that fails inside $(...) fails it, as it would outside, so a broken check
+# stops its script rather than passing.
+shopt -s inherit_errexit
+
 # Sets nodes to the name of every Ready node, the GPU Node included when it's Joined and
 # powered on. Otherwise, says so and exits.
 require_ready_nodes() {
-  mapfile -t nodes < <(kubectl get nodes \
+  local ready
+  ready=$(kubectl get nodes \
     -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' |
     awk '$2 == "True" { print $1 }')
-  ((${#nodes[@]})) || {
+  [[ -n $ready ]] || {
     echo "FAIL  no Ready nodes"
     exit 1
   }
+  # shellcheck disable=SC2034 # The scripts that source this read nodes.
+  mapfile -t nodes <<<"$ready"
 }
 
 # Usage: node_pod <namespace> <pod selector> <node>
@@ -32,6 +39,7 @@ monitoring_get() {
 }
 
 # Usage: uri_encode <text>
+# Prints the text encoded for a URL's query string.
 uri_encode() {
   Q=$1 yq -n 'strenv(Q) | @uri'
 }
@@ -45,13 +53,17 @@ prometheus_query() {
 
 # Usage: retry <command>...
 # Runs the command until it prints nothing: each line it prints is something it didn't
-# find yet. Leaves what it printed last in the array missing. Tries 24 times, 5s apart:
-# 2m, within the exec timeout (.chainsaw.yaml).
+# find yet. Leaves what it printed last in the array missing, and exits if it fails.
+# Tries 24 times, 5s apart: 2m, within the exec timeout (.chainsaw.yaml).
 retry() {
-  local attempt
+  local attempt out
   for attempt in {1..24}; do
-    mapfile -t missing < <("$@")
-    ((${#missing[@]})) || return 0
+    out=$("$@")
+    [[ -n $out ]] || {
+      missing=()
+      return 0
+    }
+    mapfile -t missing <<<"$out"
     ((attempt == 24)) || sleep 5
   done
 }
