@@ -1,0 +1,43 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: comfyui
+  # Runs only while the GPU Node is Joined and Ready (scripts/verify.sh).
+  labels:
+    k3d-lab/gpu: amd
+spec:
+  description: >-
+    ComfyUI (workloads/comfyui/) runs on the GPU Node with the Lab's NaN guard, answers
+    from the Host at https://comfyui.lab.localhost through the Gateway, and uses the
+    RX 7800 XT through ROCm rather than falling back to the CPU.
+  steps:
+    - try:
+        # The pod on the GPU Node. Its first start pulls an image of about 20 GB, downloads
+        # 21 GB of weights and installs ComfyUI.
+        - assert:
+            timeout: 45m
+            resource:
+              apiVersion: apps/v1
+              kind: DaemonSet
+              metadata:
+                name: comfyui
+                namespace: comfyui
+              status:
+                desiredNumberScheduled: 1
+                numberReady: 1
+        # verify.sh exports LAB_CA_CERT.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" https://comfyui.lab.localhost/system_stats |
+              yq -p json -e '.devices[0].name | test("RX 7800 XT")'
+        # The guard logs once, when ComfyUI loads it.
+        - script:
+            content: >-
+              kubectl -n comfyui logs ds/comfyui -c comfyui | grep -q 'NANGUARD installed'
+      catch:
+        - script:
+            content: >-
+              kubectl -n comfyui get pods -o wide;
+              kubectl -n comfyui logs ds/comfyui -c setup --tail 20;
+              kubectl -n comfyui logs ds/comfyui -c comfyui --tail 30

@@ -9,8 +9,7 @@ spec:
   description: >-
     The GPU Node advertises its GPU as amd.com/gpu, through the device plugin
     (platform/amd-gpu/). That a pod requesting it reaches the RX 7800 XT is the
-    qwen-image check's job: Qwen-Image holds the only amd.com/gpu, so no other pod could
-    get it.
+    comfyui check's job: ComfyUI holds the only amd.com/gpu, so no other pod could get it.
   steps:
     - try:
         - assert:

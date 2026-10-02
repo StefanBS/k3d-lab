@@ -1,0 +1,24 @@
+# ComfyUI, generating and editing images with Qwen-Image-2.1 on the GPU Node's RX 7800 XT
+# through ROCm, at https://comfyui.lab.localhost. Its weights, its install and what it
+# saves live on the GPU Node, so they outlive the Lab.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - comfyui.yaml
+# A change to any of these restarts ComfyUI, through the ConfigMap's name.
+configMapGenerator:
+  - name: comfyui
+    files:
+      - config/setup.sh
+      - config/weights.sh
+      - config/requirements.txt
+      - config/extra_model_paths.yaml
+      - config/nan_guard.py
+images:
+  # PyTorch 2.12 on ROCm 7.14, which ComfyUI was measured on. Renovate updates only the
+  # digest: a new tag changes PyTorch or ROCm, which needs measuring again.
+  - name: docker.io/rocm/pytorch
+    newTag: rocm7.14.1_ubuntu24.04_py3.12_pytorch_release_2.12.0
+    digest: sha256:cc9b00f90b85c97b015b040fa55c8d1b404b7cacc6ad57d74ee3451c97508da1
+  - name: curlimages/curl
+    newTag: 8.22.0
