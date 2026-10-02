@@ -67,23 +67,35 @@ spec:
         - name: sd-server
           image: ghcr.io/leejet/stable-diffusion.cpp
           command: [/sd-server]
+          # sd.cpp takes each flag's value as the next argument, never after an =.
           args:
-            - --listen-ip=0.0.0.0
-            - --listen-port=1234
-            - --diffusion-model=/models/qwen-image/qwen_image_2.1-Q8_0.gguf
-            - --llm=/models/qwen-image/Qwen3VL-8B-Instruct-Q4_K_M.gguf
-            - --llm_vision=/models/qwen-image/mmproj-Qwen3VL-8B-Instruct-F16.gguf
-            - --vae=/models/qwen-image/qwen_image_2.1_vae_bf16.safetensors
+            - --listen-ip
+            - "0.0.0.0"
+            - --listen-port
+            - "1234"
+            - --diffusion-model
+            - /models/qwen-image/qwen_image_2.1-Q8_0.gguf
+            - --llm
+            - /models/qwen-image/Qwen3VL-8B-Instruct-Q4_K_M.gguf
+            - --llm_vision
+            - /models/qwen-image/mmproj-Qwen3VL-8B-Instruct-F16.gguf
+            - --vae
+            - /models/qwen-image/qwen_image_2.1_vae_bf16.safetensors
             # The weights, about 14.5 GB, stay in RAM, and each stage's go to VRAM only
             # while it runs, which leaves the 16 GB mostly to the image itself.
             - --offload-to-cpu
             - --diffusion-fa
             # Defaults a request can override, from sd.cpp's and Unsloth's examples.
-            - --width=1024
-            - --height=1024
-            - --steps=20
-            - --cfg-scale=6.0
-            - --sampling-method=euler
+            - --width
+            - "1024"
+            - --height
+            - "1024"
+            - --steps
+            - "20"
+            - --cfg-scale
+            - "6.0"
+            - --sampling-method
+            - euler
           env:
             # Mesa keeps its shader cache in $HOME/.cache; nothing there needs to last.
             - {name: HOME, value: /home/sd}
