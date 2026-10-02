@@ -1,0 +1,5 @@
+# Where this Platform component's chart comes from.
+chart: amd-gpu
+repoURL: https://rocm.github.io/k8s-device-plugin/
+version: 0.22.0
+namespace: amd-gpu

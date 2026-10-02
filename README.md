@@ -196,6 +196,12 @@ Once, after `just host-wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` i
 
 The agent is never enabled at boot. After any reboot the GPU Node is Left, and the GPU is entirely yours until the next `gpu-join`. While it's Joined but powered off, `just verify` WARNs about it and skips its checks. The Platform's DaemonSets stop counting it while it's off, so every Application stays Healthy.
 
+### GPU Workloads
+
+A GPU Workload requests the GPU as `amd.com/gpu: 1` and tolerates the `amd.com/gpu:NoSchedule` taint. AMD's device plugin (`platform/amd-gpu/`) advertises the GPU, and its node labeller adds `amd.com/gpu.*` labels describing it. Both run only on the GPU Node. Nothing ROCm-related is installed on the GPU Node, so a GPU Workload's image brings ROCm. The GPU's devices are world-accessible there, so a GPU Workload can run as non-root without `supplementalGroups`; `gpu-join` warns if that changes.
+
+`workloads/rocminfo/` is the smoke test: a Job that runs `rocminfo` once on the GPU and logs what it finds. While the GPU Node is Left it stays Pending, and it runs at the next `gpu-join`. ArgoCD doesn't count its health, so a Pending Job doesn't keep its Application from being Healthy. To run it again, delete it (`kubectl -n rocminfo delete job rocminfo`), and ArgoCD recreates it. `just verify` checks the GPU with its own copy of that Job, which must find the RX 7800 XT (`gfx1101`).
+
 ## Machine-specific values
 
 This repo is public, so values specific to your machines (LAN IPs, SSH destinations) go in an untracked `.env`. Copy `.env.example` to `.env` and fill it in. Only the GPU Node recipes need it.
