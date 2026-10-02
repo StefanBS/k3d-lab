@@ -29,6 +29,13 @@ lab_ca_hash() {
 
 gpu_node_registered() { [[ -n $(gpu_node_in_lab) ]]; }
 
+# Every DaemonSet has a Ready, up-to-date pod on each node it should run on: once the GPU
+# Node is Ready, that means the Platform's networking, logs and metrics run there too.
+daemonsets_ready() {
+  kc get daemonsets -A -o jsonpath='{range .items[*]}{.status.desiredNumberScheduled} {.status.numberReady} {.status.updatedNumberScheduled}{"\n"}{end}' |
+    awk '$1 != $2 || $1 != $3 { bad = 1 } END { exit bad }'
+}
+
 # Fails, listing them, if the GPU Node has anything a Left GPU Node mustn't, or, with
 # purge, anything the join added.
 check_left() {
@@ -70,6 +77,10 @@ cmd_join() {
   log "Waiting for the GPU Node to be Ready"
   retry 120 gpu_node_registered || die "the GPU Node didn't register with the Lab; see 'journalctl -u k3s-agent' on it"
   kc wait --for=condition=Ready nodes -l "$GPU_NODE_LABEL_KEY" --timeout=3m >/dev/null
+  log "Waiting for the Platform's DaemonSets to run on it"
+  # The DaemonSet controller counts the new node a moment after it's Ready.
+  sleep 2
+  retry 180 daemonsets_ready || die "the Platform's DaemonSets aren't all Ready on the GPU Node; see 'kubectl --context $LAB_CONTEXT get pods -A -o wide'"
   node=$(gpu_node_in_lab)
   log "The GPU Node is Joined as ${node%% *}"
 }
