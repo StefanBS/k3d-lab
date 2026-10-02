@@ -8,7 +8,7 @@ Ansible was the other candidate, since running idempotent steps over SSH is what
 
 - **Ansible**, with an inventory built from `.env`: see above. It would pay off on the Host's own setup, if anywhere, and that's a separate decision.
 - **Commands quoted inside the Host's scripts**, as in the prototype: no new file, but quoting through two shells, and no way to lint or run the GPU Node's half alone.
-- **Copying the file to the GPU Node** and running it there: a copy that can drift from the repo, for no gain over stdin.
+- **Keeping a copy on the GPU Node** and running it there: a copy that can drift from the repo, for no gain over stdin. Only `setup` is copied over, once, because it runs before the `k3dlab` user exists.
 
 ## Consequences
 
