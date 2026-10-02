@@ -120,6 +120,15 @@ lab_host_ports_taken() {
 # The Host's route to the LAN, and its address there (HOST_LAN_IP, ADR 0002).
 host_route() { ip -4 route get 1.1.1.1; }
 host_lan_ip() { host_route | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
+# Succeeds if HOST_LAN_IP, from .env, is still the Host's address; otherwise prints how
+# it differs. The GPU Node routes the Lab's subnet through it (ADR 0002).
+host_lan_ip_current() {
+  local actual
+  actual=$(host_lan_ip)
+  [[ ${HOST_LAN_IP:-} == "$actual" ]] && return
+  echo "HOST_LAN_IP in .env (${HOST_LAN_IP:-unset}) isn't the Host's address ($actual)"
+  return 1
+}
 
 # Every component folder, as <group>/<name>: one ArgoCD Application each.
 component_dirs() {

@@ -41,8 +41,8 @@ if [[ $gpu_node != *" True" ]]; then
   args+=(--selector "!$GPU_NODE_LABEL_KEY")
 fi
 # The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
-if [[ -n ${HOST_LAN_IP:-} && $HOST_LAN_IP != "$(host_lan_ip)" ]]; then
-  warn "HOST_LAN_IP in .env ($HOST_LAN_IP) isn't the Host's address ($(host_lan_ip)): the GPU Node's route to the Lab is stale; run 'just host-wizard', then 'just gpu-join'"
+if [[ -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then
+  warn "$why: the GPU Node's route to the Lab is stale; run 'just host-wizard', then 'just gpu-join'"
 fi
 # Go's test runner announces every check as it starts, pauses and resumes it, even with
 # --quiet. The PASS or FAIL for each check says all of that. With pipefail, the

@@ -48,7 +48,7 @@ $bad"
 }
 
 cmd_join() {
-  local eviction=20Gi arg server_ip version token node
+  local eviction=20Gi arg why server_ip version token node
   for arg; do
     case $arg in
       eviction=?*) eviction=${arg#eviction=} ;;
@@ -59,8 +59,7 @@ cmd_join() {
   need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
   lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
   # The GPU Node routes the Lab's subnet through this address (ADR 0002).
-  [[ $HOST_LAN_IP == "$(host_lan_ip)" ]] ||
-    die "HOST_LAN_IP in .env ($HOST_LAN_IP) isn't the Host's address ($(host_lan_ip)); run 'just host-wizard'"
+  why=$(host_lan_ip_current) || die "$why; run 'just host-wizard'"
   gpu_node_reachable ||
     die "can't log in to the GPU Node as $GPU_NODE_SSH with sudo; is it on? If it's never been set up, run 'just gpu-wizard'"
 
@@ -105,7 +104,11 @@ cmd_leave() {
       log "Deleting the GPU Node's Node object, $node"
       kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
     fi
-    warn "can't reach the GPU Node as $GPU_NODE_SSH: the next 'just gpu-join' cleans it up"
+    if [[ -n $node ]]; then
+      warn "can't reach the GPU Node as $GPU_NODE_SSH: the next 'just gpu-join' cleans it up"
+    else
+      warn "the GPU Node isn't in the Lab, and can't be reached as $GPU_NODE_SSH to check the machine"
+    fi
     [[ $purge == false ]] || die "nothing purged on the GPU Node"
     return
   fi
