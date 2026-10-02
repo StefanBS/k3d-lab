@@ -230,7 +230,7 @@ remove_install() {
 live_leftovers() {
   local link pin pids save restore count
   pids=$(pgrep -f "^$K3S_BIN|/var/lib/rancher/k3s/data/" | paste -sd' ') && echo "k3s processes: $pids"
-  pids=$(grep -l kubepods /proc/[0-9]*/cgroup 2>/dev/null | cut -d/ -f3 | paste -sd' ')
+  pids=$(grep -l kubepods /proc/[0-9]*/cgroup 2>/dev/null | cut -d/ -f3 | paste -sd' ') || true
   [[ -z $pids ]] || echo "pod processes: $pids"
   for link in $(cilium_links); do
     echo "Cilium link: $link"
