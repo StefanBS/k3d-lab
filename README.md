@@ -67,6 +67,7 @@ The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA
 | ArgoCD | https://argocd.lab.localhost |
 | Grafana | https://grafana.lab.localhost |
 | Argo Rollouts | https://rollouts.lab.localhost |
+| Ollama (API, while the GPU Node is Joined) | https://ollama.lab.localhost |
 
 `just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard has no login at all.
 
@@ -189,7 +190,7 @@ Once, after `just host-wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` i
 
 | Command | What it does |
 |---|---|
-| `just gpu-join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. |
+| `just gpu-join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`, which every GPU Workload can write to. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. |
 | `just gpu-leave` | Takes the GPU back: it drains the node, stops the agent and its pods (freeing VRAM), removes Cilium's state from the GPU Node, and deletes the Node object. The install and the route stay, so the next join is quick. If the GPU Node is off, it only deletes the Node object, and the next `gpu-join` cleans the machine up. |
 | `just gpu-leave purge` | Also removes k3s, its files and the route. Only the `k3dlab` user, its key and the model directory stay. |
 | `just gpu-status` | Shows the GPU Node's state in the Lab and on the machine, with anything left behind. |
@@ -200,7 +201,18 @@ The agent is never enabled at boot. After any reboot the GPU Node is Left, and t
 
 A GPU Workload requests the GPU as `amd.com/gpu: 1` and tolerates the `amd.com/gpu:NoSchedule` taint. AMD's device plugin (`platform/amd-gpu/`) advertises the GPU, and its node labeller adds `amd.com/gpu.*` labels describing it. Both run only on the GPU Node. Nothing ROCm-related is installed on the GPU Node, so a GPU Workload's image brings ROCm. The GPU's devices are world-accessible there, so a GPU Workload can run as non-root without `supplementalGroups`; `gpu-join` warns if that changes.
 
-`just verify` checks the GPU, while the GPU Node is Joined, with the smallest GPU Workload there is: a Job that runs `rocminfo` (`verify/lib/rocminfo.yaml`), which must find the RX 7800 XT (`gfx1101`).
+There's one GPU, advertised as one `amd.com/gpu`, so only one GPU Workload runs at a time; another stays Pending until the GPU is free.
+
+### Ollama
+
+Ollama (`workloads/ollama/`) serves LLMs on the GPU through ROCm, at https://ollama.lab.localhost, and holds the GPU while the GPU Node is Joined. It keeps its models in `/var/lib/k3d-lab/models/ollama` on the GPU Node, which every leave and purge keep, so a model is downloaded once and survives rebuilding the Lab. A model unloads after 5 minutes unused, giving its VRAM back; `gpu-leave` frees all of it.
+
+```bash
+curl https://ollama.lab.localhost/api/pull -d '{"model": "qwen2.5:0.5b"}'
+curl https://ollama.lab.localhost/api/generate -d '{"model": "qwen2.5:0.5b", "prompt": "Hi", "stream": false}'
+```
+
+It's a DaemonSet on the GPU Node, so while the GPU Node is Left it has no pod at all, and its Application stays Healthy. `just verify` checks, while the GPU Node is Joined, that the GPU is advertised and that Ollama answers through the Gateway and found the RX 7800 XT (`gfx1101`).
 
 ## Machine-specific values
 

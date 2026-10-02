@@ -1,0 +1,27 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: gpu-advertised
+  # Runs only while the GPU Node is Joined and Ready (scripts/verify.sh).
+  labels:
+    k3d-lab/gpu: amd
+spec:
+  description: >-
+    The GPU Node advertises its GPU as amd.com/gpu, through the device plugin
+    (platform/amd-gpu/). That a pod requesting it runs ROCm on the RX 7800 XT is the
+    ollama check's job: Ollama holds the only amd.com/gpu, so no other pod could get it.
+  steps:
+    - try:
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Node
+              metadata:
+                labels:
+                  k3d-lab/gpu: amd
+              status:
+                allocatable:
+                  amd.com/gpu: "1"
+      catch:
+        - script:
+            content: kubectl -n amd-gpu get pods -o wide

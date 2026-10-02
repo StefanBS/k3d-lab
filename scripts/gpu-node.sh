@@ -172,6 +172,15 @@ report_gpu_devices() {
     warn "GPU Workloads need supplementalGroups for $(printf '%s\n' "${groups[@]}" | sort -u | paste -sd' ')"
 }
 
+# GPU Workloads run as users of their own, so each makes its own folder in the model
+# directory: writable to all of them, like /tmp, and sticky, so none can delete
+# another's. With SELinux on, containers may write only files labelled for them; a
+# relabel would undo that, and every join does it again.
+make_model_dir() {
+  install -d -m 1777 "$MODEL_DIR"
+  if selinux_enabled; then chcon -t container_file_t "$MODEL_DIR"; fi
+}
+
 install_k3s() {
   local token=$1 skip_selinux=true policy=skipped
   if selinux_enabled; then
@@ -312,7 +321,7 @@ cmd_join() {
   fi
 
   set_route
-  install -d -m 755 "$MODEL_DIR"
+  make_model_dir
   report_gpu_devices
   local config_changed=false
   if write_config; then config_changed=true; fi
