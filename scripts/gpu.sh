@@ -81,6 +81,8 @@ cmd_join() {
   # The DaemonSet controller counts the new node a moment after it's Ready.
   sleep 2
   retry 180 daemonsets_ready || die "the Platform's DaemonSets aren't all Ready on the GPU Node; see 'kubectl --context $LAB_CONTEXT get pods -A -o wide'"
+  # ArgoCD sees a DaemonSet Healthy again a few seconds after its pods are.
+  kc -n argocd wait applications --all --for=jsonpath='{.status.health.status}'=Healthy --timeout=3m >/dev/null
   node=$(gpu_node_in_lab)
   log "The GPU Node is Joined as ${node%% *}"
 }
