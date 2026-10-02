@@ -50,11 +50,11 @@
       matchManagers: ['github-actions'],
     },
     {
-      // The mise version CI installs the tools with (the github-actions manager finds it).
       groupName: 'Lab tools',
       matchManagers: ['mise'],
     },
     {
+      // The mise version CI installs the tools with, from the github-actions manager.
       groupName: 'Lab tools',
       matchDepNames: ['jdx/mise'],
     },
