@@ -6,11 +6,11 @@
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
-# Runs gpu-node.sh as root on the GPU Node: gpu_node <stdin> <subcommand> [<VAR=value>...]
+# Runs gpu-node.sh as root on the GPU Node: run_on_gpu_node <stdin> <subcommand> [<VAR=value>...]
 # The script goes over stdin, then the first argument, which only join reads: so the
 # token is never in a command line on either machine. Every gpu-node.sh run gets the
 # Lab's subnet and the GPU Node's address, and the Lab's CA hash while a Lab exists.
-gpu_node() {
+run_on_gpu_node() {
   local input=$1 subcommand=$2 vars ca_hash
   shift 2
   vars=(LAB_SUBNET="$LAB_SUBNET" GPU_NODE_IP="$GPU_NODE_IP" "$@")
@@ -29,26 +29,19 @@ lab_ca_hash() {
 
 gpu_node_registered() { [[ -n $(gpu_node_in_lab) ]]; }
 
-need_gpu_env() {
-  local name
-  for name in HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH; do
-    [[ -n ${!name:-} ]] || die "$name isn't set: copy .env.example to .env and fill it in"
-  done
-}
-
 # Fails, listing them, if the GPU Node has anything a Left GPU Node mustn't, or, with
 # purge, anything the join added.
 check_left() {
   local purge=$1 status bad
-  status=$(gpu_node "" status)
-  bad=$(grep '^leftover: ' <<<"$status") || true
+  status=$(run_on_gpu_node "" status)
+  bad=$(grep -e '^agent: running' -e '^leftover: ' <<<"$status") || true
   [[ $purge == false ]] || bad+=$(grep -e '^installed: ' -e '^install: [^n]' <<<"$status") || true
   [[ -z $bad ]] || die "the GPU Node still has:
 $bad"
 }
 
 cmd_join() {
-  local eviction=20Gi arg server_ip version token
+  local eviction=20Gi arg server_ip version token node
   for arg; do
     case $arg in
       eviction=?*) eviction=${arg#eviction=} ;;
@@ -56,7 +49,7 @@ cmd_join() {
     esac
   done
   [[ $eviction =~ ^[0-9]+(Ki|Mi|Gi|Ti)$ ]] || die "eviction=$eviction isn't a size such as 20Gi"
-  need_gpu_env
+  need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
   lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
   # The GPU Node routes the Lab's subnet through this address (ADR 0002).
   [[ $HOST_LAN_IP == "$(host_lan_ip)" ]] ||
@@ -71,13 +64,14 @@ cmd_join() {
   token=$(lab_token)
 
   log "Joining the GPU Node ($GPU_NODE_SSH) to the Lab"
-  gpu_node "$token" join HOST_LAN_IP="$HOST_LAN_IP" SERVER_URL="https://$server_ip:6443" \
+  run_on_gpu_node "$token" join HOST_LAN_IP="$HOST_LAN_IP" SERVER_URL="https://$server_ip:6443" \
     SERVER_VERSION="$version" EVICTION="$eviction" NODE_LABEL="$GPU_NODE_LABEL" NODE_TAINT="$GPU_NODE_TAINT"
 
   log "Waiting for the GPU Node to be Ready"
   retry 120 gpu_node_registered || die "the GPU Node didn't register with the Lab; see 'journalctl -u k3s-agent' on it"
   kc wait --for=condition=Ready nodes -l "$GPU_NODE_LABEL_KEY" --timeout=3m >/dev/null
-  log "The GPU Node is Joined as $(gpu_node_in_lab | cut -d' ' -f1)"
+  node=$(gpu_node_in_lab)
+  log "The GPU Node is Joined as ${node%% *}"
 }
 
 cmd_leave() {
@@ -87,8 +81,11 @@ cmd_leave() {
     purge) purge=true ;;
     *) die "unknown argument '$1'; usage: just gpu-leave [purge]" ;;
   esac
-  need_gpu_env
-  if lab_exists; then node=$(gpu_node_in_lab | cut -d' ' -f1); fi
+  need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
+  if lab_exists; then
+    node=$(gpu_node_in_lab)
+    node=${node%% *}
+  fi
 
   if ! gpu_node_reachable; then
     if [[ -n $node ]]; then
@@ -105,7 +102,7 @@ cmd_leave() {
     kc drain -l "$GPU_NODE_LABEL_KEY" --ignore-daemonsets --delete-emptydir-data --force --timeout=60s >/dev/null 2>&1 ||
       warn "$node didn't drain within 60s; its pods are stopped with the agent"
   fi
-  if [[ $purge == true ]]; then gpu_node "" purge; else gpu_node "" leave; fi
+  if [[ $purge == true ]]; then run_on_gpu_node "" purge; else run_on_gpu_node "" leave; fi
   # Only once the agent is stopped, or it would register again.
   if [[ -n $node ]]; then
     log "Deleting the Node object $node"
@@ -120,13 +117,13 @@ cmd_status() {
   if ! lab_exists; then
     echo "Lab: none"
   elif node=$(gpu_node_in_lab) && [[ -n $node ]]; then
-    echo "Lab: the GPU Node is Joined as ${node% *}, $([[ $node == *" True" ]] && echo Ready || echo NotReady)"
+    echo "Lab: the GPU Node is Joined as ${node% *}, $([[ $node == *" True" ]] && echo Ready || echo "NotReady (off?)")"
   else
-    echo "Lab: no GPU Node"
+    echo "Lab: the GPU Node is Left"
   fi
-  need_gpu_env
+  need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
   if gpu_node_reachable; then
-    gpu_node "" status | sed 's/^/GPU Node: /'
+    run_on_gpu_node "" status | sed 's/^/GPU Node: /'
   else
     echo "GPU Node: can't log in as $GPU_NODE_SSH"
   fi

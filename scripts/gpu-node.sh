@@ -15,8 +15,8 @@
 #                       keeping the install.
 #   purge               Leaves, then removes everything join added. Env: LAB_SUBNET
 #                       GPU_NODE_IP
-#   status              Prints the GPU Node's state and what's on it. Env: LAB_SUBNET
-#                       GPU_NODE_IP, and LAB_CA_HASH while a Lab exists
+#   status              Prints whether the agent runs, and what's on the GPU Node.
+#                       Env: LAB_SUBNET GPU_NODE_IP, and LAB_CA_HASH while a Lab exists
 # shellcheck disable=SC2329  # main calls the cmd_* functions by name, and they the rest
 set -euo pipefail
 
@@ -27,8 +27,9 @@ K3S_SERVICE_ENV=/etc/systemd/system/$K3S_SERVICE.service.env
 K3S_CONFIG=/etc/rancher/k3s/config.yaml
 K3S_KILLALL=/usr/local/bin/k3s-killall.sh
 K3S_UNINSTALL=/usr/local/bin/k3s-agent-uninstall.sh
-# What join creates beyond k3s's own install, and its uninstaller leaves (FINDINGS.md:
-# each was checked to be the join's, with no rpm owner).
+# What join creates beyond k3s's own install, and its uninstaller leaves (the prototype's
+# FINDINGS.md, on branch prototype/gpu-node-join: each was checked to be the join's,
+# with no rpm owner).
 JOIN_PATHS=(/etc/rancher /var/lib/rancher /var/lib/kubelet /etc/cni /opt/cni)
 # Cilium's live state, which neither k3s-killall.sh nor the uninstaller remove. The
 # socket-LB links pinned under /sys/fs/bpf/cilium stay attached to this machine's root
@@ -42,6 +43,7 @@ MODEL_DIR=/var/lib/k3d-lab/models
 AUTOMATION_USER=k3dlab
 
 log() { printf '==> %s\n' "$*" >&2; }
+warn() { printf 'WARN  %s\n' "$*" >&2; }
 die() {
   printf 'error: %s\n' "$*" >&2
   exit 1
@@ -89,15 +91,20 @@ saved_routes() {
     awk -v subnet="$LAB_SUBNET" '$1 == subnet'
 }
 
+remove_saved_routes() {
+  local route
+  while read -r route; do
+    [[ -n $route ]] || continue
+    nmcli connection modify "$1" -ipv4.routes "$route"
+  done < <(saved_routes "$1")
+}
+
 # Routes LAB_SUBNET via HOST_LAN_IP on the LAN connection, now and after reboots, in
 # place of any route there from an earlier HOST_LAN_IP.
 set_route() {
-  local connection route
+  local connection
   connection=$(lan_connection) || die "can't find the NetworkManager connection for $GPU_NODE_IP"
-  while read -r route; do
-    [[ -n $route ]] || continue
-    nmcli connection modify "$connection" -ipv4.routes "$route"
-  done < <(saved_routes "$connection")
+  remove_saved_routes "$connection"
   nmcli connection modify "$connection" +ipv4.routes "$LAB_SUBNET $HOST_LAN_IP"
   # Saved for the next activation; applied now without reconnecting.
   ip route replace "$LAB_SUBNET" via "$HOST_LAN_IP"
@@ -105,12 +112,9 @@ set_route() {
 }
 
 remove_route() {
-  local connection route
+  local connection
   if connection=$(lan_connection 2>/dev/null) && [[ -n $connection ]]; then
-    while read -r route; do
-      [[ -n $route ]] || continue
-      nmcli connection modify "$connection" -ipv4.routes "$route"
-    done < <(saved_routes "$connection")
+    remove_saved_routes "$connection"
   fi
   ip route del "$LAB_SUBNET" 2>/dev/null || true
 }
@@ -155,9 +159,9 @@ report_gpu_devices() {
       groups+=("$(stat -c '%G (GID %g)' "$dev")")
     fi
   done
-  [[ -c /dev/kfd ]] || log "WARN: no /dev/kfd here: no AMD GPU for compute"
+  [[ -c /dev/kfd ]] || warn "no /dev/kfd here: no AMD GPU for compute"
   ((${#groups[@]} == 0)) ||
-    log "WARN: GPU Workloads need supplementalGroups for $(printf '%s\n' "${groups[@]}" | sort -u | paste -sd' ')"
+    warn "GPU Workloads need supplementalGroups for $(printf '%s\n' "${groups[@]}" | sort -u | paste -sd' ')"
 }
 
 install_k3s() {
@@ -170,6 +174,17 @@ install_k3s() {
       INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_SKIP_START=true \
       INSTALL_K3S_SKIP_SELINUX_RPM=$skip_selinux \
       K3S_URL=$SERVER_URL K3S_TOKEN=$token sh -s - >/dev/null
+  # Skipping the enable also skips the installer's daemon-reload.
+  systemctl daemon-reload
+}
+
+cilium_links() { ip -br link | awk '$1 ~ /^(lxc|cilium_)/ { sub(/@.*/, "", $1); print $1 }'; }
+# The xtables tools that are installed, as <save command> <restore command> lines.
+xtables_tools() {
+  local save
+  for save in iptables-save ip6tables-save; do
+    if command -v "$save" >/dev/null; then echo "$save ${save/-save/-restore}"; fi
+  done
 }
 
 # Stops the agent and every container it started, which frees the GPU's VRAM.
@@ -184,7 +199,7 @@ stop_agent() {
 clean_cilium() {
   local link table save restore
   # Deleting cilium_host also deletes its veth peer, cilium_net.
-  for link in $(ip -br link | awk '$1 ~ /^(lxc|cilium_)/ { sub(/@.*/, "", $1); print $1 }'); do
+  for link in $(cilium_links); do
     ip link del "$link" 2>/dev/null || true
   done
   rm -rf "${CILIUM_PINS[@]}"
@@ -192,14 +207,13 @@ clean_cilium() {
   rm -rf "$CILIUM_RUN"
   # Rewrites only the xtables tables, without the CILIUM chains and the jumps to them.
   # firewalld's own nftables table is untouched.
-  for save in iptables-save ip6tables-save; do
-    command -v "$save" >/dev/null || continue
-    restore=${save/-save/-restore}
+  # A table that fails to restore shows up in status, which leave checks.
+  while read -r save restore; do
     for table in filter nat mangle raw; do
       "$save" -t "$table" 2>/dev/null | grep -q CILIUM || continue
-      "$save" -t "$table" | grep -v CILIUM | "$restore" -T "$table"
+      "$save" -t "$table" | grep -v CILIUM | "$restore" -T "$table" || true
     done
-  done
+  done < <(xtables_tools)
 }
 
 never_at_boot() {
@@ -214,22 +228,20 @@ remove_install() {
 
 # The things a Left GPU Node must not have, one line each.
 live_leftovers() {
-  local link pin pids save count
-  systemctl -q is-active "$K3S_SERVICE" 2>/dev/null && echo "the $K3S_SERVICE service is running"
+  local link pin pids save restore count
   pids=$(pgrep -f "^$K3S_BIN|/var/lib/rancher/k3s/data/" | paste -sd' ') && echo "k3s processes: $pids"
   pids=$(grep -l kubepods /proc/[0-9]*/cgroup 2>/dev/null | cut -d/ -f3 | paste -sd' ')
   [[ -z $pids ]] || echo "pod processes: $pids"
-  for link in $(ip -br link | awk '$1 ~ /^(lxc|cilium_)/ { sub(/@.*/, "", $1); print $1 }'); do
+  for link in $(cilium_links); do
     echo "Cilium link: $link"
   done
   for pin in "${CILIUM_PINS[@]}"; do [[ ! -e $pin ]] || echo "Cilium BPF pins: $pin"; done
   ! mountpoint -q "$CILIUM_CGROUP" || echo "Cilium cgroup2 mount: $CILIUM_CGROUP"
   [[ ! -e $CILIUM_RUN ]] || echo "Cilium state: $CILIUM_RUN"
-  for save in iptables-save ip6tables-save; do
-    command -v "$save" >/dev/null || continue
+  while read -r save restore; do
     count=$("$save" 2>/dev/null | grep -c CILIUM) || true
     ((count == 0)) || echo "$save: $count CILIUM lines"
-  done
+  done < <(xtables_tools)
   findmnt -rn -o TARGET | grep -E '^(/run/k3s|/var/lib/kubelet)(/|$)' | sed 's/^/k3s mount: /' || true
 }
 
@@ -317,19 +329,20 @@ cmd_purge() {
   remove_route
 }
 
-# The first line is the state: Joined (the agent runs, for the Lab with LAB_CA_HASH),
-# or Left. Then one line per thing found, each prefixed:
+# Whether a Lab's agent runs here is all this machine can tell; the Lab tells Joined
+# from Left (gpu.sh status). The first line is the agent's state, then one line per
+# thing found, each prefixed:
 #   install: the install, and whether it's for this Lab or a Stale install
-#   leftover: live state that a Left GPU Node must not have
+#   leftover: live state that mustn't outlive the agent, or the agent enabled at boot
 #   installed: what purge removes and leave keeps
 cmd_status() {
   need_env LAB_SUBNET
   local state
   state=$(install_state)
-  if [[ $state == current ]] && systemctl -q is-active "$K3S_SERVICE"; then
-    echo "state: Joined"
+  if systemctl -q is-active "$K3S_SERVICE" 2>/dev/null; then
+    echo "agent: running"
   else
-    echo "state: Left"
+    echo "agent: stopped"
     live_leftovers | sed 's/^/leftover: /'
   fi
   case $state in

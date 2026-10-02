@@ -32,13 +32,13 @@ args+=(--quiet)
 # Chainsaw names each check chainsaw/<check>, and matches the regex against that.
 ((${#checks[@]} == 0)) || args+=(--include-test-regex "^chainsaw/($(IFS='|' && echo "${checks[*]}"))\$")
 
-# The GPU checks, labelled k3d-lab/gpu, run only while the GPU Node is Joined and Ready.
+# The GPU checks, labelled GPU_NODE_LABEL_KEY, run only while the GPU Node is Joined and Ready.
 # Left is its normal state, so that says nothing. Joined but NotReady means it's powered
 # off (ADR 0002): not a failure, but worth knowing.
 gpu_node=$(gpu_node_in_lab)
 if [[ $gpu_node != *" True" ]]; then
   [[ -z $gpu_node ]] || warn "the GPU Node ${gpu_node%% *} is Joined but NotReady; its checks are skipped"
-  args+=(--selector '!k3d-lab/gpu')
+  args+=(--selector "!$GPU_NODE_LABEL_KEY")
 fi
 # The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
 if [[ -n ${HOST_LAN_IP:-} && $HOST_LAN_IP != "$(host_lan_ip)" ]]; then

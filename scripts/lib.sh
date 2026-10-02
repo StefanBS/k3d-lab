@@ -43,6 +43,14 @@ quietly() {
   return "$status"
 }
 
+# need_env <name>...: fails unless .env (loaded by the Justfile) sets each variable.
+need_env() {
+  local name
+  for name; do
+    [[ -n ${!name:-} ]] || die "$name isn't set: copy .env.example to .env and fill it in"
+  done
+}
+
 # For the scripts that report one line per check: doctor, lint and the host-setup
 # scripts print with these. doctor and lint count their failures in fails, and exit
 # non-zero if there are any.
@@ -92,7 +100,7 @@ gpu_node_in_lab() {
 # ssh to the GPU Node as k3dlab. Never prompts and gives up quickly, so a GPU Node
 # that's off never holds anything up.
 gpu_ssh() {
-  [[ -n ${GPU_NODE_SSH:-} ]] || die "GPU_NODE_SSH isn't set: copy .env.example to .env and fill it in"
+  need_env GPU_NODE_SSH
   ssh -i "$GPU_NODE_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=5 \
     -o StrictHostKeyChecking=accept-new "$GPU_NODE_SSH" "$@"
 }

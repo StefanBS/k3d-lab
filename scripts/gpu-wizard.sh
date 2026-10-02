@@ -5,9 +5,7 @@
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
-for name in GPU_NODE_IP GPU_NODE_SSH; do
-  [[ -n ${!name:-} ]] || die "$name isn't set: copy .env.example to .env and fill it in"
-done
+need_env GPU_NODE_IP GPU_NODE_SSH
 
 if [[ ! -f $GPU_NODE_SSH_KEY ]]; then
   log "Generating the Host's key for the GPU Node, $GPU_NODE_SSH_KEY"
