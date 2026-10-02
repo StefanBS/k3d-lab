@@ -106,9 +106,16 @@ set_route() {
   connection=$(lan_connection) || die "can't find the NetworkManager connection for $GPU_NODE_IP"
   remove_saved_routes "$connection"
   nmcli connection modify "$connection" +ipv4.routes "$LAB_SUBNET $HOST_LAN_IP"
-  # Saved for the next activation; applied now without reconnecting.
-  ip route replace "$LAB_SUBNET" via "$HOST_LAN_IP"
+  # Saved for the next activation; applied now without reconnecting, in place of any
+  # live route NetworkManager added at boot, possibly via an earlier HOST_LAN_IP.
+  delete_live_routes
+  ip route add "$LAB_SUBNET" via "$HOST_LAN_IP"
   log "Routing $LAB_SUBNET via $HOST_LAN_IP ($connection)"
+}
+
+# Every live route to LAB_SUBNET: NetworkManager's from boot, and join's own.
+delete_live_routes() {
+  while ip route del "$LAB_SUBNET" 2>/dev/null; do :; done
 }
 
 remove_route() {
@@ -116,7 +123,7 @@ remove_route() {
   if connection=$(lan_connection 2>/dev/null) && [[ -n $connection ]]; then
     remove_saved_routes "$connection"
   fi
-  ip route del "$LAB_SUBNET" 2>/dev/null || true
+  delete_live_routes
 }
 
 # Writes the agent's own config: how it registers, and absolute eviction thresholds,
