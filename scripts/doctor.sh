@@ -69,11 +69,10 @@ else
     ok ".env has every key in .env.example"
   fi
   # The GPU Node routes the Lab's subnet through this address (ADR 0002).
-  lan_ip=$(host_lan_ip)
-  if [[ $(sed -n 's/^HOST_LAN_IP=//p' "$LAB_ENV_FILE") == "$lan_ip" ]]; then
-    ok "HOST_LAN_IP in .env is the Host's address ($lan_ip)"
+  if why=$(host_lan_ip_current); then
+    ok "HOST_LAN_IP in .env is the Host's address ($HOST_LAN_IP)"
   else
-    warn "HOST_LAN_IP in .env isn't the Host's address ($lan_ip): run 'just host-wizard' before joining the GPU Node"
+    warn "$why: run 'just host-wizard' before joining the GPU Node"
   fi
 fi
 

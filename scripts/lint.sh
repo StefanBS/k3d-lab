@@ -46,7 +46,7 @@ render_gitops() {
 
 # The probes that verify's checks deploy are plain manifests: nothing to render.
 render_probes() {
-  cp verify/lib/probes.yaml "$manifests"
+  cat verify/lib/probes.yaml <(echo ---) verify/lib/gpu-probes.yaml >"$manifests"
 }
 
 # Schemas are cached between runs: the CRDs catalog is pinned, so they never change
@@ -129,7 +129,7 @@ lint_chainsaw configuration verify/.chainsaw.yaml
 for file in verify/*/chainsaw-test.yaml; do
   lint_chainsaw test "$file"
 done
-lint_rendering verify/lib/probes.yaml render_probes
+lint_rendering "verify's probes" render_probes
 
 ((fails == 0)) || die "lint found $fails problem(s)"
 log "Lint passed"

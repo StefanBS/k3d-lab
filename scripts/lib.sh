@@ -25,8 +25,15 @@ LAB_SUBNET_NETMASK=255.255.0.0 # LAB_SUBNET's /16, for the Lab CA's name constra
 LAB_GATEWAY=172.28.0.1
 # ArgoCD reads the Lab from here, without credentials.
 LAB_REPO=https://github.com/StefanBS/k3d-lab.git
-# Machine-specific values, never committed (.env.example lists them).
+# Machine-specific values, never committed (.env.example lists them). Loaded here, so
+# the scripts see them also when run without just.
 LAB_ENV_FILE=$LAB_ROOT/.env
+if [[ -f $LAB_ENV_FILE ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$LAB_ENV_FILE"
+  set +a
+fi
 
 log() { printf '==> %s\n' "$*" >&2; }
 die() {
@@ -41,6 +48,14 @@ quietly() {
   out=$("$@" 2>&1) || status=$?
   ((status == 0)) || printf '%s\n' "$out" >&2
   return "$status"
+}
+
+# need_env <name>...: fails unless .env sets each variable.
+need_env() {
+  local name
+  for name; do
+    [[ -n ${!name:-} ]] || die "$name isn't set: copy .env.example to .env and fill it in"
+  done
 }
 
 # For the scripts that report one line per check: doctor, lint and the host-setup
@@ -69,6 +84,34 @@ retry() {
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
+
+# The Server's container, and its address on the Lab network.
+LAB_SERVER=k3d-$LAB_NAME-server-0
+lab_server_ip() {
+  docker inspect -f "{{(index .NetworkSettings.Networks \"$LAB_NETWORK\").IPAddress}}" "$LAB_SERVER"
+}
+
+# The GPU Node (ADRs 0002 and 0005), always found by its label, never by hostname.
+GPU_NODE_LABEL_KEY=k3d-lab/gpu
+GPU_NODE_LABEL=$GPU_NODE_LABEL_KEY=amd
+GPU_NODE_TAINT=amd.com/gpu:NoSchedule
+# The key the Host logs in to the GPU Node with, as k3dlab (just gpu-wizard).
+GPU_NODE_SSH_KEY=$HOME/.ssh/k3d-lab_ed25519
+
+# The GPU Node's Node object in the Lab, if it's Joined: its name and Ready status.
+gpu_node_in_lab() {
+  kc get nodes -l "$GPU_NODE_LABEL_KEY" \
+    -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
+}
+
+# ssh to the GPU Node as k3dlab. Never prompts and gives up quickly, so a GPU Node
+# that's off never holds anything up.
+gpu_ssh() {
+  need_env GPU_NODE_SSH
+  ssh -i "$GPU_NODE_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=5 \
+    -o StrictHostKeyChecking=accept-new "$GPU_NODE_SSH" "$@"
+}
+gpu_node_reachable() { gpu_ssh sudo -n true 2>/dev/null; }
 lab_network_exists() { docker network inspect "$LAB_NETWORK" >/dev/null 2>&1; }
 
 # The Host's ports that k3d publishes the Lab's Gateway on (k3d/cluster.yaml).
@@ -84,6 +127,15 @@ lab_host_ports_taken() {
 # The Host's route to the LAN, and its address there (HOST_LAN_IP, ADR 0002).
 host_route() { ip -4 route get 1.1.1.1; }
 host_lan_ip() { host_route | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
+# Succeeds if HOST_LAN_IP, from .env, is still the Host's address; otherwise prints how
+# it differs. The GPU Node routes the Lab's subnet through it (ADR 0002).
+host_lan_ip_current() {
+  local actual
+  actual=$(host_lan_ip)
+  [[ ${HOST_LAN_IP:-} == "$actual" ]] && return
+  echo "HOST_LAN_IP in .env (${HOST_LAN_IP:-unset}) isn't the Host's address ($actual)"
+  return 1
+}
 
 # Every component folder, as <group>/<name>: one ArgoCD Application each.
 component_dirs() {

@@ -49,7 +49,7 @@ sudo scripts/host-setup.sh
 | `just up` | Builds the Lab, then runs `just verify`. Refuses if a Lab already exists. ArgoCD builds it from the branch checked out here, as pushed, since `verify` runs the checks from this checkout; `just up REVISION=<branch>` picks another pushed branch or tag. |
 | `just creds` | Prints each of the Lab's UIs with its URL and login. The passwords are new with every Lab. |
 | `just verify` | Checks how the running Lab behaves, with one Chainsaw test per check in `verify/`: a PASS or FAIL for each, and a non-zero exit on any FAIL. `just verify <check>...` runs only those checks, named by their folders; any Chainsaw flags go after them. |
-| `just down` | Destroys the Lab completely, and fails if anything is left behind. |
+| `just down` | Destroys the Lab completely, and fails if anything is left behind. A Joined GPU Node leaves first, if it's reachable. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
 | `just bao <args>` | Runs the `bao` CLI against the Secret Store, as its root. |
 | `just vault-backup <path>` | Archives the Secret Store, to a new file in `<path>` if it's a directory. See Secrets. |
@@ -180,6 +180,21 @@ just host-setup
 ```
 
 `host-setup` starts OpenBao on the restored data, and renews its certificate if the Lab CA is a new one. Once it works, delete `secret-store.old`.
+
+## The GPU Node
+
+The GPU Node is a gaming PC on the LAN that the Lab borrows now and then ([ADR 0002](docs/adr/0002-gpu-node-joins-over-routed-docker-bridge.md)). It joins as a k3s Agent, labelled `k3d-lab/gpu=amd` and tainted `amd.com/gpu:NoSchedule`, so only GPU Workloads run there. The Host runs its side of each step over SSH as the `k3dlab` user, by sending it `scripts/gpu-node.sh` ([ADR 0005](docs/adr/0005-gpu-node-lifecycle-is-bash-over-ssh.md)).
+
+Once, after `just host-wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` in `.env`, run `just gpu-wizard`. It generates the Host's key, `~/.ssh/k3d-lab_ed25519`, prints the two commands that create the `k3dlab` user on the GPU Node, and then tests the login.
+
+| Command | What it does |
+|---|---|
+| `just gpu-join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. |
+| `just gpu-leave` | Takes the GPU back: it drains the node, stops the agent and its pods (freeing VRAM), removes Cilium's state from the GPU Node, and deletes the Node object. The install and the route stay, so the next join is quick. If the GPU Node is off, it only deletes the Node object, and the next `gpu-join` cleans the machine up. |
+| `just gpu-leave purge` | Also removes k3s, its files and the route. Only the `k3dlab` user, its key and the model directory stay. |
+| `just gpu-status` | Shows the GPU Node's state in the Lab and on the machine, with anything left behind. |
+
+The agent is never enabled at boot. After any reboot the GPU Node is Left, and the GPU is entirely yours until the next `gpu-join`. While it's Joined but powered off, `just verify` WARNs about it and skips its checks. The Platform's DaemonSets stop counting it while it's off, so every Application stays Healthy.
 
 ## Machine-specific values
 

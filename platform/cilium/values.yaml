@@ -38,7 +38,19 @@ gatewayAPI:
     nodes:
       matchLabels:
         node-role.kubernetes.io/control-plane: "true"
+# The taints Cilium runs despite, instead of the chart's every taint: networking must
+# start on a node that isn't Ready yet, and on the GPU Node. Leaving out
+# node.kubernetes.io/unreachable:NoSchedule means a Joined GPU Node that's powered off
+# stops counting towards the DaemonSets, as it already does for Alloy and node-exporter,
+# so they stay Healthy (ADR 0002). Their pod there isn't deleted: the DaemonSet
+# controller tolerates unreachable:NoExecute itself. Envoy's DaemonSet runs on the same.
+tolerations: &tolerations
+  - {key: node.kubernetes.io/not-ready, operator: Exists}
+  - {key: node.cilium.io/agent-not-ready, operator: Exists}
+  - {key: node-role.kubernetes.io/control-plane, operator: Exists}
+  - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
 envoy:
+  tolerations: *tolerations
   securityContext:
     capabilities:
       # Envoy binds ports 80 and 443, below 1024. The first two are the chart's default.

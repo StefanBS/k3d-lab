@@ -25,7 +25,7 @@ host-wizard:
 up *args:
     @scripts/up.sh {{ args }}
 
-# Destroy the Lab (the Host's Secret Store, Lab CA and Docker CE are kept)
+# Destroy the Lab, taking a Joined GPU Node back first (the Host's Secret Store, Lab CA and Docker CE are kept)
 down:
     @scripts/down.sh
 
@@ -41,6 +41,22 @@ bao *args:
 # Archive the Secret Store's data, unseal key and root token into a directory or to an archive path
 vault-backup path:
     @scripts/vault-backup.sh {{ quote(path) }}
+
+# Walk through the GPU Node step only you can do: creating the user the Host logs in as
+gpu-wizard:
+    @scripts/gpu-wizard.sh
+
+# Lend the GPU Node to the Lab; eviction=<size> sets its free-disk threshold (20Gi)
+gpu-join *args:
+    @scripts/gpu.sh join {{ args }}
+
+# Take the GPU Node back, keeping its install; `just gpu-leave purge` removes that too
+gpu-leave *args:
+    @scripts/gpu.sh leave {{ args }}
+
+# Show the GPU Node's state, in the Lab and on the machine
+gpu-status:
+    @scripts/gpu.sh status
 
 # Check how the running Lab behaves; `just verify <check>...` runs only those checks
 verify *args:
