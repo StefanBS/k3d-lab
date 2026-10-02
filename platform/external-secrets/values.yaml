@@ -28,12 +28,16 @@ extraObjects:
             kubernetes:
               mountPath: kubernetes
               role: eso
-              # ESO asks for a token meant only for the Secret Store, and the role eso
-              # accepts no other (`just up` reads it from here).
+              # The role eso accepts only tokens meant for the Secret Store: the first
+              # audience, which `just up` reads from here. OpenBao checks each token
+              # with a TokenReview made with that same token, so it must also be meant
+              # for the API server, the second.
               serviceAccountRef:
                 name: external-secrets
                 namespace: external-secrets
-                audiences: [k3d-lab-secret-store]
+                audiences:
+                  - k3d-lab-secret-store
+                  - https://kubernetes.default.svc.cluster.local
 # How the controller reaches the Secret Store: host.k3d.internal is the Host's address
 # on the Lab network, LAB_GATEWAY in scripts/lib.sh, which `just lint` checks this
 # against. Only ESO talks to the Secret Store, so only its controller resolves the name.
