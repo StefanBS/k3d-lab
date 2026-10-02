@@ -69,6 +69,34 @@ retry() {
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
+
+# The Server's container, and its address on the Lab network.
+LAB_SERVER=k3d-$LAB_NAME-server-0
+lab_server_ip() {
+  docker inspect -f "{{(index .NetworkSettings.Networks \"$LAB_NETWORK\").IPAddress}}" "$LAB_SERVER"
+}
+
+# The GPU Node (ADRs 0002 and 0005), always found by its label, never by hostname.
+GPU_NODE_LABEL_KEY=k3d-lab/gpu
+GPU_NODE_LABEL=$GPU_NODE_LABEL_KEY=amd
+GPU_NODE_TAINT=amd.com/gpu:NoSchedule
+# The key the Host logs in to the GPU Node with, as k3dlab (just gpu-wizard).
+GPU_NODE_SSH_KEY=$HOME/.ssh/k3d-lab_ed25519
+
+# The GPU Node's Node object in the Lab, if it's Joined: its name and Ready status.
+gpu_node_in_lab() {
+  kc get nodes -l "$GPU_NODE_LABEL_KEY" \
+    -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
+}
+
+# ssh to the GPU Node as k3dlab. Never prompts and gives up quickly, so a GPU Node
+# that's off never holds anything up.
+gpu_ssh() {
+  [[ -n ${GPU_NODE_SSH:-} ]] || die "GPU_NODE_SSH isn't set: copy .env.example to .env and fill it in"
+  ssh -i "$GPU_NODE_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=5 \
+    -o StrictHostKeyChecking=accept-new "$GPU_NODE_SSH" "$@"
+}
+gpu_node_reachable() { gpu_ssh sudo -n true 2>/dev/null; }
 lab_network_exists() { docker network inspect "$LAB_NETWORK" >/dev/null 2>&1; }
 
 # The Host's ports that k3d publishes the Lab's Gateway on (k3d/cluster.yaml).

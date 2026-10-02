@@ -65,7 +65,7 @@ log "Creating the k3d cluster"
 quietly k3d cluster create --config "$LAB_ROOT/k3d/cluster.yaml" \
   --volume "$LAB_ROOT/k3d/entrypoint-route-localnet.sh:/bin/k3d-entrypoint-route-localnet.sh:ro@all"
 
-server_ip=$(docker inspect -f "{{(index .NetworkSettings.Networks \"$LAB_NETWORK\").IPAddress}}" "k3d-$LAB_NAME-server-0")
+server_ip=$(lab_server_ip)
 expected_ip=$(yq '.k8sServiceHost' "$LAB_ROOT/platform/cilium/values.yaml")
 [[ $server_ip == "$expected_ip" ]] ||
   die "the Server got $server_ip, but Cilium's values expect $expected_ip; run 'just down' and try again"

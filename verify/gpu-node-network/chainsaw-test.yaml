@@ -1,0 +1,53 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: gpu-node-network
+  # Runs only while the GPU Node is Joined and Ready (scripts/verify.sh).
+  labels:
+    k3d-lab/gpu: amd
+spec:
+  description: >-
+    The GPU Node and the k3d Nodes reach each other's pods across the VXLAN tunnel and
+    through ClusterIP Services, both ways: a client pod on every Ready node calls a web
+    server on a k3d Node and one on the GPU Node, at their pod IPs and Service names.
+    The API server reaches the GPU Node's kubelet, so kubectl logs and exec work on its
+    pods.
+  steps:
+    - use:
+        template: ../lib/deploy-probes.yaml
+    - try:
+        - apply:
+            file: ../lib/gpu-probes.yaml
+        - assert:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: web-gpu
+              status:
+                availableReplicas: 1
+    - name: pod to pod
+      try:
+        - script:
+            content: >-
+              ip=$(kubectl -n "$NAMESPACE" get pods -l app=web-gpu -o jsonpath='{.items[0].status.podIP}') &&
+              ../lib/on-ready-nodes.sh "$NAMESPACE" app=client -- wget -qO- -T 5 "http://$ip/"
+        - script:
+            content: >-
+              ip=$(kubectl -n "$NAMESPACE" get pods -l app=web -o jsonpath='{.items[0].status.podIP}') &&
+              ../lib/on-ready-nodes.sh "$NAMESPACE" app=client -- wget -qO- -T 5 "http://$ip/"
+    - name: Services
+      try:
+        - script:
+            content: >-
+              ../lib/on-ready-nodes.sh "$NAMESPACE" app=client
+              -- wget -qO- -T 5 "http://web-gpu.$NAMESPACE.svc.cluster.local/"
+        - script:
+            content: >-
+              ../lib/on-ready-nodes.sh "$NAMESPACE" app=client
+              -- wget -qO- -T 5 "http://web.$NAMESPACE.svc.cluster.local/"
+    # on-ready-nodes.sh already ran kubectl exec in the GPU Node's client.
+    - name: kubectl logs
+      try:
+        - script:
+            content: kubectl -n "$NAMESPACE" logs deployment/web-gpu | grep -q .

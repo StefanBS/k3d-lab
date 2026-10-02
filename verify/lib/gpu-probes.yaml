@@ -1,0 +1,32 @@
+# A second web server behind its own ClusterIP Service, on the GPU Node, so traffic is
+# tested in both directions between it and the k3d Nodes. Applied, like probes.yaml,
+# into the check's own namespace.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-gpu
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: web-gpu}
+  template:
+    metadata:
+      labels: {app: web-gpu}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      containers:
+        - name: web
+          image: traefik/whoami:v1.11
+          ports: [{containerPort: 80}]
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-gpu
+spec:
+  selector: {app: web-gpu}
+  ports: [{port: 80}]

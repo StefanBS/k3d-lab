@@ -35,11 +35,14 @@ args+=(--quiet)
 # The GPU checks, labelled k3d-lab/gpu, run only while the GPU Node is Joined and Ready.
 # Left is its normal state, so that says nothing. Joined but NotReady means it's powered
 # off (ADR 0002): not a failure, but worth knowing.
-gpu_node=$(kc get nodes -l k3d-lab/gpu \
-  -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}')
+gpu_node=$(gpu_node_in_lab)
 if [[ $gpu_node != *" True" ]]; then
   [[ -z $gpu_node ]] || warn "the GPU Node ${gpu_node%% *} is Joined but NotReady; its checks are skipped"
   args+=(--selector '!k3d-lab/gpu')
+fi
+# The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
+if [[ -n ${HOST_LAN_IP:-} && $HOST_LAN_IP != "$(host_lan_ip)" ]]; then
+  warn "HOST_LAN_IP in .env ($HOST_LAN_IP) isn't the Host's address ($(host_lan_ip)): the GPU Node's route to the Lab is stale; run 'just host-wizard', then 'just gpu-join'"
 fi
 # Go's test runner announces every check as it starts, pauses and resumes it, even with
 # --quiet. The PASS or FAIL for each check says all of that. With pipefail, the

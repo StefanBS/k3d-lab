@@ -5,10 +5,12 @@ metadata:
 spec:
   description: >-
     Every ArgoCD Application is Synced and Healthy. The root Application is among them,
-    and it isn't Healthy while an ApplicationSet fails to generate its Applications.
+    and it isn't Healthy while an ApplicationSet fails to generate its Applications. A
+    Joined GPU Node that is off doesn't count: DaemonSet pods missing only from it are
+    a WARN (applications-healthy.sh).
   steps:
     - try:
-        # The error below passes when there are no Applications at all.
+        # The script below passes when there are no Applications at all.
         - assert:
             resource:
               apiVersion: argoproj.io/v1alpha1
@@ -16,13 +18,8 @@ spec:
               metadata:
                 name: root
                 namespace: argocd
-        - error:
-            resource:
-              apiVersion: argoproj.io/v1alpha1
-              kind: Application
-              metadata:
-                namespace: argocd
-              (status.sync.status != 'Synced' || status.health.status != 'Healthy'): true
+        - script:
+            content: ../lib/applications-healthy.sh
       catch:
         - script:
             content: >-
