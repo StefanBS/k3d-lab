@@ -1,12 +1,14 @@
 # AMD's device plugin, which advertises the GPU Node's GPU as amd.com/gpu, and its node
 # labeller, which adds amd.com/gpu.* labels describing it. Both run only on the GPU Node.
-# The chart's image tags lag behind AMD's releases, so they're set here: check them
-# again whenever the chart's version changes.
+# The chart's image tags lag behind AMD's releases, so they're set here. Renovate
+# updates them with the chart, in one PR: check that the chart still expects them.
 dp:
   image:
+    # renovate: datasource=docker depName=docker.io/rocm/k8s-device-plugin versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\.(?<build>\d+)$
     tag: "1.31.0.11"
 lbl:
   image:
+    # renovate: datasource=docker depName=docker.io/rocm/k8s-device-plugin versioning=regex:^labeller-(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)\.(?<build>\d+)$
     tag: "labeller-1.31.0.11"
 labeller:
   enabled: true
