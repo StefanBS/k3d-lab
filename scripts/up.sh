@@ -47,7 +47,8 @@ export K3D_FIX_MOUNTS=1
 
 log "Creating the Lab network $LAB_NETWORK ($LAB_SUBNET)"
 if lab_network_exists; then
-  # The Server must be the first container on the network to get its fixed address.
+  # The Server must be the first container on the network to get the address it's then
+  # pinned to.
   [[ $(docker network inspect -f '{{len .Containers}}' "$LAB_NETWORK") -eq 0 ]] ||
     die "network $LAB_NETWORK still has containers attached; run 'just down' first"
 else
@@ -69,6 +70,22 @@ server_ip=$(lab_server_ip)
 expected_ip=$(yq '.k8sServiceHost' "$LAB_ROOT/platform/cilium/values.yaml")
 [[ $server_ip == "$expected_ip" ]] ||
   die "the Server got $server_ip, but Cilium's values expect $expected_ip; run 'just down' and try again"
+
+# Docker only keeps a container's address across its own restart, such as a Host
+# reboot, if the address is static; otherwise the k3d Nodes come back in whichever
+# order they start. k3d only gives addresses on a network it creates itself, which
+# can't be this one (ADR 0002). So each k3d Node is reconnected, stopped, with the
+# address it already has: k3s has already put that address in its certificates.
+log "Pinning the k3d Nodes' addresses"
+mapfile -t node_addresses < <(docker network inspect "$LAB_NETWORK" \
+  -f '{{range .Containers}}{{.Name}} {{.IPv4Address}}{{"\n"}}{{end}}' | sed '/^$/d')
+quietly k3d cluster stop "$LAB_NAME"
+for node_address in "${node_addresses[@]}"; do
+  read -r node address <<<"$node_address"
+  docker network disconnect "$LAB_NETWORK" "$node"
+  docker network connect --ip "${address%/*}" "$LAB_NETWORK" "$node"
+done
+quietly k3d cluster start "$LAB_NAME"
 
 # Cilium only runs its Gateway controller if the Gateway API CRDs exist when it starts.
 log "Installing the Gateway API CRDs"
