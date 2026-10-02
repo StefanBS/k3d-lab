@@ -31,10 +31,10 @@ It prepares what outlives any Lab and is safe to re-run: a run with nothing to d
 - **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `lab.localhost` (where every Lab UI lives), `k3d.internal`, the Lab's subnet and loopback.
 - **The Secret Store** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): OpenBao, as the rootless Podman Quadlet `k3d-lab-secret-store` (a user service of yours, started at boot through lingering), with all its state in `~/.local/share/k3d-lab/secret-store/`. It unseals itself at every start, with OpenBao's `static` seal and a key generated once, and serves TLS from the Lab CA on port 8200. A firewalld policy lets only the Lab's subnet, `172.28.0.0/16`, reach that port, so it's closed to the LAN; the Secret Store only starts once that policy is in place. See Secrets.
 
-`host-setup` never escalates privileges. It checks the steps that need root and, if any are left, asks you to run them yourself, then run `just host-setup` again:
+`host-setup` never escalates privileges. It goes through the steps in order, and when it reaches one that needs root, it stops and asks you to run the same script under sudo yourself, then `just host-setup` again:
 
 ```sh
-sudo scripts/host-setup-root.sh
+sudo scripts/host-setup.sh
 ```
 
 `just host-wizard` walks you through the steps only you can do: for now, reserving the Host's LAN address on your router, which the GPU Node needs. It saves the address to `.env`.
