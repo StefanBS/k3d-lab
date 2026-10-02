@@ -5,6 +5,8 @@
 # Chainsaw has no step that runs once per node (ADR 0004), so its script steps call
 # this. They point kubectl at the Lab, through a context named chainsaw.
 set -euo pipefail
+# shellcheck source=checks.sh
+source "$(dirname "$0")/checks.sh"
 
 namespace=$1 selector=$2
 shift 2
@@ -15,10 +17,7 @@ shift 2
 pod_on_node() {
   local node=$1 pod="" attempt
   for attempt in {1..15}; do
-    # Skips pods being deleted: while a pod is replaced, the node briefly has two.
-    pod=$(kubectl -n "$namespace" get pods -l "$selector" --field-selector "spec.nodeName=$node" \
-      -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.deletionTimestamp}{"\n"}{end}' |
-      awk 'NF == 1 { print "pod/" $1; exit }')
+    pod=$(node_pod "$namespace" "$selector" "$node")
     [[ -n $pod ]] && break
     ((attempt < 15)) && sleep 2
   done
@@ -26,21 +25,17 @@ pod_on_node() {
     echo "FAIL  $node: no pod matching $selector" >&2
     return 1
   }
-  kubectl -n "$namespace" wait --for=condition=Ready "$pod" --timeout=30s >/dev/null 2>&1 || {
-    echo "FAIL  $node: $pod is not Ready" >&2
+  kubectl -n "$namespace" wait --for=condition=Ready "pod/$pod" --timeout=30s >/dev/null 2>&1 || {
+    echo "FAIL  $node: pod/$pod is not Ready" >&2
     return 1
   }
   echo "$pod"
 }
 
-nodes=$("$(dirname "$0")/ready-nodes.sh")
-[[ -n $nodes ]] || {
-  echo "FAIL  no Ready nodes"
-  exit 1
-}
+require_ready_nodes
 
 bad=0
-for node in $nodes; do
+for node in "${nodes[@]}"; do
   pod=$(pod_on_node "$node") || {
     bad=1
     continue

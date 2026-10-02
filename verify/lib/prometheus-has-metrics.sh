@@ -6,45 +6,26 @@
 # Run by metrics-reach-prometheus, whose script steps point kubectl at the Lab through a
 # context named chainsaw.
 set -euo pipefail
+# shellcheck source=checks.sh
+source "$(dirname "$0")/checks.sh"
 
 # The jobs Alloy scrapes on each node (platform/alloy/values.yaml).
 node_jobs=(kubelet cadvisor node-exporter)
 
-# Usage: query <PromQL> <yq expression>
-# Runs the query through the API server's proxy to Prometheus' Service, and prints what
-# the yq expression makes of the JSON response.
-query() {
-  local promql=$1 expression=$2 encoded
-  encoded=$(Q=$promql yq -n 'strenv(Q) | @uri')
-  kubectl get --raw "/api/v1/namespaces/monitoring/services/prometheus-server:http/proxy/api/v1/query?query=$encoded" |
-    yq -p json "$expression"
-}
-
-nodes=$("$(dirname "$0")/ready-nodes.sh")
-[[ -n $nodes ]] || {
-  echo "FAIL  no Ready nodes"
-  exit 1
-}
-
-for attempt in {1..24}; do
-  missing=()
+# Prints "<node>: <job>" for each node's target that isn't up yet, and
+# kube-state-metrics if it isn't.
+missing_metrics() {
+  local up_targets node job
   # "<node> <job>" for every target that's up.
-  up_targets=$(query 'up == 1' '.data.result[].metric | .node + " " + .job' 2>&1) || up_targets=""
-  for node in $nodes; do
+  up_targets=$(prometheus_query 'up == 1' '.data.result[].metric | .node + " " + .job' 2>&1) || up_targets=""
+  for node in "${nodes[@]}"; do
     for job in "${node_jobs[@]}"; do
-      grep -qx "$node $job" <<<"$up_targets" || missing+=("$node: $job")
+      grep -qx "$node $job" <<<"$up_targets" || echo "$node: $job"
     done
   done
-  grep -q ' kube-state-metrics$' <<<"$up_targets" || missing+=("kube-state-metrics")
-  ((${#missing[@]})) || break
-  ((attempt < 24)) && sleep 5
-done
-
-for node in $nodes; do
-  [[ " ${missing[*]} " == *" $node: "* ]] || echo "OK    $node"
-done
-((${#missing[@]} == 0)) || {
-  printf 'FAIL  no metrics from %s\n' "${missing[@]}"
-  exit 1
+  grep -q ' kube-state-metrics$' <<<"$up_targets" || echo kube-state-metrics
 }
-echo "OK    kube-state-metrics"
+
+require_ready_nodes
+retry missing_metrics
+report 'no metrics from %s' "${nodes[@]}" kube-state-metrics
