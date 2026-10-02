@@ -200,7 +200,7 @@ The agent is never enabled at boot. After any reboot the GPU Node is Left, and t
 
 A GPU Workload requests the GPU as `amd.com/gpu: 1` and tolerates the `amd.com/gpu:NoSchedule` taint. AMD's device plugin (`platform/amd-gpu/`) advertises the GPU, and its node labeller adds `amd.com/gpu.*` labels describing it. Both run only on the GPU Node. Nothing ROCm-related is installed on the GPU Node, so a GPU Workload's image brings ROCm. The GPU's devices are world-accessible there, so a GPU Workload can run as non-root without `supplementalGroups`; `gpu-join` warns if that changes.
 
-`workloads/rocminfo/` is the smoke test: a Job that runs `rocminfo` once on the GPU and logs what it finds. While the GPU Node is Left it stays Pending, and it runs at the next `gpu-join`. ArgoCD doesn't count its health, so a Pending Job doesn't keep its Application from being Healthy. To run it again, delete it (`kubectl -n rocminfo delete job rocminfo`), and ArgoCD recreates it. `just verify` checks the GPU with its own copy of that Job, which must find the RX 7800 XT (`gfx1101`).
+`just verify` checks the GPU, while the GPU Node is Joined, with the smallest GPU Workload there is: a Job that runs `rocminfo` (`verify/lib/rocminfo.yaml`), which must find the RX 7800 XT (`gfx1101`).
 
 ## Machine-specific values
 

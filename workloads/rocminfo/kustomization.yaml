@@ -1,5 +1,0 @@
-# A smoke test of GPU scheduling: a Job that runs rocminfo on the GPU Node's GPU.
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - job.yaml

@@ -8,10 +8,8 @@ metadata:
 spec:
   description: >-
     The GPU Node advertises its GPU as amd.com/gpu, through the device plugin
-    (platform/amd-gpu/), and a pod that requests it runs ROCm on the RX 7800 XT: a copy
-    of the rocminfo Job (workloads/rocminfo/) succeeds and finds gfx1101. It's a copy
-    because the Workload's own Job ran once, and its logs went with the GPU Node at the
-    last gpu-leave.
+    (platform/amd-gpu/), and a pod that requests it runs ROCm on the RX 7800 XT: the
+    rocminfo Job (verify/lib/rocminfo.yaml) succeeds as non-root and finds gfx1101.
   steps:
     - name: GPU advertised
       try:
@@ -31,7 +29,7 @@ spec:
     - name: rocminfo
       try:
         - apply:
-            file: ../../workloads/rocminfo/job.yaml
+            file: ../lib/rocminfo.yaml
         # Waits for the Job to finish either way, so a failure shows at once rather than
         # after the timeout. The image is over 1 GB, and the GPU Node pulls it on the
         # first run.

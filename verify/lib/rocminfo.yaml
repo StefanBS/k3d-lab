@@ -1,25 +1,12 @@
-# Runs rocminfo once on the GPU Node, through amd.com/gpu, and logs the GPU it finds.
-# While the GPU Node is Left, the Job stays Pending, and runs at the next gpu-join.
-# Once it has run, deleting it runs it again: ArgoCD recreates it. A Job's pod template
-# can't change in place, so a change to it here syncs only once the Job is deleted.
-# verify's gpu-rocminfo check runs its own copy of this file.
+# The smallest GPU Workload: runs rocminfo once on the GPU Node, through amd.com/gpu,
+# and logs the GPU it finds. Applied, like probes.yaml, into the gpu-rocminfo check's
+# own namespace.
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: rocminfo
-  annotations:
-    # So that Pending doesn't keep its Application from being Healthy, which `just up`
-    # waits for. verify's gpu-rocminfo check tells whether the GPU works.
-    argocd.argoproj.io/ignore-healthcheck: "true"
 spec:
   backoffLimit: 0
-  # A gpu-leave while it runs deletes its pod with the GPU Node. That isn't a failure:
-  # a new pod waits, Pending, for the next gpu-join.
-  podFailurePolicy:
-    rules:
-      - action: Ignore
-        onPodConditions:
-          - type: DisruptionTarget
   template:
     spec:
       restartPolicy: Never

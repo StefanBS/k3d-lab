@@ -44,9 +44,9 @@ render_gitops() {
   helm template gitops gitops --kube-version "$k8s_version" >"$manifests"
 }
 
-# The probes that verify's checks deploy are plain manifests: nothing to render.
+# The probes and the Job that verify's checks deploy are plain manifests: nothing to render.
 render_probes() {
-  cat verify/lib/probes.yaml <(echo ---) verify/lib/gpu-probes.yaml >"$manifests"
+  cat verify/lib/probes.yaml <(echo ---) verify/lib/gpu-probes.yaml <(echo ---) verify/lib/rocminfo.yaml >"$manifests"
 }
 
 # Schemas are cached between runs: the CRDs catalog is pinned, so they never change
