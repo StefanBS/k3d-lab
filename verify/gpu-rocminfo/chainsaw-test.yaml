@@ -1,0 +1,60 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: gpu-rocminfo
+  # Runs only while the GPU Node is Joined and Ready (scripts/verify.sh).
+  labels:
+    k3d-lab/gpu: amd
+spec:
+  description: >-
+    The GPU Node advertises its GPU as amd.com/gpu, through the device plugin
+    (platform/amd-gpu/), and a pod that requests it runs ROCm on the RX 7800 XT: the
+    rocminfo Job (verify/lib/rocminfo.yaml) succeeds as non-root and finds gfx1101.
+  steps:
+    - name: GPU advertised
+      try:
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Node
+              metadata:
+                labels:
+                  k3d-lab/gpu: amd
+              status:
+                allocatable:
+                  amd.com/gpu: "1"
+      catch:
+        - script:
+            content: kubectl -n amd-gpu get pods -o wide
+    - name: rocminfo
+      try:
+        - apply:
+            file: ../lib/rocminfo.yaml
+        # Waits for the Job to finish either way, so a failure shows at once rather than
+        # after the timeout. The image is over 1 GB, and the GPU Node pulls it on the
+        # first run.
+        - assert:
+            timeout: 15m
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: rocminfo
+              status:
+                # A running Job has no conditions yet: [0] is then null, not an error.
+                (conditions[?type == 'Complete' || type == 'Failed'] | [0].status): 'True'
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: rocminfo
+              status:
+                succeeded: 1
+        - script:
+            content: kubectl -n "$NAMESPACE" logs job/rocminfo | grep -q gfx1101
+      catch:
+        - script:
+            content: >-
+              kubectl -n "$NAMESPACE" describe pods -l job-name=rocminfo | tail -n 20;
+              kubectl -n "$NAMESPACE" logs job/rocminfo

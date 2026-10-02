@@ -1,0 +1,38 @@
+# The smallest GPU Workload: runs rocminfo once on the GPU Node, through amd.com/gpu,
+# and logs the GPU it finds. Applied, like probes.yaml, into the gpu-rocminfo check's
+# own namespace.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rocminfo
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      # The GPU Node's /dev/kfd and /dev/dri/renderD* are world-accessible, so rocminfo
+      # needs no root and no supplementalGroups. gpu-join says if that changes.
+      securityContext:
+        runAsNonRoot: true
+        # The image's rocm-user, by UID: runAsNonRoot can't check a user name.
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: rocminfo
+          # Nothing ROCm-related is installed on the GPU Node: the image brings it all.
+          image: docker.io/rocm/rocm-terminal:6.4
+          command:
+            - bash
+            - -o
+            - pipefail
+            - -c
+            - "rocminfo | grep -E 'Marketing Name|Name: +gfx|Compute Unit'"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            limits:
+              amd.com/gpu: 1

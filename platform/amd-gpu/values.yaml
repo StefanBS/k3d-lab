@@ -1,0 +1,21 @@
+# AMD's device plugin, which advertises the GPU Node's GPU as amd.com/gpu, and its node
+# labeller, which adds amd.com/gpu.* labels describing it. Both run only on the GPU Node.
+# The chart's image tags lag behind AMD's releases, so they're set here: check them
+# again whenever the chart's version changes.
+dp:
+  image:
+    tag: "1.31.0.11"
+lbl:
+  image:
+    tag: "labeller-1.31.0.11"
+labeller:
+  enabled: true
+node_selector_enabled: true
+# Helm merges this with the chart's default selector, which also wants a label from
+# Node Feature Discovery. The Lab has no NFD, so that key is removed: otherwise the
+# DaemonSets match no nodes.
+node_selector:
+  k3d-lab/gpu: amd
+  feature.node.kubernetes.io/pci-0300_1002.present: null
+tolerations:
+  - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
