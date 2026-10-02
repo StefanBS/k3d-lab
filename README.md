@@ -229,7 +229,7 @@ curl https://ollama.lab.localhost/api/pull -d '{"model": "qwen2.5:0.5b"}'
 curl https://ollama.lab.localhost/api/generate -d '{"model": "qwen2.5:0.5b", "prompt": "Hi", "stream": false}'
 ```
 
-It's a DaemonSet on the GPU Node, so while the GPU Node is Left it has no pod at all, and its Application stays Healthy. `just verify` checks, while the GPU Node is Joined, that the GPU is advertised and that Ollama answers through the Gateway and found the RX 7800 XT (`gfx1101`).
+It's a DaemonSet on the GPU Node ([ADR 0006](docs/adr/0006-gpu-workloads-are-daemonsets-on-the-gpu-node.md)), so while the GPU Node is Left it has no pod at all, and its Application stays Healthy. `just verify` checks, while the GPU Node is Joined, that the GPU is advertised and that Ollama answers through the Gateway and found the RX 7800 XT (`gfx1101`).
 
 ## Machine-specific values
 
