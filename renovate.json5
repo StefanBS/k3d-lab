@@ -5,7 +5,7 @@
   extends: ['config:recommended'],
   automerge: false,
   // Plain manifests that pin an image. The kustomize, mise and github-actions managers
-  // find the rest of the images, the tools and the actions by themselves.
+  // find the rest of the images, the tools, the actions and CI's mise by themselves.
   kubernetes: {
     managerFilePatterns: ['/^workloads/.+\\.yaml$/', '/^verify/lib/.+\\.yaml$/'],
   },
@@ -34,15 +34,6 @@
       datasourceTemplate: 'github-releases',
     },
     {
-      description: 'The mise version that CI installs the tools with',
-      customType: 'regex',
-      managerFilePatterns: ['/^\\.github/workflows/.+\\.yaml$/'],
-      matchStrings: ['jdx/mise-action@\\S+\\n\\s+with:\\n\\s+version: (?<currentValue>\\S+)'],
-      depNameTemplate: 'jdx/mise',
-      datasourceTemplate: 'github-releases',
-      extractVersionTemplate: '^v(?<version>.+)$',
-    },
-    {
       description: 'A version on the line below a `# renovate: datasource=... depName=...` comment',
       customType: 'regex',
       managerFilePatterns: ['/^scripts/.+\\.sh$/', '/^platform/.+\\.yaml$/'],
@@ -55,16 +46,17 @@
   // group, a major update still gets its own PR.
   packageRules: [
     {
+      groupName: 'GitHub Actions',
+      matchManagers: ['github-actions'],
+    },
+    {
+      // The mise version CI installs the tools with (the github-actions manager finds it).
       groupName: 'Lab tools',
       matchManagers: ['mise'],
     },
     {
       groupName: 'Lab tools',
       matchDepNames: ['jdx/mise'],
-    },
-    {
-      groupName: 'GitHub Actions',
-      matchManagers: ['github-actions'],
     },
     {
       // kubectl matches the Lab's Kubernetes version (mise.toml).
