@@ -105,11 +105,12 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
 done
 lint_rendering gitops render_gitops
-# Git can't read lib.sh, so the Lab's gateway is written out where CoreDNS needs it.
-if [[ $(yq '.data["host-k3d-internal.server"]' platform/host-dns/coredns-custom.yaml) == *" $LAB_GATEWAY host.k3d.internal"* ]]; then
-  ok "platform/host-dns resolves host.k3d.internal to LAB_GATEWAY ($LAB_GATEWAY)"
+# Git can't read lib.sh, so the Lab's gateway is written out where ESO needs it.
+eso_host=$(yq '.hostAliases[] | select(.hostnames[] == "host.k3d.internal") | .ip' platform/external-secrets/values.yaml)
+if [[ $eso_host == "$LAB_GATEWAY" ]]; then
+  ok "ESO resolves host.k3d.internal to LAB_GATEWAY ($LAB_GATEWAY)"
 else
-  fail "platform/host-dns/coredns-custom.yaml doesn't resolve host.k3d.internal to LAB_GATEWAY ($LAB_GATEWAY)"
+  fail "platform/external-secrets/values.yaml resolves host.k3d.internal to '$eso_host', not LAB_GATEWAY ($LAB_GATEWAY)"
 fi
 
 # Chainsaw only checks each file against its schema. The step templates have none, so

@@ -39,7 +39,7 @@ SECRET_STORE_IMAGE=ghcr.io/openbao/openbao:2.7.1
 SECRET_STORE_UNIT=k3d-lab-secret-store
 SECRET_STORE_QUADLET=$LAB_OWNER_HOME/.config/containers/systemd/$SECRET_STORE_UNIT.container
 SECRET_STORE_PORT=8200
-# How the Lab reaches the Host: its gateway on the Lab network (platform/host-dns/).
+# How ESO reaches the Host: its gateway on the Lab network (platform/external-secrets/).
 SECRET_STORE_HOST=host.k3d.internal
 # The firewalld policy that admits only the Lab's subnet to SECRET_STORE_PORT. It runs
 # before every zone: the Lab's bridge is in Docker's zone, which accepts everything, and

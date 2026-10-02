@@ -31,6 +31,14 @@ extraObjects:
               serviceAccountRef:
                 name: external-secrets
                 namespace: external-secrets
+# How the controller reaches the Secret Store: host.k3d.internal is the Host's address
+# on the Lab network, LAB_GATEWAY in scripts/lib.sh, which `just lint` checks this
+# against. Only ESO talks to the Secret Store, so only its controller resolves the name.
+# k3d also writes it into CoreDNS's NodeHosts, but k3s resets those whenever its
+# CoreDNS addon is applied again, such as when a k3d Node restarts.
+hostAliases:
+  - ip: 172.28.0.1
+    hostnames: [host.k3d.internal]
 # Modest requests for a Host short on RAM.
 resources:
   requests: {cpu: 10m, memory: 64Mi}
