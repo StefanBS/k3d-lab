@@ -36,7 +36,7 @@
     {
       description: 'A version on the line below a `# renovate: datasource=... depName=...` comment',
       customType: 'regex',
-      managerFilePatterns: ['/^scripts/.+\\.sh$/', '/^platform/.+\\.yaml$/'],
+      managerFilePatterns: ['/\\.(sh|ya?ml)$/', '/(^|/)Justfile$/'],
       matchStrings: [
         '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\n[^\\n]*[:=]\\s*"?(?<currentValue>[^\\s"]+?)"?\\s*\\n',
       ],
@@ -62,11 +62,17 @@
       // kubectl matches the Lab's Kubernetes version (mise.toml).
       groupName: 'Kubernetes',
       matchDepNames: ['rancher/k3s', 'kubectl'],
+      prBodyNotes: [
+        "**Before merging:** kubectl in `mise.toml` and the k3s image in `k3d/cluster.yaml` should stay on the same Kubernetes minor. If this PR moves only one of them, wait for the other's release.",
+      ],
     },
     {
       // The Gateway API CRDs are at the version Cilium supports.
       groupName: 'Cilium and Gateway API',
       matchDepNames: ['cilium', 'kubernetes-sigs/gateway-api'],
+      prBodyNotes: [
+        "**Before merging:** check that Cilium's Gateway API docs name the Gateway API version this PR leaves `platform/gateway-api/` at.",
+      ],
     },
     {
       groupName: 'Argo',
@@ -90,8 +96,13 @@
       matchDepNames: ['amd-gpu', 'docker.io/rocm/k8s-device-plugin', 'docker.io/ollama/ollama'],
     },
     {
-      groupName: 'Demo and probe images',
-      matchDepNames: ['ghcr.io/stefanprodan/podinfo', 'curlimages/curl', 'traefik/whoami', 'busybox'],
+      groupName: 'Rollouts demo',
+      matchDepNames: ['ghcr.io/stefanprodan/podinfo', 'curlimages/curl'],
+      prBodyNotes: ["Merging a new podinfo starts a canary in every running Lab."],
+    },
+    {
+      groupName: 'Verify probes',
+      matchDepNames: ['traefik/whoami', 'busybox'],
     },
     {
       matchDepNames: ['argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi'],
