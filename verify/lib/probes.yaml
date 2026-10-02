@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: traefik/whoami:v1.11
+          image: traefik/whoami:v1.12
           ports: [{containerPort: 80}]
           resources:
             requests: {cpu: 5m, memory: 8Mi}
@@ -47,7 +47,7 @@ spec:
       terminationGracePeriodSeconds: 0
       containers:
         - name: client
-          image: busybox:1.37
+          image: busybox:1.38
           command: [sh, -c, 'echo "k3d-lab probe on $NODE_NAME"; exec sleep infinity']
           env:
             - name: NODE_NAME
