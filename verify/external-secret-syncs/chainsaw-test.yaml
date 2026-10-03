@@ -19,7 +19,7 @@ spec:
               (status.conditions[?type == 'Ready'] | [0].status): 'True'
         # Script steps run in this check's folder.
         - script:
-            content: ../../scripts/bao.sh kv put -mount=lab "workloads/verify/$NAMESPACE" value="$NAMESPACE"
+            content: ../../scripts/secret-store.sh bao kv put -mount=lab "workloads/verify/$NAMESPACE" value="$NAMESPACE"
         - apply:
             resource:
               apiVersion: external-secrets.io/v1
@@ -52,4 +52,4 @@ spec:
             content: kubectl get clustersecretstore secret-store -o yaml | yq .status
       finally:
         - script:
-            content: ../../scripts/bao.sh kv metadata delete -mount=lab "workloads/verify/$NAMESPACE"
+            content: ../../scripts/secret-store.sh bao kv metadata delete -mount=lab "workloads/verify/$NAMESPACE"

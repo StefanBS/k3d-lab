@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prepares the Host once (ADRs 0001 and 0003). Safe to re-run: each step checks first,
-# and a run with nothing to do says so. The steps are in host.sh.
+# and a run with nothing to do says so. The steps are in host.sh and secret-store.sh.
 # Run as the Lab's owner, it does the owner's steps. Under sudo, it does the steps that
 # need root, which you run yourself: the owner's run says when.
 #   sudo scripts/host-setup.sh
@@ -13,6 +13,8 @@ fi
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
+# shellcheck source=secret-store.sh
+source "$(dirname "$0")/secret-store.sh"
 
 if [[ $EUID -eq 0 ]]; then
   fix_host_steps root

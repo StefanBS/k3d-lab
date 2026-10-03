@@ -5,6 +5,8 @@
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
+# shellcheck source=secret-store.sh
+source "$(dirname "$0")/secret-store.sh"
 
 # The variable names a .env-style file assigns, sorted.
 env_keys() {
