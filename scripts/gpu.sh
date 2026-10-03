@@ -39,17 +39,6 @@ daemonsets_ready() {
     awk '$1 != $2 || $1 != $3 { bad = 1 } END { exit bad }'
 }
 
-# check_left leave|purge: fails, listing them, if the GPU Node has anything a Left GPU
-# Node mustn't, or, after a purge, anything the join added.
-check_left() {
-  local mode=$1 status bad
-  status=$(run_on_gpu_node "" status)
-  bad=$(grep -e '^agent: running' -e '^leftover: ' <<<"$status") || true
-  [[ $mode == leave ]] || bad+=$(grep -e '^installed: ' -e '^install: [^n]' <<<"$status") || true
-  [[ -z $bad ]] || die "the GPU Node still has:
-$bad"
-}
-
 cmd_join() {
   local eviction=20Gi arg why server_ip version token node
   for arg; do
@@ -90,7 +79,7 @@ cmd_join() {
 }
 
 cmd_leave() {
-  local mode=leave node=""
+  local mode=leave node="" left=true
   case ${1:-} in
     '') ;;
     purge) mode=purge ;;
@@ -119,13 +108,14 @@ cmd_leave() {
     kc drain -l "$GPU_NODE_LABEL_KEY" --ignore-daemonsets --delete-emptydir-data --force --timeout=60s >/dev/null 2>&1 ||
       warn "$node didn't drain within 60s; its pods are stopped with the agent"
   fi
-  run_on_gpu_node "" "$mode"
+  # gpu-node.sh fails, listing them, if anything is left that mustn't be.
+  run_on_gpu_node "" "$mode" || left=false
   # Only once the agent is stopped, or it would register again.
   if [[ -n $node ]]; then
     log "Deleting the Node object $node"
     kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
   fi
-  check_left "$mode"
+  [[ $left == true ]] || die "the GPU Node didn't $mode cleanly (above)"
   log "The GPU Node is Left$([[ $mode == purge ]] && echo ", and purged")"
 }
 

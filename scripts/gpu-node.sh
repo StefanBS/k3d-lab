@@ -12,10 +12,14 @@
 #                       Env: LAB_SUBNET HOST_LAN_IP GPU_NODE_IP SERVER_URL
 #                            SERVER_VERSION EVICTION NODE_LABEL NODE_TAINT
 #   leave               Stops the agent and its pods and removes Cilium's live state,
-#                       keeping the install.
-#   purge               Leaves, then removes everything join added. Env: LAB_SUBNET
+#                       keeping the install. Fails, listing them, if anything a Left
+#                       GPU Node mustn't have is still here. Env: LAB_SUBNET GPU_NODE_IP
+#   purge               Leaves, then removes everything join added. Fails, listing
+#                       them, if anything of the join's is still here. Env: LAB_SUBNET
 #                       GPU_NODE_IP
-#   status              Prints whether the agent runs, and what's on the GPU Node.
+#   status              Prints whether the agent runs, and what's on the GPU Node. Only
+#                       its first line, agent: running or agent: stopped, is for
+#                       scripts/gpu.sh; the rest is for you to read.
 #                       Env: LAB_SUBNET GPU_NODE_IP, and LAB_CA_HASH while a Lab exists
 # shellcheck disable=SC2329  # main calls the cmd_* functions by name, and they the rest
 set -euo pipefail
@@ -284,6 +288,27 @@ install_leftovers() {
   fi
 }
 
+# What makes this machine not Left, one line each: its agent, or else anything that
+# mustn't outlive it. After a purge, also anything join added.
+not_left() {
+  if systemctl -q is-active "$K3S_SERVICE" 2>/dev/null; then
+    echo "the agent is running"
+  else
+    live_leftovers
+  fi
+  if systemctl -q is-enabled "$K3S_SERVICE" 2>/dev/null; then echo "$K3S_SERVICE is enabled at boot"; fi
+  if [[ $1 == purge ]]; then install_leftovers; fi
+}
+
+# check_left leave|purge: the definition of a clean leave or purge, which the Host
+# relies on. Fails, listing what's still here.
+check_left() {
+  local found
+  found=$(not_left "$1")
+  [[ -z $found ]] || die "the GPU Node still has:
+$found"
+}
+
 cmd_setup() {
   local pubkey=${1:-} home
   [[ $pubkey == ssh-* ]] || die "usage: gpu-node.sh setup '<the Host's public key>'"
@@ -339,7 +364,8 @@ cmd_join() {
   fi
 }
 
-cmd_leave() {
+# What leave and purge both do first.
+stop_and_clean() {
   log "Stopping the agent and its pods"
   stop_agent
   log "Removing Cilium's live state"
@@ -347,17 +373,23 @@ cmd_leave() {
   never_at_boot
 }
 
+cmd_leave() {
+  stop_and_clean
+  check_left leave
+}
+
 cmd_purge() {
   need_env LAB_SUBNET
-  cmd_leave
+  stop_and_clean
   log "Removing k3s, its files and the route (keeping $MODEL_DIR and $AUTOMATION_USER)"
   remove_install
   remove_route
+  check_left purge
 }
 
 # Whether a Lab's agent runs here is all this machine can tell; the Lab tells Joined
-# from Left (gpu.sh status). The first line is the agent's state, then one line per
-# thing found, each prefixed:
+# from Left (gpu.sh status). The first line is the agent's state, the only one gpu.sh
+# reads. Then one line per thing found, for you to read, each prefixed:
 #   install: the install, and whether it's for this Lab or a Stale install
 #   leftover: live state that mustn't outlive the agent, or the agent enabled at boot
 #   installed: what purge removes and leave keeps
