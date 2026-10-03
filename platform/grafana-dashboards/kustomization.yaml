@@ -12,3 +12,6 @@ configMapGenerator:
   - name: dashboard-k3d-lab
     files:
       - k3d-lab.json
+  - name: dashboard-gpu-comfyui
+    files:
+      - gpu-comfyui.json
