@@ -2,8 +2,8 @@
 # mounted from this ConfigMap.
 lab:
   base_path: /models/comfyui/weights
-  diffusion_models: .
-  text_encoders: .
-  model_patches: .
-  vae: .
+  diffusion_models: diffusion_models
+  text_encoders: text_encoders
+  model_patches: model_patches
+  vae: vae
   custom_nodes: /config/custom_nodes

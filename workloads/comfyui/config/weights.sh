@@ -1,7 +1,9 @@
 #!/bin/sh
 # Downloads each weight file once into /models/comfyui/weights on the GPU Node, about 21 GB
 # in all, resuming a download the last pod didn't finish, and keeps it only if its
-# checksum matches. Each is Comfy-Org's ComfyUI build, pinned to a commit of its repo.
+# checksum matches. Each is Comfy-Org's ComfyUI build, pinned to a commit of its repo, and
+# goes in a folder named for its model type, as in that repo, so each of ComfyUI's loaders
+# lists only its own files.
 set -eu
 
 revision=cb504a4090723e43f17ad01cec0359490e2de613
@@ -9,11 +11,18 @@ mkdir -p /models/comfyui/weights
 cd /models/comfyui/weights
 
 fetch() {
-  [ -f "$1" ] && return
-  echo "Downloading $1"
-  curl -fsSL --retry 5 -C - -o "$1.part" "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/$revision/$2/$1"
-  echo "$3  $1.part" | sha256sum -c -
-  mv "$1.part" "$1"
+  file=$2/$1
+  [ -f "$file" ] && return
+  mkdir -p "$2"
+  # Older pods kept every file in the weights folder itself: move it rather than download it.
+  if [ -f "$1" ]; then
+    mv "$1" "$file"
+    return
+  fi
+  echo "Downloading $file"
+  curl -fsSL --retry 5 -C - -o "$file.part" "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/$revision/$file"
+  echo "$3  $file.part" | sha256sum -c -
+  mv "$file.part" "$file"
 }
 
 # The denoiser and the Qwen3-VL text encoder, in ComfyUI's int8 ConvRot format, which it
