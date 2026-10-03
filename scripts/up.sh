@@ -67,9 +67,8 @@ quietly k3d cluster create --config "$LAB_ROOT/k3d/cluster.yaml" \
   --volume "$LAB_ROOT/k3d/entrypoint-route-localnet.sh:/bin/k3d-entrypoint-route-localnet.sh:ro@all"
 
 server_ip=$(lab_server_ip)
-expected_ip=$(yq '.k8sServiceHost' "$LAB_ROOT/platform/cilium/values.yaml")
-[[ $server_ip == "$expected_ip" ]] ||
-  die "the Server got $server_ip, but Cilium's values expect $expected_ip; run 'just down' and try again"
+[[ $server_ip == "$LAB_SERVER_IP" ]] ||
+  die "the Server got $server_ip, but Cilium's values expect LAB_SERVER_IP ($LAB_SERVER_IP); run 'just down' and try again"
 
 # Docker only keeps a container's address across its own restart, such as a Host
 # reboot, if the address is static; otherwise the k3d Nodes come back in whichever
@@ -102,7 +101,7 @@ install_component argocd
 # The Lab CA's key never goes in Git: cert-manager's lab-ca ClusterIssuer
 # (platform/cert-manager/values.yaml) signs with it from this Secret (ADR 0003).
 log "Loading the Lab CA into cert-manager"
-cert_manager_ns=$(yq '.namespace' "$LAB_ROOT/platform/cert-manager/component.yaml")
+cert_manager_ns=$(component_namespace platform/cert-manager)
 kc create namespace "$cert_manager_ns" >/dev/null
 kc -n "$cert_manager_ns" create secret tls lab-ca --cert "$LAB_CA_CERT" --key "$LAB_CA_KEY" >/dev/null
 
@@ -118,9 +117,8 @@ bao_quietly policy write eso - <<'EOF'
 path "lab/data/workloads/*" { capabilities = ["read"] }
 path "lab/metadata/workloads/*" { capabilities = ["read", "list"] }
 EOF
-eso_ns=$(yq '.namespace' "$LAB_ROOT/platform/external-secrets/component.yaml")
-eso_audience=$(yq '.extraObjects[0]' "$LAB_ROOT/platform/external-secrets/values.yaml" |
-  yq '.spec.provider.vault.auth.kubernetes.serviceAccountRef.audiences[0]')
+eso_ns=$(component_namespace platform/external-secrets)
+eso_audience=$(platform_fact eso.audience)
 bao_quietly write auth/kubernetes/role/eso \
   bound_service_account_names=external-secrets bound_service_account_namespaces="$eso_ns" \
   audience="$eso_audience" token_policies=eso token_ttl=1h
@@ -134,8 +132,8 @@ kc -n "$eso_ns" create configmap lab-ca --from-file=ca.crt="$LAB_CA_CERT" >/dev/
 # Grafana's admin password never goes in Git either: each Lab gets a new one, which
 # Grafana reads from this Secret (platform/grafana/values.yaml) and `just creds` prints.
 log "Generating Grafana's admin password"
-grafana_ns=$(yq '.namespace' "$LAB_ROOT/platform/grafana/component.yaml")
-grafana_secret=$(yq '.admin.existingSecret' "$LAB_ROOT/platform/grafana/values.yaml")
+grafana_ns=$(component_namespace platform/grafana)
+grafana_secret=$(platform_fact grafana.admin-secret)
 kc create namespace "$grafana_ns" >/dev/null
 kc -n "$grafana_ns" create secret generic "$grafana_secret" \
   --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -hex 16)" >/dev/null
