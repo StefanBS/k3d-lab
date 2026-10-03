@@ -12,4 +12,4 @@ ComfyUI replaced stable-diffusion.cpp's sd-server for Qwen-Image-2.1: it sampled
 
 - What runs is still all in Git: the image digest, the ComfyUI commit and every package version. Renovate updates them together, once a week, and a new ComfyUI commit needs the lock regenerated before merging.
 - The install lives in `/var/lib/k3d-lab/models/comfyui/runtime`, beside the weights, so it survives every leave, purge and rebuild of the Lab, as they do. A change to the commit or the lock reinstalls it, from GitHub and PyPI.
-- The GPU Node's disk holds the image, about 20 GB compressed, and 21 GB of weights. `gpu-leave purge` removes the image with k3s, and the next join pulls it again.
+- The GPU Node's disk holds the image, about 20 GB compressed, and 21 GB of weights. `just gpu leave purge` removes the image with k3s, and the next join pulls it again.

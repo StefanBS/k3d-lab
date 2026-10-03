@@ -15,7 +15,7 @@ spec:
       nodeSelector: {k3d-lab/gpu: amd}
       tolerations:
         - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
-      # The GPU's devices are world-accessible (gpu-join reports it), so no root.
+      # The GPU's devices are world-accessible (`just gpu join` reports it), so no root.
       # The UID is no one's on the GPU Node; the files it writes there are its own.
       securityContext:
         runAsNonRoot: true

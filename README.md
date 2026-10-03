@@ -4,7 +4,7 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 
 ## Prerequisites
 
-- **Docker CE**, running as root ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)); `just host-setup` installs it. The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
+- **Docker CE**, running as root ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)); `just host setup` installs it. The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
 - **[mise](https://mise.jdx.dev/installing-mise.html)**, activated in your shell. It installs every other tool (`k3d`, `kubectl`, `helm`, `just`, `yq`, `shellcheck`, `kubeconform`) at the versions pinned in `mise.toml`, the same ones CI uses. Once, in this repo:
 
   ```sh
@@ -22,7 +22,7 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 Once per Host, run:
 
 ```sh
-just host-setup
+just host setup
 ```
 
 It prepares what outlives any Lab and is safe to re-run: a run with nothing to do says so.
@@ -31,13 +31,13 @@ It prepares what outlives any Lab and is safe to re-run: a run with nothing to d
 - **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `lab.localhost` (where every Lab UI lives), `k3d.internal`, the Lab's subnet and loopback.
 - **The Secret Store** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): OpenBao, as the rootless Podman Quadlet `k3d-lab-secret-store` (a user service of yours, started at boot through lingering), with all its state in `~/.local/share/k3d-lab/secret-store/`. It unseals itself at every start, with OpenBao's `static` seal and a key generated once, and serves TLS from the Lab CA on port 8200. A firewalld policy lets only the Lab's subnet, `172.28.0.0/16`, reach that port, so it's closed to the LAN; the Secret Store only starts once that policy is in place. See Secrets.
 
-`host-setup` never escalates privileges. It goes through the steps in order, and when it reaches one that needs root, it stops and asks you to run the same script under sudo yourself, then `just host-setup` again:
+`just host setup` never escalates privileges. It goes through the steps in order, and when it reaches one that needs root, it stops and asks you to run the same script under sudo yourself, then `just host setup` again:
 
 ```sh
 sudo scripts/host-setup.sh
 ```
 
-`just host-wizard` walks you through the steps only you can do: for now, reserving the Host's LAN address on your router, which the GPU Node needs. It saves the address to `.env`.
+`just host wizard` walks you through the steps only you can do: for now, reserving the Host's LAN address on your router, which the GPU Node needs. It saves the address to `.env`.
 
 `just down` never touches any of this.
 
@@ -45,14 +45,16 @@ sudo scripts/host-setup.sh
 
 | Command | What it does |
 |---|---|
-| `just doctor` | Checks the Host has what the Lab needs: the tools, every `host-setup` step, that the Secret Store is running and unsealed, free space in Docker's data directory, and that `HOST_LAN_IP` in `.env` is still the Host's address. Installs nothing. |
+| `just doctor` | Checks the Host has what the Lab needs: the tools, every `just host setup` step, that the Secret Store is running and unsealed, free space in Docker's data directory, and that `HOST_LAN_IP` in `.env` is still the Host's address. Installs nothing. |
 | `just up` | Builds the Lab, then runs `just verify`. Refuses if a Lab already exists. ArgoCD builds it from the branch checked out here, as pushed, since `verify` runs the checks from this checkout; `just up REVISION=<branch>` picks another pushed branch or tag. |
 | `just creds` | Prints each of the Lab's UIs with its URL and login. The passwords are new with every Lab. |
 | `just verify` | Checks how the running Lab behaves, with one Chainsaw test per check in `verify/`: a PASS or FAIL for each, and a non-zero exit on any FAIL. `just verify <check>...` runs only those checks, named by their folders; any Chainsaw flags go after them. |
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. A Joined GPU Node leaves first, if it's reachable. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
-| `just bao <args>` | Runs the `bao` CLI against the Secret Store, as its root. |
-| `just secret-store-backup <path>` | Archives the Secret Store, to a new file in `<path>` if it's a directory. See Secrets. |
+| `just secret-store bao <args>` | Runs the `bao` CLI against the Secret Store, as its root. |
+| `just secret-store backup <path>` | Archives the Secret Store, to a new file in `<path>` if it's a directory. See Secrets. |
+
+The recipes for one part of the Lab are grouped under its name, as `just host …`, `just secret-store …` and `just gpu …`; `just` on its own lists them all.
 
 The Lab's kube context is `k3d-lab`. `just up` adds it to your kubeconfig without switching to it.
 
@@ -103,7 +105,7 @@ Groups name their dependencies in `renovate.json5`, so a new component joins one
 
 Renovate is a GitHub app, so enabling it is a step you do yourself, once: install the [Renovate app](https://github.com/apps/renovate) on your account with access to this repo only. With `renovate.json5` already on `main`, it skips its onboarding PR and opens the Dependency Dashboard and the update PRs straight away.
 
-Some updates need more than a merge: the Argo Rollouts Gateway API plugin needs its new `sha256`, and the Secret Store reaches the new image only when you re-run `just host-setup`. Their PRs say so.
+Some updates need more than a merge: the Argo Rollouts Gateway API plugin needs its new `sha256`, and the Secret Store reaches the new image only when you re-run `just host setup`. Their PRs say so.
 
 ## Metrics
 
@@ -158,7 +160,7 @@ Workloads get their secrets as Kubernetes Secrets from **External Secrets Operat
 Each secret lives in OpenBao's KV v2 mount `lab/`, at `lab/workloads/<workload>/<key>`, and holds one or more fields. Write one with:
 
 ```sh
-just bao kv put -mount=lab workloads/<workload>/<key> <field>=<value>
+just secret-store bao kv put -mount=lab workloads/<workload>/<key> <field>=<value>
 ```
 
 A Workload asks for it with an ExternalSecret in its own folder, in Git, from the ClusterSecretStore `secret-store`:
@@ -182,11 +184,11 @@ spec:
 ```
 
 - **How ESO logs in:** with OpenBao's Kubernetes auth, as the role `eso`, which can only read `lab/workloads/*`. `just up` points that auth at each new Lab, and nothing in the Lab holds a token of OpenBao's: OpenBao checks each of ESO's short-lived tokens with a TokenReview made with that same token, and accepts only tokens meant for it (the audience `k3d-lab-secret-store`), so no other token of ESO's service account can log in. ESO reaches OpenBao at `https://host.k3d.internal:8200`, the Host's address on the Lab network, which only ESO's controller resolves (through its pod's `hostAliases`), and trusts its certificate through the Lab CA.
-- **What's kept on the Host:** `~/.local/share/k3d-lab/secret-store/` holds OpenBao's Raft data, its unseal key, and `init.json` with the root token and recovery key. The unseal key sits next to the data, so encryption at rest is mostly for show. `just bao` uses the root token.
+- **What's kept on the Host:** `~/.local/share/k3d-lab/secret-store/` holds OpenBao's Raft data, its unseal key, and `init.json` with the root token and recovery key. The unseal key sits next to the data, so encryption at rest is mostly for show. `just secret-store bao` uses the root token.
 
 ### Backup and restore
 
-`just secret-store-backup <path>` stops OpenBao for a few seconds, archives that whole directory, and starts it again. The archive can read every secret, so keep it somewhere safe.
+`just secret-store backup <path>` stops OpenBao for a few seconds, archives that whole directory, and starts it again. The archive can read every secret, so keep it somewhere safe.
 
 To restore an archive, on this Host or a new one:
 
@@ -194,29 +196,29 @@ To restore an archive, on this Host or a new one:
 systemctl --user stop k3d-lab-secret-store
 mv ~/.local/share/k3d-lab/secret-store ~/.local/share/k3d-lab/secret-store.old
 tar -xzf <archive> -C ~/.local/share/k3d-lab
-just host-setup
+just host setup
 ```
 
-`host-setup` starts OpenBao on the restored data, and renews its certificate if the Lab CA is a new one. Once it works, delete `secret-store.old`.
+`just host setup` starts OpenBao on the restored data, and renews its certificate if the Lab CA is a new one. Once it works, delete `secret-store.old`.
 
 ## The GPU Node
 
 The GPU Node is a gaming PC on the LAN that the Lab borrows now and then ([ADR 0002](docs/adr/0002-gpu-node-joins-over-routed-docker-bridge.md)). It joins as a k3s Agent, labelled `k3d-lab/gpu=amd` and tainted `amd.com/gpu:NoSchedule`, so only GPU Workloads run there. The Host runs its side of each step over SSH as the `k3dlab` user, by sending it `scripts/gpu-node.sh` ([ADR 0005](docs/adr/0005-gpu-node-lifecycle-is-bash-over-ssh.md)).
 
-Once, after `just host-wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` in `.env`, run `just gpu-wizard`. It generates the Host's key, `~/.ssh/k3d-lab_ed25519`, prints the two commands that create the `k3dlab` user on the GPU Node, and then tests the login.
+Once, after `just host wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` in `.env`, run `just gpu wizard`. It generates the Host's key, `~/.ssh/k3d-lab_ed25519`, prints the two commands that create the `k3dlab` user on the GPU Node, and then tests the login.
 
 | Command | What it does |
 |---|---|
-| `just gpu-join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`, which every GPU Workload can write to. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. |
-| `just gpu-leave` | Takes the GPU back: it drains the node, stops the agent and its pods (freeing VRAM), removes Cilium's state from the GPU Node, and deletes the Node object. The install and the route stay, so the next join is quick. If the GPU Node is off, it only deletes the Node object, and the next `gpu-join` cleans the machine up. |
-| `just gpu-leave purge` | Also removes k3s, its files and the route. Only the `k3dlab` user, its key and the model directory stay. |
-| `just gpu-status` | Shows the GPU Node's state in the Lab and on the machine, with anything left behind. |
+| `just gpu join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`, which every GPU Workload can write to. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. |
+| `just gpu leave` | Takes the GPU back: it drains the node, stops the agent and its pods (freeing VRAM), removes Cilium's state from the GPU Node, and deletes the Node object. The install and the route stay, so the next join is quick. If the GPU Node is off, it only deletes the Node object, and the next `just gpu join` cleans the machine up. |
+| `just gpu leave purge` | Also removes k3s, its files and the route. Only the `k3dlab` user, its key and the model directory stay. |
+| `just gpu status` | Shows the GPU Node's state in the Lab and on the machine, with anything left behind. |
 
-The agent is never enabled at boot. After any reboot the GPU Node is Left, and the GPU is entirely yours until the next `gpu-join`. While it's Joined but powered off, `just verify` WARNs about it and skips its checks. The Platform's DaemonSets stop counting it while it's off, so every Application stays Healthy.
+The agent is never enabled at boot. After any reboot the GPU Node is Left, and the GPU is entirely yours until the next `just gpu join`. While it's Joined but powered off, `just verify` WARNs about it and skips its checks. The Platform's DaemonSets stop counting it while it's off, so every Application stays Healthy.
 
 ### GPU Workloads
 
-A GPU Workload requests the GPU as `amd.com/gpu: 1` and tolerates the `amd.com/gpu:NoSchedule` taint. AMD's device plugin (`platform/amd-gpu/`) advertises the GPU, and its node labeller adds `amd.com/gpu.*` labels describing it. Both run only on the GPU Node. Nothing ROCm-related is installed on the GPU Node, so a GPU Workload's image brings ROCm. The GPU's devices are world-accessible there, so a GPU Workload can run as non-root without `supplementalGroups`; `gpu-join` warns if that changes.
+A GPU Workload requests the GPU as `amd.com/gpu: 1` and tolerates the `amd.com/gpu:NoSchedule` taint. AMD's device plugin (`platform/amd-gpu/`) advertises the GPU, and its node labeller adds `amd.com/gpu.*` labels describing it. Both run only on the GPU Node. Nothing ROCm-related is installed on the GPU Node, so a GPU Workload's image brings ROCm. The GPU's devices are world-accessible there, so a GPU Workload can run as non-root without `supplementalGroups`; `just gpu join` warns if that changes.
 
 There's one GPU, advertised as one `amd.com/gpu`, so only one GPU Workload runs at a time; another stays Pending until the GPU is free.
 

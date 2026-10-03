@@ -10,12 +10,12 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
 
-(($# == 1)) || die "usage: just secret-store-backup <directory or archive path>"
+(($# == 1)) || die "usage: just secret-store backup <directory or archive path>"
 archive=$1
 [[ ! -d $archive ]] || archive=$archive/k3d-lab-secret-store-$(date +%Y%m%d-%H%M%S).tar.gz
 [[ ! -e $archive ]] || die "$archive already exists"
 [[ -d $(dirname "$archive") ]] || die "$(dirname "$archive") isn't a directory"
-[[ -f $SECRET_STORE_INIT ]] || die "the Secret Store isn't set up yet; run 'just host-setup'"
+[[ -f $SECRET_STORE_INIT ]] || die "the Secret Store isn't set up yet; run 'just host setup'"
 
 # Started again however the archiving ends.
 start_secret_store() {

@@ -7,11 +7,11 @@ Ollama is the first such Workload (`workloads/ollama/`). It holds the only `amd.
 ## Considered Options
 
 - **A Deployment, with its Application allowed to be Degraded**: Pending is what the spec described, but `verify` would then have to tell a Left GPU Node from a broken Workload, and `just up` couldn't wait for a Healthy Lab.
-- **A Deployment scaled to zero by `gpu-leave`**: ArgoCD's self-heal would scale it back, or the replica count would have to be ignored, which hides real drift.
+- **A Deployment scaled to zero by `just gpu leave`**: ArgoCD's self-heal would scale it back, or the replica count would have to be ignored, which hides real drift.
 - **Keeping the `rocminfo` Job** beside Ollama: it would sit Pending for as long as Ollama holds the GPU.
 
 ## Consequences
 
 - A GPU Workload has a pod only while the GPU Node is Joined and Ready, so it's never Pending. A Joined GPU Node that's powered off leaves its pod unreachable, as with every other DaemonSet there (ADR 0002).
 - A second GPU Workload would compete with Ollama for the one GPU. It would need Ollama removed from Git first, or a way to share the GPU that the Lab doesn't have.
-- GPU Workloads assume the GPU Node's `/dev/kfd` and `/dev/dri` are world-accessible, as they are on Nobara, and run as non-root without `supplementalGroups`. The render group's GID belongs to the machine, and the manifests in a public repo can't carry it. `gpu-join` detects the permissions and warns when they're stricter, so a GPU Workload failing to open the GPU has an explanation.
+- GPU Workloads assume the GPU Node's `/dev/kfd` and `/dev/dri` are world-accessible, as they are on Nobara, and run as non-root without `supplementalGroups`. The render group's GID belongs to the machine, and the manifests in a public repo can't carry it. `just gpu join` detects the permissions and warns when they're stricter, so a GPU Workload failing to open the GPU has an explanation.

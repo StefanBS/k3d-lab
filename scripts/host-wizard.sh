@@ -35,7 +35,7 @@ EOF
 xdg-open "http://$router" >/dev/null 2>&1 || true # the URL is above if no browser opens
 
 read -rp "Is the reservation saved? [y/N] " reply || true
-[[ $reply == [Yy]* ]] || die "nothing saved; run 'just host-wizard' again once the reservation is in place"
+[[ $reply == [Yy]* ]] || die "nothing saved; run 'just host wizard' again once the reservation is in place"
 
 # Replaces any HOST_LAN_IP line and keeps the rest of .env.
 touch "$LAB_ENV_FILE"

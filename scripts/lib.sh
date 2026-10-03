@@ -58,7 +58,7 @@ need_env() {
   done
 }
 
-# For the scripts that report one line per check: doctor, lint and the host-setup
+# For the scripts that report one line per check: doctor, lint and the host setup
 # scripts print with these. doctor and lint count their failures in fails, and exit
 # non-zero if there are any.
 fails=0
@@ -95,7 +95,7 @@ lab_server_ip() {
 GPU_NODE_LABEL_KEY=k3d-lab/gpu
 GPU_NODE_LABEL=$GPU_NODE_LABEL_KEY=amd
 GPU_NODE_TAINT=amd.com/gpu:NoSchedule
-# The key the Host logs in to the GPU Node with, as k3dlab (just gpu-wizard).
+# The key the Host logs in to the GPU Node with, as k3dlab (just gpu wizard).
 GPU_NODE_SSH_KEY=$HOME/.ssh/k3d-lab_ed25519
 
 # The GPU Node's Node object in the Lab, if it's Joined: its name and Ready status.

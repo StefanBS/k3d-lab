@@ -55,16 +55,16 @@ cmd_join() {
   for arg; do
     case $arg in
       eviction=?*) eviction=${arg#eviction=} ;;
-      *) die "unknown argument '$arg'; usage: just gpu-join [eviction=20Gi]" ;;
+      *) die "unknown argument '$arg'; usage: just gpu join [eviction=20Gi]" ;;
     esac
   done
   [[ $eviction =~ ^[0-9]+(Ki|Mi|Gi|Ti)$ ]] || die "eviction=$eviction isn't a size such as 20Gi"
   need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
   lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
   # The GPU Node routes the Lab's subnet through this address (ADR 0002).
-  why=$(host_lan_ip_current) || die "$why; run 'just host-wizard'"
+  why=$(host_lan_ip_current) || die "$why; run 'just host wizard'"
   gpu_node_reachable ||
-    die "can't log in to the GPU Node as $GPU_NODE_SSH with sudo; is it on? If it's never been set up, run 'just gpu-wizard'"
+    die "can't log in to the GPU Node as $GPU_NODE_SSH with sudo; is it on? If it's never been set up, run 'just gpu wizard'"
 
   server_ip=$(lab_server_ip)
   # The agent must match the Server exactly (ADR 0002).
@@ -94,7 +94,7 @@ cmd_leave() {
   case ${1:-} in
     '') ;;
     purge) mode=purge ;;
-    *) die "unknown argument '$1'; usage: just gpu-leave [purge]" ;;
+    *) die "unknown argument '$1'; usage: just gpu leave [purge]" ;;
   esac
   need_env GPU_NODE_IP GPU_NODE_SSH
   if lab_exists; then
@@ -106,7 +106,7 @@ cmd_leave() {
     if [[ -n $node ]]; then
       log "Deleting the GPU Node's Node object, $node"
       kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
-      warn "can't reach the GPU Node as $GPU_NODE_SSH: the next 'just gpu-join' cleans it up"
+      warn "can't reach the GPU Node as $GPU_NODE_SSH: the next 'just gpu join' cleans it up"
     else
       warn "the GPU Node isn't in the Lab, and can't be reached as $GPU_NODE_SSH to check the machine"
     fi
@@ -149,7 +149,7 @@ cmd_status() {
   elif [[ $node == *" True" ]]; then
     echo "Lab: the GPU Node is Joined as ${node% *}, Ready"
   elif [[ $machine == "agent: stopped"* ]]; then
-    echo "Lab: the GPU Node's agent is stopped, as after a reboot, so it's Left; ${node% *} stays NotReady until 'just gpu-join'"
+    echo "Lab: the GPU Node's agent is stopped, as after a reboot, so it's Left; ${node% *} stays NotReady until 'just gpu join'"
   else
     echo "Lab: the GPU Node is Joined as ${node% *}, NotReady: it's off"
   fi
