@@ -176,7 +176,7 @@ component_namespace() { yq '.namespace' "$LAB_ROOT/$1/component.yaml"; }
 declare -A PLATFORM_FACTS=(
   [argocd.host]='platform/argocd/values.yaml|.global.domain'
   [grafana.url]='platform/grafana/values.yaml|.["grafana.ini"].server.root_url'
-  # The Secret `just up` generates Grafana's admin login into.
+  # The Secret ESO generates Grafana's admin login into.
   [grafana.admin-secret]='platform/grafana/values.yaml|.admin.existingSecret'
   [rollouts.host]='platform/argo-rollouts/values.yaml|.dashboard.httproute.hostnames[0]'
   # The audience of the tokens ESO logs in to the Secret Store with.

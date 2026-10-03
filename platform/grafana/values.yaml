@@ -1,5 +1,5 @@
-# Anyone can look without logging in; changing things takes the admin login, whose
-# password `just up` generates into the Secret named here. `just creds` prints it.
+# Anyone can look without logging in; changing things takes the admin login, which ESO
+# generates into the Secret named here (extraObjects, below). `just creds` prints it.
 admin:
   existingSecret: grafana-admin
 grafana.ini:
@@ -82,3 +82,37 @@ testFramework:
 # Modest requests for a Host short on RAM.
 resources:
   requests: {cpu: 25m, memory: 128Mi}
+# The admin login: a new password for each Lab, generated once, so it never goes in
+# Git. Grafana's pod waits for the Secret. The chart runs these through tpl, so they
+# use no ESO templates: rewrite renames the generator's key, and Merge adds the user.
+extraObjects:
+  - apiVersion: generators.external-secrets.io/v1alpha1
+    kind: Password
+    metadata:
+      name: grafana-admin
+    spec:
+      length: 32
+      digits: 8
+      symbols: 0
+      noUpper: false
+      allowRepeat: true
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    metadata:
+      name: grafana-admin
+    spec:
+      refreshPolicy: CreatedOnce
+      target:
+        name: grafana-admin
+        template:
+          mergePolicy: Merge
+          data:
+            admin-user: admin
+      dataFrom:
+        - sourceRef:
+            generatorRef:
+              apiVersion: generators.external-secrets.io/v1alpha1
+              kind: Password
+              name: grafana-admin
+          rewrite:
+            - regexp: {source: ^password$, target: admin-password}

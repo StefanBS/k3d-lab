@@ -111,15 +111,6 @@ kc -n "$cert_manager_ns" create secret tls lab-ca --cert "$LAB_CA_CERT" --key "$
 # new Lab has to be introduced to it.
 secret_store_trust_lab
 
-# Grafana's admin password never goes in Git either: each Lab gets a new one, which
-# Grafana reads from this Secret (platform/grafana/values.yaml) and `just creds` prints.
-log "Generating Grafana's admin password"
-grafana_ns=$(component_namespace platform/grafana)
-grafana_secret=$(platform_fact grafana.admin-secret)
-kc create namespace "$grafana_ns" >/dev/null
-kc -n "$grafana_ns" create secret generic "$grafana_secret" \
-  --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -hex 16)" >/dev/null
-
 # From here on, Git is the only source of truth: ArgoCD takes over Cilium and itself,
 # and installs everything else.
 log "Handing the Lab over to ArgoCD, tracking $revision"
