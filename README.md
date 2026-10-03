@@ -114,7 +114,7 @@ Each component comes from its own upstream chart, never an umbrella chart, and a
 - **Alloy** (`platform/alloy/`) is the only collector: a DaemonSet whose pod on each node scrapes what runs there, the kubelet, cAdvisor and every ServiceMonitor or PodMonitor target, and remote-writes it all to Prometheus. Every series carries a `node` label.
 - **Prometheus** (`platform/prometheus/`) runs only its server, scrapes nothing itself and accepts remote writes. It keeps 7 days on a 10 Gi volume.
 - **kube-state-metrics** and **node-exporter** ship ServiceMonitors that Alloy picks up. node-exporter's `drm` collector reports the GPU Node's GPU. The Prometheus-operator CRDs (`platform/prometheus-operator-crds/`) are only the ServiceMonitor and PodMonitor CRDs; no operator runs.
-- **Grafana** (`platform/grafana/`) has Prometheus, Loki and Tempo as its datasources. Its admin password is new with every Lab: `just up` generates it into the Secret `grafana-admin`, never Git.
+- **Grafana** (`platform/grafana/`) has Prometheus, Loki and Tempo as its datasources. Its admin password is new with every Lab: ESO generates it once into the Secret `grafana-admin` (a `Password` generator in its values), so it never goes in Git.
 
 A chart that ships a ServiceMonitor or PodMonitor is scraped with no change to Alloy, as long as its targets are pods: a target with no pod behind it, such as the API server's endpoints, runs on no node, so no Alloy scrapes it. Alloy and node-exporter tolerate the GPU Node's taint, so its metrics start as soon as it joins.
 
