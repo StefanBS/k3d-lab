@@ -23,6 +23,9 @@ LAB_BRIDGE=br-k3d-lab
 LAB_SUBNET=172.28.0.0/16
 LAB_SUBNET_NETMASK=255.255.0.0 # LAB_SUBNET's /16, for the Lab CA's name constraints
 LAB_GATEWAY=172.28.0.1
+# The Server is the first container on the Lab network, so it always gets this address.
+# Cilium's values pin it (lint checks they match), and up.sh checks it got it.
+LAB_SERVER_IP=172.28.0.2
 # ArgoCD reads the Lab from here, without credentials.
 LAB_REPO=https://github.com/StefanBS/k3d-lab.git
 # Machine-specific values, never committed (.env.example lists them). Loaded here, so
@@ -160,6 +163,43 @@ component_helm_args() {
     "$(yq '.chart' "$component")" \
     --repo "$(yq '.repoURL' "$component")" \
     --version "$(yq '.version' "$component")" \
-    --namespace "$(yq '.namespace' "$component")" \
+    --namespace "$(component_namespace "$1")" \
     --values "$dir/values.yaml"
+}
+
+# component_namespace <group>/<name>: the namespace that component folder installs into.
+component_namespace() { yq '.namespace' "$LAB_ROOT/$1/component.yaml"; }
+
+# Platform facts: what the scripts need from the Platform's values, each a file and the
+# yq expression that reads it there. Callers ask by name, so only this table knows how
+# the values files are laid out, and lint checks that every fact still resolves.
+declare -A PLATFORM_FACTS=(
+  [argocd.host]='platform/argocd/values.yaml|.global.domain'
+  [grafana.url]='platform/grafana/values.yaml|.["grafana.ini"].server.root_url'
+  # The Secret `just up` generates Grafana's admin login into.
+  [grafana.admin-secret]='platform/grafana/values.yaml|.admin.existingSecret'
+  [rollouts.host]='platform/argo-rollouts/values.yaml|.dashboard.httproute.hostnames[0]'
+  # The audience of the tokens ESO logs in to the Secret Store with.
+  [eso.audience]='platform/external-secrets/values.yaml|.extraObjects[0] | from_yaml | .spec.provider.vault.auth.kubernetes.serviceAccountRef.audiences[0]'
+  # Where ESO reaches the Secret Store: the Lab network's gateway.
+  [eso.gateway-ip]='platform/external-secrets/values.yaml|.hostAliases[] | select(.hostnames[] == "host.k3d.internal") | .ip'
+  # Where Cilium reaches the Kubernetes API, before it can resolve anything.
+  [cilium.server-ip]='platform/cilium/values.yaml|.k8sServiceHost'
+)
+# The facts that Git can't read from here, so they repeat a constant above: each fact's
+# constant, by name. lint checks they match.
+declare -A PLATFORM_PINNED_FACTS=(
+  [eso.gateway-ip]=LAB_GATEWAY
+  [cilium.server-ip]=LAB_SERVER_IP
+)
+
+# platform_fact <name>: prints that fact. Fails if there's no such fact, or if it
+# doesn't resolve.
+platform_fact() {
+  local fact=${PLATFORM_FACTS[$1]:-} value
+  [[ -n $fact ]] || die "no Platform fact named '$1'"
+  # -e: fails when the expression finds nothing, or null, which it still prints.
+  value=$(yq -e "${fact#*|}" "$LAB_ROOT/${fact%%|*}" 2>/dev/null) ||
+    die "Platform fact '$1' doesn't resolve: no ${fact#*|} in ${fact%%|*}"
+  printf '%s\n' "$value"
 }

@@ -5,11 +5,11 @@ source "$(dirname "$0")/lib.sh"
 
 lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
 
-argocd_url=https://$(yq '.global.domain' "$LAB_ROOT/platform/argocd/values.yaml")
-grafana_url=$(yq '.["grafana.ini"].server.root_url' "$LAB_ROOT/platform/grafana/values.yaml")
-grafana_ns=$(yq '.namespace' "$LAB_ROOT/platform/grafana/component.yaml")
-grafana_secret=$(yq '.admin.existingSecret' "$LAB_ROOT/platform/grafana/values.yaml")
-rollouts_url=https://$(yq '.dashboard.httproute.hostnames[0]' "$LAB_ROOT/platform/argo-rollouts/values.yaml")
+argocd_url=https://$(platform_fact argocd.host)
+grafana_url=$(platform_fact grafana.url)
+grafana_ns=$(component_namespace platform/grafana)
+grafana_secret=$(platform_fact grafana.admin-secret)
+rollouts_url=https://$(platform_fact rollouts.host)
 
 # ArgoCD generates its admin password at install and keeps it in this Secret.
 argocd_password=$(kc -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
