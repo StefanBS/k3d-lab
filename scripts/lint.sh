@@ -87,12 +87,15 @@ else
   fail "shellcheck found problems (above)"
 fi
 
-log "Justfile"
-if just --fmt --check; then
-  ok "the Justfile is formatted"
-else
-  fail "the Justfile isn't formatted; run 'just --fmt'"
-fi
+log "Recipes"
+# `just --fmt` reads only the file it's given, never the modules that file names.
+for file in Justfile just/*.just; do
+  if just --fmt --check --justfile "$file"; then
+    ok "$file is formatted"
+  else
+    fail "$file isn't formatted; run 'just --fmt --justfile $file'"
+  fi
+done
 
 log "Components"
 mapfile -t components < <(component_dirs)

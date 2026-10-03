@@ -7,7 +7,7 @@
 #
 # Subcommands:
 #   setup <public key>  Creates the k3dlab user that the Host logs in as. Run once, by
-#                       hand, with sudo as you (just gpu-wizard prints how).
+#                       hand, with sudo as you (just gpu wizard prints how).
 #   join                Joins the current Lab. Reads the token from stdin.
 #                       Env: LAB_SUBNET HOST_LAN_IP GPU_NODE_IP SERVER_URL
 #                            SERVER_VERSION EVICTION NODE_LABEL NODE_TAINT
@@ -134,7 +134,7 @@ write_config() {
   local config
   config=$(
     cat <<EOF
-# Written by k3d-lab's gpu-join; rewritten at every join.
+# Written by k3d-lab's 'just gpu join'; rewritten at every join.
 node-ip: $GPU_NODE_IP
 node-label:
   - $NODE_LABEL

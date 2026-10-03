@@ -29,8 +29,8 @@ install_component() {
 }
 
 lab_exists && die "a Lab already exists; run 'just down' first"
-lab_ca_exists || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host-setup'"
-secret_store_unsealed || die "the Secret Store isn't running and unsealed; run 'just host-setup'"
+lab_ca_exists || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host setup'"
+secret_store_unsealed || die "the Secret Store isn't running and unsealed; run 'just host setup'"
 taken=$(lab_host_ports_taken)
 [[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
 $taken"

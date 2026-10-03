@@ -138,7 +138,7 @@
     {
       matchDepNames: ['ghcr.io/openbao/openbao'],
       prBodyNotes: [
-        "**Before merging:** check OpenBao's release notes for storage or seal changes. The update reaches the Host only when you re-run `just host-setup`, which restarts the Secret Store on the new image.",
+        "**Before merging:** check OpenBao's release notes for storage or seal changes. The update reaches the Host only when you re-run `just host setup`, which restarts the Secret Store on the new image.",
       ],
     },
   ],

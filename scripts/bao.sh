@@ -8,7 +8,7 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
 
-[[ -f $SECRET_STORE_INIT ]] || die "the Secret Store isn't set up yet; run 'just host-setup'"
+[[ -f $SECRET_STORE_INIT ]] || die "the Secret Store isn't set up yet; run 'just host setup'"
 secret_store_running || die "the Secret Store isn't running; see: systemctl --user status $SECRET_STORE_UNIT"
 # Passed by name, so the token never shows up in the Host's process list.
 BAO_TOKEN=$(yq -p json -o yaml '.root_token' "$SECRET_STORE_INIT")

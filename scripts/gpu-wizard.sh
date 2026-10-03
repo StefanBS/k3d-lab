@@ -23,7 +23,7 @@ It's safe to run again: it replaces k3dlab's key with this one.
 
 EOF
 read -rp "Has setup finished? [y/N] " reply || true
-[[ $reply == [Yy]* ]] || die "nothing tested; run 'just gpu-wizard' again once setup has run"
+[[ $reply == [Yy]* ]] || die "nothing tested; run 'just gpu wizard' again once setup has run"
 
 gpu_node_reachable || die "can't log in as $GPU_NODE_SSH with passwordless sudo; check the setup's output"
-log "The Host logs in to the GPU Node as $GPU_NODE_SSH, with sudo; 'just gpu-join' can run"
+log "The Host logs in to the GPU Node as $GPU_NODE_SSH, with sudo; 'just gpu join' can run"

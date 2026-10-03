@@ -1,25 +1,27 @@
 # The Lab's interface. Recipes stay thin; the logic lives in scripts/.
+# The recipes for one part of the Lab are a module in just/, run as `just <module> <recipe>`.
 
 set dotenv-load
 
 # Every script pins DOCKER_HOST to Docker CE (scripts/lib.sh, ADR 0001), so no recipe
 # lands on another engine.
 
+# The Host: preparing it once
+mod host 'just/host.just'
+
+# The Secret Store on the Host (ADR 0003)
+mod secret-store 'just/secret-store.just'
+
+# The GPU Node: lending it to the Lab and taking it back (ADRs 0002 and 0005)
+mod gpu 'just/gpu.just'
+
 # List the recipes
 default:
-    @just --list
+    @just --list --list-submodules
 
 # Check that the Host has what the Lab needs
 doctor:
     @scripts/doctor.sh
-
-# Prepare the Host once; safe to re-run. Says when to run the root steps yourself
-host-setup:
-    @scripts/host-setup.sh
-
-# Walk through the Host steps only you can do, such as the router's DHCP reservation
-host-wizard:
-    @scripts/host-wizard.sh
 
 # Build the Lab from the pushed branch checked out here, then verify it; REVISION=<branch> picks another
 up *args:
@@ -32,31 +34,6 @@ down:
 # Print the Lab's UIs and how to log in to them
 creds:
     @scripts/creds.sh
-
-# Run the bao CLI against the Secret Store as its root, e.g. `just bao kv put -mount=lab workloads/<workload>/<key> <field>=<value>`
-[positional-arguments]
-bao *args:
-    @scripts/bao.sh "$@"
-
-# Archive the Secret Store's data, unseal key and root token into a directory or to an archive path
-secret-store-backup path:
-    @scripts/secret-store-backup.sh {{ quote(path) }}
-
-# Walk through the GPU Node step only you can do: creating the user the Host logs in as
-gpu-wizard:
-    @scripts/gpu-wizard.sh
-
-# Lend the GPU Node to the Lab; eviction=<size> sets its free-disk threshold (20Gi)
-gpu-join *args:
-    @scripts/gpu.sh join {{ args }}
-
-# Take the GPU Node back, keeping its install; `just gpu-leave purge` removes that too
-gpu-leave *args:
-    @scripts/gpu.sh leave {{ args }}
-
-# Show the GPU Node's state, in the Lab and on the machine
-gpu-status:
-    @scripts/gpu.sh status
 
 # Check how the running Lab behaves; `just verify <check>...` runs only those checks
 verify *args:

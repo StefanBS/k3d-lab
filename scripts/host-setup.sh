@@ -17,9 +17,9 @@ source "$(dirname "$0")/host.sh"
 if [[ $EUID -eq 0 ]]; then
   fix_host_steps root
   if ((changes == 0)); then
-    log "Nothing to change: the Host's root steps are already done. Now run 'just host-setup' as $LAB_OWNER"
+    log "Nothing to change: the Host's root steps are already done. Now run 'just host setup' as $LAB_OWNER"
   else
-    log "Made $changes change(s). Now run 'just host-setup' again as $LAB_OWNER"
+    log "Made $changes change(s). Now run 'just host setup' again as $LAB_OWNER"
   fi
   exit
 fi
