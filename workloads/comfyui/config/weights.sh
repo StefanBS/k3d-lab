@@ -14,11 +14,6 @@ fetch() {
   file=$2/$1
   [ -f "$file" ] && return
   mkdir -p "$2"
-  # Older pods kept every file in the weights folder itself: move it rather than download it.
-  if [ -f "$1" ]; then
-    mv "$1" "$file"
-    return
-  fi
   echo "Downloading $file"
   curl -fsSL --retry 5 -C - -o "$file.part" "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/$revision/$file"
   echo "$3  $file.part" | sha256sum -c -
