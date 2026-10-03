@@ -8,6 +8,8 @@
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
+# shellcheck source=secret-store.sh
+source "$(dirname "$0")/secret-store.sh"
 
 revision=$(git -C "$LAB_ROOT" branch --show-current)
 for arg; do
@@ -105,29 +107,9 @@ cert_manager_ns=$(component_namespace platform/cert-manager)
 kc create namespace "$cert_manager_ns" >/dev/null
 kc -n "$cert_manager_ns" create secret tls lab-ca --cert "$LAB_CA_CERT" --key "$LAB_CA_KEY" >/dev/null
 
-# ESO reads Workloads' secrets from the Secret Store on the Host, which trusts the Lab
-# through Kubernetes auth (ADR 0003, platform/external-secrets/values.yaml). Every Lab
-# has a new API CA, so the auth is pointed at it here. OpenBao keeps no token of the
-# Lab's: it checks each login's token with a TokenReview made with that same token.
-log "Pointing the Secret Store's Kubernetes auth at the Lab"
-bao_quietly() { quietly "$LAB_ROOT/scripts/bao.sh" "$@"; }
-bao_enabled auth kubernetes || bao_quietly auth enable kubernetes
-# Read-only, and only Workloads' secrets: lab/workloads/<workload>/<key>.
-bao_quietly policy write eso - <<'EOF'
-path "lab/data/workloads/*" { capabilities = ["read"] }
-path "lab/metadata/workloads/*" { capabilities = ["read", "list"] }
-EOF
-eso_ns=$(component_namespace platform/external-secrets)
-eso_audience=$(platform_fact eso.audience)
-bao_quietly write auth/kubernetes/role/eso \
-  bound_service_account_names=external-secrets bound_service_account_namespaces="$eso_ns" \
-  audience="$eso_audience" token_policies=eso token_ttl=1h
-kc config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' |
-  base64 -d | bao_quietly write auth/kubernetes/config \
-  kubernetes_host="https://$server_ip:6443" kubernetes_ca_cert=- disable_local_ca_jwt=true
-# The ClusterSecretStore trusts the Secret Store's certificate through this.
-kc create namespace "$eso_ns" >/dev/null
-kc -n "$eso_ns" create configmap lab-ca --from-file=ca.crt="$LAB_CA_CERT" >/dev/null
+# ESO reads Workloads' secrets from the Secret Store on the Host (ADR 0003), and each
+# new Lab has to be introduced to it.
+secret_store_trust_lab
 
 # Grafana's admin password never goes in Git either: each Lab gets a new one, which
 # Grafana reads from this Secret (platform/grafana/values.yaml) and `just creds` prints.

@@ -1,9 +1,9 @@
 # The Host's one-time setup (ADRs 0001 and 0003): where it puts things, and every step
 # that prepares it, each with a check for "done" and a fix. Sourced after lib.sh by
 # host-setup.sh, which fixes the steps (yours as the owner, root's under sudo), and by
-# doctor.sh, which reports them. up.sh and verify.sh source it for the Lab CA and the
-# Secret Store, and bao.sh and secret-store-backup.sh for the Secret Store. Each check needs no
-# root and no Docker socket.
+# doctor.sh, which reports them. up.sh and verify.sh source it for the Lab CA. The
+# Secret Store's own steps are in secret-store.sh, which adds them to HOST_STEPS when
+# it's sourced after this file. Each check needs no root and no Docker socket.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the variables here are used by the scripts that source this file
 # shellcheck disable=SC2329  # the fix_* and blocked_* functions are called by name
@@ -23,44 +23,14 @@ LAB_CA_CERT=$LAB_CA_DIR/ca.crt
 LAB_CA_KEY=$LAB_CA_DIR/ca.key
 LAB_CA_ANCHOR=/etc/pki/ca-trust/source/anchors/k3d-lab-ca.crt
 
-# ADR 0003: the Secret Store, OpenBao as a rootless Podman Quadlet of the owner's. All of
-# its state lives in SECRET_STORE_DIR, which `just secret-store backup` archives: the Raft data, the
-# unseal key, the root token, and its TLS certificate from the Lab CA.
-SECRET_STORE_DIR=$LAB_HOST_DIR/secret-store
-SECRET_STORE_UNSEAL_KEY=$SECRET_STORE_DIR/unseal.key
-# What `bao operator init` printed: the root token and the recovery key.
-SECRET_STORE_INIT=$SECRET_STORE_DIR/init.json
-SECRET_STORE_DATA=$SECRET_STORE_DIR/data
-SECRET_STORE_CONFIG=$SECRET_STORE_DIR/openbao.hcl
-SECRET_STORE_TLS_CERT=$SECRET_STORE_DIR/tls.crt
-SECRET_STORE_TLS_KEY=$SECRET_STORE_DIR/tls.key
-# The Lab CA's certificate, for the bao CLI inside the container.
-SECRET_STORE_CA_CERT=$SECRET_STORE_DIR/ca.crt
-# From ghcr.io: pulling from quay.io failed on the Host.
-# renovate: datasource=docker depName=ghcr.io/openbao/openbao
-SECRET_STORE_IMAGE=ghcr.io/openbao/openbao:2.7.1
-SECRET_STORE_UNIT=k3d-lab-secret-store
-SECRET_STORE_QUADLET=$LAB_OWNER_HOME/.config/containers/systemd/$SECRET_STORE_UNIT.container
-SECRET_STORE_PORT=8200
-# How ESO reaches the Host: its gateway on the Lab network (platform/external-secrets/).
-SECRET_STORE_HOST=host.k3d.internal
-# The firewalld policy that admits only the Lab's subnet to SECRET_STORE_PORT. It runs
-# before every zone: the Lab's bridge is in Docker's zone, which accepts everything, and
-# Fedora Workstation's default zone accepts every port above 1024 from the LAN.
-SECRET_STORE_FIREWALL_POLICY=k3d-lab-secret-store
-SECRET_STORE_FIREWALL_RULES=(
-  "rule priority=\"-2\" family=\"ipv4\" source address=\"$LAB_SUBNET\" port port=\"$SECRET_STORE_PORT\" protocol=\"tcp\" accept"
-  "rule priority=\"-1\" port port=\"$SECRET_STORE_PORT\" protocol=\"tcp\" reject"
-)
-
 DOCKER_CE_PACKAGES=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin)
 DOCKER_DAEMON_JSON=/etc/docker/daemon.json
 
 # Every step, in the order they're done: its check, who fixes it (owner or root), and
 # what it means. Each check has a fix_<check>, and may have a blocked_<check> that
 # prints why it can't be fixed without you. The order carries the dependencies: root
-# trusts the Lab CA only once it exists, and the Secret Store waits for the firewall,
-# so it never listens before the LAN is kept out.
+# trusts the Lab CA only once it exists. secret-store.sh adds the Secret Store's steps
+# after these, since its certificate is from the Lab CA.
 HOST_STEPS=(
   lab_ca_exists owner "the Lab CA exists ($LAB_CA_DIR)"
   docker_ce_installed root "Docker CE is installed"
@@ -69,16 +39,6 @@ HOST_STEPS=(
   docker_ce_running root "Docker CE is running and starts at boot"
   owner_in_docker_group root "$LAB_OWNER is in the docker group"
   lab_ca_trusted root "the Host trusts the Lab CA"
-  secret_store_firewalled root "only the Lab's subnet can reach the Secret Store's port $SECRET_STORE_PORT"
-  owner_lingers owner "$LAB_OWNER's user services start at boot (lingering)"
-  secret_store_unseal_key_exists owner "the Secret Store's unseal key exists ($SECRET_STORE_UNSEAL_KEY)"
-  secret_store_tls_valid owner "the Secret Store's TLS certificate is from the Lab CA, and valid for 30 more days"
-  secret_store_config_current owner "the Secret Store's configuration is up to date"
-  secret_store_quadlet_current owner "the Secret Store's Quadlet is up to date"
-  secret_store_runs_current_config owner "the Secret Store is running, started since its configuration last changed"
-  secret_store_initialised owner "the Secret Store is initialised"
-  secret_store_unsealed owner "the Secret Store is unsealed"
-  secret_store_has_kv_mount owner "the Secret Store has the KV v2 mount lab/"
 )
 
 # What each side runs to fix its steps.
@@ -249,206 +209,4 @@ fix_lab_ca_trusted() {
   changed "Adding the Lab CA to the Host's trust store"
   install -m 0644 "$LAB_CA_CERT" "$LAB_CA_ANCHOR"
   update-ca-trust extract
-}
-
-# In the running firewall. Only root can query the permanent configuration without
-# polkit asking for a password, but the fix writes it there and reloads.
-secret_store_firewalled() {
-  local rule
-  for rule in "${SECRET_STORE_FIREWALL_RULES[@]}"; do
-    firewall-cmd -q --policy "$SECRET_STORE_FIREWALL_POLICY" --query-rich-rule "$rule" 2>/dev/null || return 1
-  done
-}
-fix_secret_store_firewalled() {
-  changed "Letting only $LAB_SUBNET reach port $SECRET_STORE_PORT (firewalld policy $SECRET_STORE_FIREWALL_POLICY)"
-  local policy=(--permanent --policy "$SECRET_STORE_FIREWALL_POLICY") rule
-  firewall-cmd -q --permanent --info-policy "$SECRET_STORE_FIREWALL_POLICY" >/dev/null 2>&1 ||
-    firewall-cmd -q --permanent --new-policy "$SECRET_STORE_FIREWALL_POLICY"
-  # Traffic from any zone to the Host itself, before any zone's own rules.
-  firewall-cmd -q "${policy[@]}" --set-priority -100
-  firewall-cmd -q "${policy[@]}" --add-ingress-zone ANY
-  firewall-cmd -q "${policy[@]}" --add-egress-zone HOST
-  for rule in "${SECRET_STORE_FIREWALL_RULES[@]}"; do
-    firewall-cmd -q "${policy[@]}" --add-rich-rule "$rule"
-  done
-  firewall-cmd -q --reload
-}
-
-# A user unit only starts at boot, before you log in, with lingering.
-owner_lingers() { [[ $(loginctl show-user "$LAB_OWNER" -p Linger --value 2>/dev/null) == yes ]]; }
-fix_owner_lingers() {
-  changed "Enabling lingering, so $LAB_OWNER's user services start at boot"
-  loginctl enable-linger "$LAB_OWNER"
-}
-
-# The Secret Store's steps from here on need its user systemd, so only the owner fixes
-# them. The unseal key is generated once: OpenBao's data can't be read without the key
-# it was sealed with.
-secret_store_unseal_key_exists() { [[ -f $SECRET_STORE_UNSEAL_KEY ]]; }
-blocked_secret_store_unseal_key_exists() {
-  ! secret_store_unseal_key_exists && [[ -e $SECRET_STORE_DATA ]] &&
-    echo "$SECRET_STORE_DATA exists, but its unseal key doesn't; restore $SECRET_STORE_UNSEAL_KEY from a 'just secret-store backup' archive, or delete $SECRET_STORE_DIR to start over (its secrets are lost)"
-}
-fix_secret_store_unseal_key_exists() {
-  changed "Generating the Secret Store's unseal key"
-  (
-    umask 077
-    mkdir -p "$SECRET_STORE_DIR"
-    openssl rand -out "$SECRET_STORE_UNSEAL_KEY" 32
-  )
-}
-
-# Renewed a month before it expires, or when the Lab CA is new.
-secret_store_tls_valid() {
-  [[ -f $SECRET_STORE_TLS_CERT ]] &&
-    openssl x509 -in "$SECRET_STORE_TLS_CERT" -noout -checkend $((30 * 86400)) >/dev/null &&
-    openssl verify -CAfile "$LAB_CA_CERT" "$SECRET_STORE_TLS_CERT" >/dev/null 2>&1
-}
-fix_secret_store_tls_valid() {
-  changed "Signing the Secret Store's TLS certificate with the Lab CA"
-  (
-    umask 077
-    # For the Lab, by name, and for the bao CLI inside the container.
-    openssl req -x509 -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -noenc \
-      -CA "$LAB_CA_CERT" -CAkey "$LAB_CA_KEY" \
-      -keyout "$SECRET_STORE_TLS_KEY" -out "$SECRET_STORE_TLS_CERT" -days 3650 \
-      -subj "/CN=$SECRET_STORE_HOST" \
-      -addext "subjectAltName=DNS:$SECRET_STORE_HOST,IP:127.0.0.1" \
-      -addext "basicConstraints=critical,CA:FALSE" \
-      -addext "extendedKeyUsage=serverAuth" \
-      2>/dev/null
-  )
-  install -m 0644 "$LAB_CA_CERT" "$SECRET_STORE_CA_CERT"
-}
-
-# Paths here are inside the container, where SECRET_STORE_DIR is /openbao/state.
-# OpenBao 2.7 has no file storage, so it's single-node Raft: still one data directory.
-secret_store_config() {
-  cat <<EOF
-# Written by 'just host setup' (scripts/host-setup.sh); changes here are overwritten.
-ui = false
-api_addr = "https://127.0.0.1:8200"
-cluster_addr = "https://127.0.0.1:8201"
-storage "raft" {
-  path = "/openbao/state/data"
-  node_id = "secret-store"
-}
-listener "tcp" {
-  address = "0.0.0.0:8200"
-  tls_cert_file = "/openbao/state/tls.crt"
-  tls_key_file = "/openbao/state/tls.key"
-}
-# Unseals itself at every start with this key (ADR 0003).
-seal "static" {
-  current_key_id = "1"
-  current_key = "file:///openbao/state/unseal.key"
-}
-EOF
-}
-secret_store_config_current() { [[ -f $SECRET_STORE_CONFIG && $(<"$SECRET_STORE_CONFIG") == "$(secret_store_config)" ]]; }
-fix_secret_store_config_current() {
-  changed "Writing the Secret Store's configuration"
-  secret_store_config >"$SECRET_STORE_CONFIG"
-}
-
-# keep-id maps the owner to the image's openbao user (100:1000), so the owner owns
-# every file OpenBao writes, and `just secret-store backup` can read them.
-secret_store_quadlet() {
-  cat <<EOF
-# Written by 'just host setup' (scripts/host-setup.sh); changes here are overwritten.
-[Unit]
-Description=k3d-lab Secret Store (OpenBao)
-
-[Container]
-ContainerName=$SECRET_STORE_UNIT
-Image=$SECRET_STORE_IMAGE
-Entrypoint=bao
-Exec=server -config=/openbao/state/openbao.hcl
-UserNS=keep-id:uid=100,gid=1000
-Volume=$SECRET_STORE_DIR:/openbao/state:Z
-# Every address, so the Lab reaches it on its gateway, which only exists while there's
-# a Lab. The firewall admits only the Lab's subnet ($SECRET_STORE_FIREWALL_POLICY).
-PublishPort=$SECRET_STORE_PORT:8200
-# For the bao CLI that scripts/bao.sh runs in the container.
-Environment=BAO_ADDR=https://127.0.0.1:8200 BAO_CACERT=/openbao/state/ca.crt
-
-[Service]
-Restart=always
-
-[Install]
-WantedBy=default.target
-EOF
-}
-secret_store_quadlet_current() { [[ -f $SECRET_STORE_QUADLET && $(<"$SECRET_STORE_QUADLET") == "$(secret_store_quadlet)" ]]; }
-fix_secret_store_quadlet_current() {
-  changed "Writing the Secret Store's Quadlet ($SECRET_STORE_QUADLET)"
-  mkdir -p "$(dirname "$SECRET_STORE_QUADLET")"
-  secret_store_quadlet >"$SECRET_STORE_QUADLET"
-  quietly podman pull "$SECRET_STORE_IMAGE"
-}
-
-secret_store_running() { systemctl --user -q is-active "$SECRET_STORE_UNIT"; }
-# OpenBao reads its configuration, Quadlet and certificate only when it starts.
-secret_store_runs_current_config() {
-  local started file
-  secret_store_running || return 1
-  started=$(systemctl --user show -p ActiveEnterTimestamp --value --timestamp=unix "$SECRET_STORE_UNIT")
-  started=${started#@}
-  for file in "$SECRET_STORE_CONFIG" "$SECRET_STORE_QUADLET" "$SECRET_STORE_TLS_CERT"; do
-    [[ -f $file ]] && (($(stat -c %Y "$file") <= started)) || return 1
-  done
-}
-fix_secret_store_runs_current_config() {
-  if secret_store_running; then
-    changed "Restarting the Secret Store on its current configuration"
-  else
-    changed "Starting the Secret Store"
-  fi
-  mkdir -p "$SECRET_STORE_DATA"
-  # Turns the Quadlet into the unit that systemd runs.
-  systemctl --user daemon-reload
-  systemctl --user restart "$SECRET_STORE_UNIT"
-  # Answers once it's listening, sealed or not.
-  retry 30 secret_store_answers || die "the Secret Store doesn't answer; see: journalctl --user -u $SECRET_STORE_UNIT"
-}
-
-# bao_status: `bao status` in the container, as JSON. Exits 0 if unsealed, 2 if sealed
-# or not initialised yet, and 1 if OpenBao doesn't answer.
-bao_status() {
-  podman exec "$SECRET_STORE_UNIT" bao status -format=json 2>/dev/null
-}
-secret_store_answers() {
-  local status=0
-  bao_status >/dev/null || status=$?
-  ((status != 1))
-}
-
-# Once ever. The root token never leaves the Host; scripts/bao.sh uses it.
-secret_store_initialised() { [[ $(bao_status | yq -p json -o yaml '.initialized') == true ]]; }
-fix_secret_store_initialised() {
-  changed "Initialising the Secret Store ($SECRET_STORE_INIT holds its root token)"
-  (
-    umask 077
-    podman exec "$SECRET_STORE_UNIT" bao operator init -recovery-shares=1 -recovery-threshold=1 \
-      -format=json >"$SECRET_STORE_INIT"
-  )
-}
-
-secret_store_unsealed() { bao_status >/dev/null; }
-# It unseals itself with the static seal; this only waits for it.
-fix_secret_store_unsealed() {
-  retry 30 secret_store_unsealed || die "the Secret Store is sealed; see: journalctl --user -u $SECRET_STORE_UNIT"
-}
-
-# bao_enabled <secrets|auth> <path>: whether that secrets engine or auth method is
-# enabled at <path>/.
-bao_enabled() {
-  [[ $("$LAB_ROOT/scripts/bao.sh" "$1" list -format=json | yq -p json -o yaml "has(\"$2/\")") == true ]]
-}
-
-# Where Workloads' secrets live: lab/workloads/<workload>/<key>.
-secret_store_has_kv_mount() { bao_enabled secrets lab 2>/dev/null; }
-fix_secret_store_has_kv_mount() {
-  changed "Creating the KV v2 mount lab/"
-  quietly "$LAB_ROOT/scripts/bao.sh" secrets enable -path=lab -version=2 kv
 }
