@@ -7,13 +7,14 @@ metadata:
     k3d-lab/gpu: amd
 spec:
   description: >-
-    ComfyUI (workloads/comfyui/) runs on the GPU Node with the Lab's NaN guard, answers
-    from the Host at https://comfyui.lab.localhost through the Gateway, and uses the
-    RX 7800 XT through ROCm rather than falling back to the CPU.
+    ComfyUI (workloads/comfyui/) runs on the GPU Node with the Lab's NaN guard and
+    ComfyUI-RMBG's BiRefNet node, answers from the Host at https://comfyui.lab.localhost
+    through the Gateway, and uses the RX 7800 XT through ROCm rather than falling back to
+    the CPU.
   steps:
     - try:
         # The pod on the GPU Node. Its first start pulls an image of about 20 GB, downloads
-        # 21 GB of weights and installs ComfyUI.
+        # 22 GB of weights and installs ComfyUI.
         - assert:
             timeout: 45m
             resource:
@@ -31,6 +32,12 @@ spec:
               curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
               --cacert "$LAB_CA_CERT" https://comfyui.lab.localhost/system_stats |
               yq -p json -e '.devices[0].name | test("RX 7800 XT")'
+        # ComfyUI-RMBG's BiRefNet node imported, with the packages it needs.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" https://comfyui.lab.localhost/object_info/BiRefNetRMBG |
+              yq -p json -e '.BiRefNetRMBG.input.required.model[0] | contains(["BiRefNet_toonout"])'
         # The guard logs once, when ComfyUI loads it.
         - script:
             content: >-
