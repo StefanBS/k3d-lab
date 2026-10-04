@@ -8,7 +8,7 @@ metadata:
 spec:
   description: >-
     ComfyUI (workloads/comfyui/) runs on the GPU Node with the Lab's NaN guard and sprite
-    sheet node and ComfyUI-RMBG's BiRefNet node, answers from the Host at
+    sheet nodes and ComfyUI-RMBG's BiRefNet node, answers from the Host at
     https://comfyui.lab.localhost through the Gateway, and uses the RX 7800 XT through
     ROCm rather than falling back to the CPU.
   steps:
@@ -42,12 +42,12 @@ spec:
         - script:
             content: >-
               kubectl -n comfyui logs ds/comfyui -c comfyui | grep -q 'NANGUARD installed'
-        # The Lab's sprite sheet node imported.
+        # The Lab's sprite sheet nodes imported.
         - script:
             content: >-
               curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
-              --cacert "$LAB_CA_CERT" https://comfyui.lab.localhost/object_info/SpriteSheetToFrames |
-              yq -p json -e 'has("SpriteSheetToFrames")'
+              --cacert "$LAB_CA_CERT" https://comfyui.lab.localhost/object_info |
+              yq -p json -e 'has("SpriteSheetToFrames") and has("TreadFrames")'
       catch:
         - script:
             content: >-
