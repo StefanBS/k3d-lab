@@ -231,11 +231,12 @@ ComfyUI (`workloads/comfyui/`) generates and edits images with [Qwen-Image-2.1](
 - **Background removal:** the one custom node pack is [ComfyUI-RMBG](https://github.com/1038lab/ComfyUI-RMBG), pinned to a commit, and only its BiRefNet node (`BiRefNetRMBG`), with the ToonOut model. Its other nodes need SAM, GroundingDINO and ONNX Runtime, which the Lab doesn't install.
 - **What it saves**, your workflows and settings (`user/`) and its images (`output/`), stays in `/var/lib/k3d-lab/models/comfyui` too. Uploaded images last only as long as the pod.
 - **`--reserve-vram 3`** keeps 3 GB of VRAM free. Without it, a 1024×1024 ControlNet job corrupts the VAE in ComfyUI's dynamic VRAM, and every later job comes out NaN until a restart. A NaN guard (`config/nan_guard.py`) fails any job whose denoiser or VAE produces NaN, rather than saving a black or noise image.
+- **Sprite sheets:** the node Sprite Sheet to Frames (`config/sprite_sheet.py`) cuts a sheet with a transparent background into frames by the gaps between its sprites, and lines each frame up with the first, so an animation of them doesn't jump. Image models don't draw an even grid, so cutting fixed cells does. Tread Frames, in the same file, animates a top-down tank from one sprite by moving only its tread links, as Battle City does: asked for two frames, the model redraws the whole tank a few pixels different, and it shakes.
 - **Memory:** it keeps the models it has loaded in RAM, up to 21.4 GiB, and its limit is 24 GiB, so an overrun stops ComfyUI rather than one of the GPU Node's own processes.
 
 Every leave and purge keep `/var/lib/k3d-lab/models`, so the weights, the install and what it saved outlive the Lab. The model is under the Qwen Research License, for non-commercial use.
 
-It's a DaemonSet on the GPU Node ([ADR 0006](docs/adr/0006-gpu-workloads-are-daemonsets-on-the-gpu-node.md)), so while the GPU Node is Left it has no pod at all, and its Application stays Healthy. `just verify` checks, while the GPU Node is Joined, that the GPU is advertised, and that ComfyUI answers through the Gateway, loaded the NaN guard and the BiRefNet node, and uses the RX 7800 XT.
+It's a DaemonSet on the GPU Node ([ADR 0006](docs/adr/0006-gpu-workloads-are-daemonsets-on-the-gpu-node.md)), so while the GPU Node is Left it has no pod at all, and its Application stays Healthy. `just verify` checks, while the GPU Node is Joined, that the GPU is advertised, and that ComfyUI answers through the Gateway, loaded the NaN guard, the sprite sheet nodes and the BiRefNet node, and uses the RX 7800 XT.
 
 ## Machine-specific values
 

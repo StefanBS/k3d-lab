@@ -14,6 +14,7 @@ configMapGenerator:
       - config/requirements.txt
       - config/extra_model_paths.yaml
       - config/nan_guard.py
+      - config/sprite_sheet.py
 images:
   # PyTorch 2.12 on ROCm 7.14, which ComfyUI was measured on. Renovate updates only the
   # digest: a new tag changes PyTorch or ROCm, which needs measuring again.

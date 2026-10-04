@@ -1,4 +1,4 @@
-# Where ComfyUI finds the weights the setup container downloads, and the Lab's NaN guard,
+# Where ComfyUI finds the weights the setup container downloads, and the Lab's own nodes,
 # mounted from this ConfigMap.
 lab:
   base_path: /models/comfyui/weights

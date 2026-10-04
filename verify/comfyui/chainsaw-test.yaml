@@ -7,10 +7,10 @@ metadata:
     k3d-lab/gpu: amd
 spec:
   description: >-
-    ComfyUI (workloads/comfyui/) runs on the GPU Node with the Lab's NaN guard and
-    ComfyUI-RMBG's BiRefNet node, answers from the Host at https://comfyui.lab.localhost
-    through the Gateway, and uses the RX 7800 XT through ROCm rather than falling back to
-    the CPU.
+    ComfyUI (workloads/comfyui/) runs on the GPU Node with the Lab's NaN guard and sprite
+    sheet nodes and ComfyUI-RMBG's BiRefNet node, answers from the Host at
+    https://comfyui.lab.localhost through the Gateway, and uses the RX 7800 XT through
+    ROCm rather than falling back to the CPU.
   steps:
     - try:
         # The pod on the GPU Node. Its first start pulls an image of about 20 GB, downloads
@@ -42,6 +42,12 @@ spec:
         - script:
             content: >-
               kubectl -n comfyui logs ds/comfyui -c comfyui | grep -q 'NANGUARD installed'
+        # The Lab's sprite sheet nodes imported.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" https://comfyui.lab.localhost/object_info |
+              yq -p json -e 'has("SpriteSheetToFrames") and has("TreadFrames")'
       catch:
         - script:
             content: >-

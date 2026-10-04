@@ -115,6 +115,7 @@ spec:
               - {key: requirements.txt, path: requirements.txt}
               - {key: extra_model_paths.yaml, path: extra_model_paths.yaml}
               - {key: nan_guard.py, path: custom_nodes/nan_guard.py}
+              - {key: sprite_sheet.py, path: custom_nodes/sprite_sheet.py}
         # Uploads, temporary files and caches: nothing there needs to last.
         - name: work
           emptyDir: {}
