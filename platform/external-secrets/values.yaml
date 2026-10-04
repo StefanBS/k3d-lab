@@ -6,13 +6,16 @@ systemAuthDelegator: true
 # secretStoreRef {kind: ClusterSecretStore, name: secret-store}, and remoteRef.key
 # workloads/<workload>/<key>: a secret at lab/workloads/<workload>/<key> in OpenBao.
 # `just up` creates the ConfigMap lab-ca, and points OpenBao's Kubernetes auth at the
-# new Lab, with the role eso: read-only, on lab/workloads/* alone.
+# new Lab, with the role eso: read-only, on lab/workloads/* alone. Wave 1 waits for
+# ESO's webhook, which must admit it.
 extraObjects:
   - |
     apiVersion: external-secrets.io/v1
     kind: ClusterSecretStore
     metadata:
       name: secret-store
+      annotations:
+        argocd.argoproj.io/sync-wave: "1"
     spec:
       provider:
         vault:
