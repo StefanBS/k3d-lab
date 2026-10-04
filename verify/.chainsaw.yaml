@@ -5,8 +5,11 @@ metadata:
   name: verify
 spec:
   # Chainsaw's defaults (5s for exec) are too short for waiting on pods and probes.
-  # on-ready-nodes.sh gives each node up to 1m, one after another.
+  # on-ready-nodes.sh gives each node up to 1m, one after another. Right after `just
+  # up`, with every check starting at once, the API server can take more than apply's
+  # 5s to create a plain Service.
   timeouts:
+    apply: 30s
     assert: 2m
     error: 2m
     exec: 5m
