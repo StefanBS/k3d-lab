@@ -32,15 +32,28 @@ lab_ca_hash() {
 
 gpu_node_registered() { [[ -n $(gpu_node_in_lab) ]]; }
 
-# Every DaemonSet has a Ready, up-to-date pod on each node it should run on: once the GPU
+# The Platform's Applications, as ArgoCD names them, separated by spaces.
+platform_applications() {
+  kc -n argocd get applications -l k3d-lab/group=platform -o jsonpath='{.items[*].metadata.name}'
+}
+
+# platform_daemonsets_ready <Platform Applications>: every DaemonSet of those
+# Applications has a Ready, up-to-date pod on each node it should run on. Once the GPU
 # Node is Ready, that means the Platform's networking, logs and metrics run there too.
-daemonsets_ready() {
-  kc get daemonsets -A -o jsonpath='{range .items[*]}{.status.desiredNumberScheduled} {.status.numberReady} {.status.updatedNumberScheduled}{"\n"}{end}' |
-    awk '$1 != $2 || $1 != $3 { bad = 1 } END { exit bad }'
+# GPU Workloads are DaemonSets as well (ADR 0006), but they start in their own time,
+# such as after pulling a large image, so a join never waits for them.
+platform_daemonsets_ready() {
+  # ArgoCD's tracking id starts with the DaemonSet's Application: <app>:apps/DaemonSet:...
+  kc get daemonsets -A -o jsonpath='{range .items[*]}{.status.desiredNumberScheduled} {.status.numberReady} {.status.updatedNumberScheduled} {.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}' |
+    awk -v apps="$1" '
+      BEGIN { for (i = split(apps, list, " "); i > 0; i--) platform[list[i]] = 1 }
+      { split($4, id, ":") }
+      (id[1] in platform) && ($1 != $2 || $1 != $3) { bad = 1 }
+      END { exit bad }'
 }
 
 cmd_join() {
-  local eviction=20Gi arg why server_ip version token node
+  local eviction=20Gi arg why server_ip version token node apps
   for arg; do
     case $arg in
       eviction=?*) eviction=${arg#eviction=} ;;
@@ -71,9 +84,11 @@ cmd_join() {
   log "Waiting for the Platform's DaemonSets to run on it"
   # The DaemonSet controller counts the new node a moment after it's Ready.
   sleep 2
-  retry 180 daemonsets_ready || die "the Platform's DaemonSets aren't all Ready on the GPU Node; see 'kubectl --context $LAB_CONTEXT get pods -A -o wide'"
-  # ArgoCD sees a DaemonSet Healthy again a few seconds after its pods are.
-  kc -n argocd wait applications --all --for=jsonpath='{.status.health.status}'=Healthy --timeout=3m >/dev/null
+  apps=$(platform_applications)
+  retry 180 platform_daemonsets_ready "$apps" || die "the Platform's DaemonSets aren't all Ready on the GPU Node; see 'kubectl --context $LAB_CONTEXT get pods -A -o wide'"
+  # ArgoCD sees a DaemonSet Healthy again a few seconds after its pods are. Only the
+  # Platform's: a GPU Workload's Application is Healthy once its pod runs, in its own time.
+  kc -n argocd wait applications -l k3d-lab/group=platform --for=jsonpath='{.status.health.status}'=Healthy --timeout=3m >/dev/null
   node=$(gpu_node_in_lab)
   log "The GPU Node is Joined as ${node%% *}"
 }
