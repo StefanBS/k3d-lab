@@ -16,23 +16,18 @@ spec:
               curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
               --cacert "$LAB_CA_CERT" -o /dev/null https://grafana.lab.localhost/api/health
         # Grafana asks each datasource itself; without a login, as the anonymous viewer.
+        # It answers 400 when one isn't healthy.
         - script:
             content: |
               bad=0
               for uid in prometheus loki tempo; do
-                out=$(curl -sS --retry 5 --retry-all-errors --retry-delay 2 \
-                  "https://grafana.lab.localhost/api/datasources/uid/$uid/health")
-                echo "$uid: $out"
-                [[ $(yq -p json '.status' <<<"$out") == OK ]] || bad=1
+                echo -n "$uid: "
+                curl -sS --fail-with-body --retry 5 --retry-all-errors --retry-delay 2 -w '\n' \
+                  "https://grafana.lab.localhost/api/datasources/uid/$uid/health" || bad=1
               done
               exit "$bad"
-        # The sidecar loads dashboards a few seconds after Grafana starts.
+        # The sidecar loads dashboards a few seconds after Grafana starts: until then, 404.
         - script:
-            content: |
-              for attempt in {1..12}; do
-                out=$(curl -sS https://grafana.lab.localhost/api/search?type=dash-db)
-                [[ $(yq -p json '[.[] | select(.uid == "k3d-lab")] | length' <<<"$out") == 1 ]] && exit
-                sleep 5
-              done
-              echo "no dashboard with uid k3d-lab; Grafana has: $(yq -p json '[.[].uid] | join(" ")' <<<"$out")"
-              exit 1
+            content: >-
+              curl -sS --fail --retry 12 --retry-all-errors --retry-delay 5
+              -o /dev/null https://grafana.lab.localhost/api/dashboards/uid/k3d-lab
