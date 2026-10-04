@@ -209,7 +209,7 @@ Once, after `just host wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` i
 
 | Command | What it does |
 |---|---|
-| `just gpu join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`, which every GPU Workload can write to. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. |
+| `just gpu join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`, which every GPU Workload can write to. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. It waits for the Platform to run there, not for GPU Workloads, which start in their own time. |
 | `just gpu leave` | Takes the GPU back: it drains the node, stops the agent and its pods (freeing VRAM), removes Cilium's state from the GPU Node, and deletes the Node object. The install and the route stay, so the next join is quick. If the GPU Node is off, it only deletes the Node object, and the next `just gpu join` cleans the machine up. |
 | `just gpu leave purge` | Also removes k3s, its files and the route. Only the `k3dlab` user, its key and the model directory stay. |
 | `just gpu status` | Shows the GPU Node's state in the Lab and on the machine, with anything left behind. |
