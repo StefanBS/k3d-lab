@@ -8,7 +8,9 @@
 # Subcommands:
 #   setup <public key>  Creates the k3dlab user that the Host logs in as. Run once, by
 #                       hand, with sudo as you (just gpu wizard prints how).
-#   join                Joins the current Lab. Reads the token from stdin.
+#   join                Joins the current Lab. Reads the token from stdin. Cleans up a
+#                       Stale install first, keeping its images unless k3s goes back a
+#                       version.
 #                       Env: LAB_SUBNET HOST_LAN_IP GPU_NODE_IP SERVER_URL
 #                            SERVER_VERSION EVICTION NODE_LABEL NODE_TAINT
 #   leave               Stops the agent and its pods and removes Cilium's live state,
@@ -32,6 +34,15 @@ K3S_CONFIG=/etc/rancher/k3s/config.yaml
 K3S_KILLALL=/usr/local/bin/k3s-killall.sh
 K3S_UNINSTALL=/usr/local/bin/k3s-agent-uninstall.sh
 K3S_RUN=/run/k3s
+# containerd's image store: its blobs, their unpacked snapshots and the metadata that
+# links them, which only work together.
+K3S_IMAGES=/var/lib/rancher/k3s/agent/containerd
+# Where a Stale install's image store waits while the uninstaller runs. The uninstaller
+# removes /var/lib/rancher/k3s but not /var/lib/rancher, which status lists and purge
+# removes, so a join that dies here leaves nothing behind that they miss. It must stay
+# directly in /var/lib/rancher, the JOIN_PATHS entry that remove_install empties around
+# it.
+KEPT_IMAGES=/var/lib/rancher/kept-containerd
 # What join creates beyond k3s's own install, and its uninstaller leaves (the prototype's
 # FINDINGS.md, on branch prototype/gpu-node-join: each was checked to be the join's,
 # with no rpm owner).
@@ -250,10 +261,44 @@ never_at_boot() {
   if systemctl -q is-enabled "$K3S_SERVICE" 2>/dev/null; then systemctl disable "$K3S_SERVICE" 2>/dev/null; fi
 }
 
-# Everything except the model directory, the k3dlab user and its key.
+# Whether a Stale install's images can be kept under k3s $SERVER_VERSION. containerd
+# migrates its store forward, never back, so not for a downgrade, or for a Stale install
+# whose version can't be read.
+images_keepable() {
+  local old
+  [[ -d $K3S_IMAGES ]] || return 1
+  old=$("$K3S_BIN" --version 2>/dev/null | awk 'NR == 1 { print $3 }') || true
+  if [[ $old != v* ]]; then
+    warn "can't read the Stale install's k3s version; removing its images"
+    return 1
+  fi
+  if [[ $(printf '%s\n' "$old" "$SERVER_VERSION" | sort -V | head -1) != "$old" ]]; then
+    warn "k3s $SERVER_VERSION is older than the Stale install's $old; removing its images"
+    return 1
+  fi
+}
+
+# Everything except the model directory, the k3dlab user and its key. With
+# keep-images, also containerd's image store, moved out of the uninstaller's way and
+# back.
 remove_install() {
+  local keep=${1:-} path
+  if [[ $keep == keep-images ]]; then
+    rm -rf "$KEPT_IMAGES"
+    mv "$K3S_IMAGES" "$KEPT_IMAGES"
+  fi
   if [[ -x $K3S_UNINSTALL ]]; then "$K3S_UNINSTALL" >/dev/null 2>&1 || true; fi
-  rm -rf "${JOIN_PATHS[@]}"
+  for path in "${JOIN_PATHS[@]}"; do
+    if [[ $keep == keep-images && $path == "${KEPT_IMAGES%/*}" ]]; then
+      find "$path" -mindepth 1 -maxdepth 1 ! -path "$KEPT_IMAGES" -exec rm -rf {} +
+    else
+      rm -rf "$path"
+    fi
+  done
+  if [[ $keep == keep-images ]]; then
+    install -d "${K3S_IMAGES%/*}"
+    mv "$KEPT_IMAGES" "$K3S_IMAGES"
+  fi
 }
 
 # The things a Left GPU Node must not have, one line each.
@@ -282,6 +327,7 @@ install_leftovers() {
   ! installed || echo "k3s: $("$K3S_BIN" --version 2>/dev/null | head -1)"
   [[ ! -f /etc/systemd/system/$K3S_SERVICE.service ]] || echo "service: $K3S_SERVICE"
   for path in "${JOIN_PATHS[@]}"; do [[ ! -e $path ]] || echo "files: $path"; done
+  [[ ! -d $K3S_IMAGES ]] || echo "images: $(du -sh "$K3S_IMAGES" | cut -f1)"
   ip route show "$LAB_SUBNET" | sed 's/^/route: /'
   if connection=$(lan_connection 2>/dev/null) && [[ -n $connection ]]; then
     saved_routes "$connection" | sed "s|^|saved route on '$connection': |"
@@ -342,7 +388,12 @@ cmd_join() {
     log "Cleaning up a Stale install from an earlier Lab"
     stop_agent
     clean_cilium
-    remove_install
+    if images_keepable; then
+      log "Keeping its images"
+      remove_install keep-images
+    else
+      remove_install
+    fi
   fi
 
   set_route
@@ -381,7 +432,7 @@ cmd_leave() {
 cmd_purge() {
   need_env LAB_SUBNET
   stop_and_clean
-  log "Removing k3s, its files and the route (keeping $MODEL_DIR and $AUTOMATION_USER)"
+  log "Removing k3s, its images, its files and the route (keeping $MODEL_DIR and $AUTOMATION_USER)"
   remove_install
   remove_route
   check_left purge
