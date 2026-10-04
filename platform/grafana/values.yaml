@@ -83,13 +83,16 @@ testFramework:
 resources:
   requests: {cpu: 25m, memory: 128Mi}
 # The admin login: a new password for each Lab, generated once, so it never goes in
-# Git. Grafana's pod waits for the Secret. The chart runs these through tpl, so they
-# use no ESO templates: rewrite renames the generator's key, and Merge adds the user.
+# Git. Wave -1 holds back the rest of Grafana until ESO has written the Secret, so its
+# pod never starts without it. The chart runs these through tpl, so they use no ESO
+# templates: rewrite renames the generator's key, and Merge adds the user.
 extraObjects:
   - apiVersion: generators.external-secrets.io/v1alpha1
     kind: Password
     metadata:
       name: grafana-admin
+      annotations:
+        argocd.argoproj.io/sync-wave: "-1"
     spec:
       length: 32
       digits: 8
@@ -100,6 +103,8 @@ extraObjects:
     kind: ExternalSecret
     metadata:
       name: grafana-admin
+      annotations:
+        argocd.argoproj.io/sync-wave: "-1"
     spec:
       refreshPolicy: CreatedOnce
       target:
