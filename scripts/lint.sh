@@ -87,6 +87,14 @@ else
   fail "shellcheck found problems (above)"
 fi
 
+# The scripts' logic that needs no Lab, such as the GPU Node's state.
+log "Script tests"
+if bats scripts/tests; then
+  ok "bats passes"
+else
+  fail "bats found failures (above)"
+fi
+
 log "Recipes"
 # `just --fmt` reads only the file it's given, never the modules that file names.
 for file in Justfile just/*.just; do

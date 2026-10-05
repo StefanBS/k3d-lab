@@ -5,7 +5,7 @@ A disposable Kubernetes Lab on one workstation: k3d with Cilium, managed through
 ## Prerequisites
 
 - **Docker CE**, running as root ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)); `just host setup` installs it. The Lab's recipes always use Docker CE's socket, whatever your `DOCKER_HOST` says.
-- **[mise](https://mise.jdx.dev/installing-mise.html)**, activated in your shell. It installs every other tool (`k3d`, `kubectl`, `helm`, `just`, `yq`, `shellcheck`, `kubeconform`) at the versions pinned in `mise.toml`, the same ones CI uses. Once, in this repo:
+- **[mise](https://mise.jdx.dev/installing-mise.html)**, activated in your shell. It installs every other tool (`k3d`, `kubectl`, `helm`, `just`, `yq`, `shellcheck`, `bats`, `kubeconform`) at the versions pinned in `mise.toml`, the same ones CI uses. Once, in this repo:
 
   ```sh
   mise trust && mise install

@@ -101,11 +101,9 @@ GPU_NODE_TAINT=amd.com/gpu:NoSchedule
 # The key the Host logs in to the GPU Node with, as k3dlab (just gpu wizard).
 GPU_NODE_SSH_KEY=$HOME/.ssh/k3d-lab_ed25519
 
-# The GPU Node's Node object in the Lab, if it's Joined: its name and Ready status.
-gpu_node_in_lab() {
-  kc get nodes -l "$GPU_NODE_LABEL_KEY" \
-    -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
-}
+# Joined or Left: gpu_node_state.
+# shellcheck source=gpu-node-state.sh
+source "$LAB_ROOT/scripts/gpu-node-state.sh"
 
 # ssh to the GPU Node as k3dlab. Never prompts and gives up quickly, so a GPU Node
 # that's off never holds anything up.
