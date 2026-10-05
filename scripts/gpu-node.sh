@@ -16,9 +16,9 @@
 #   leave               Stops the agent and its pods and removes Cilium's live state,
 #                       keeping the install. Fails, listing them, if anything a Left
 #                       GPU Node mustn't have is still here. Env: LAB_SUBNET GPU_NODE_IP
-#   purge               Leaves, then removes everything join added. Fails, listing
-#                       them, if anything of the join's is still here. Env: LAB_SUBNET
-#                       GPU_NODE_IP
+#   purge               Leaves, then removes everything join added, its firewalld zone
+#                       included. Fails, listing them, if anything of the join's is
+#                       still here. Env: LAB_SUBNET GPU_NODE_IP
 #   status              Prints whether the agent runs, and what's on the GPU Node. Only
 #                       its first line, agent: running or agent: stopped, is for
 #                       scripts/gpu.sh; the rest is for you to read.
@@ -140,6 +140,57 @@ remove_route() {
     remove_saved_routes "$connection"
   fi
   delete_live_routes
+}
+
+# firewalld's zone for Cilium's interfaces: the pods' veths (lxc…), and cilium_host and
+# cilium_vxlan (cilium_…). Cilium redirects what a network policy's DNS or HTTP rule
+# covers to its proxies on this machine, keeping the packet's own port, such as 53, and
+# untracked; the default zone rejects that before it reaches the proxy. ACCEPT, as in
+# firewalld's trusted zone: the default zone already accepts ports above 1024 and SSH,
+# so this only adds the lower ports, from pods and the tunnel (ADR 0002).
+FIREWALL_ZONE=k3d-lab
+FIREWALL_ZONE_INTERFACES=(lxc+ cilium_+)
+# Where firewalld keeps the zone, which status and purge read even while it's stopped.
+FIREWALL_ZONE_FILE=/etc/firewalld/zones/$FIREWALL_ZONE.xml
+
+firewalld_running() { command -v firewall-cmd >/dev/null && firewall-cmd -q --state 2>/dev/null; }
+
+# Creates the zone, permanently, unless it's there already. Without firewalld running,
+# there's nothing to let through.
+set_firewall_zone() {
+  local fw=(firewall-cmd -q --permanent --zone "$FIREWALL_ZONE") changed=false interface
+  if ! firewalld_running; then
+    log "firewalld isn't running: no zone for Cilium's interfaces"
+    return
+  fi
+  if [[ ! -f $FIREWALL_ZONE_FILE ]]; then
+    firewall-cmd -q --permanent --new-zone "$FIREWALL_ZONE"
+    changed=true
+  fi
+  if [[ $(firewall-cmd --permanent --zone "$FIREWALL_ZONE" --get-target) != ACCEPT ]]; then
+    "${fw[@]}" --set-target ACCEPT
+    changed=true
+  fi
+  for interface in "${FIREWALL_ZONE_INTERFACES[@]}"; do
+    "${fw[@]}" --query-interface "$interface" || {
+      "${fw[@]}" --add-interface "$interface"
+      changed=true
+    }
+  done
+  # A new zone only takes effect at a reload, which keeps Cilium's own rules: they're in
+  # iptables' tables, not firewalld's.
+  if [[ $changed == true ]]; then firewall-cmd -q --reload; fi
+  log "Letting Cilium's interfaces through firewalld (zone $FIREWALL_ZONE)"
+}
+
+remove_firewall_zone() {
+  [[ -f $FIREWALL_ZONE_FILE ]] || return 0
+  if firewalld_running; then
+    firewall-cmd -q --permanent --delete-zone "$FIREWALL_ZONE"
+    firewall-cmd -q --reload
+  else
+    rm -f "$FIREWALL_ZONE_FILE"
+  fi
 }
 
 # Writes the agent's own config: how it registers, and absolute eviction thresholds,
@@ -332,6 +383,7 @@ install_leftovers() {
   if connection=$(lan_connection 2>/dev/null) && [[ -n $connection ]]; then
     saved_routes "$connection" | sed "s|^|saved route on '$connection': |"
   fi
+  [[ ! -f $FIREWALL_ZONE_FILE ]] || echo "firewalld zone: $FIREWALL_ZONE"
 }
 
 # What makes this machine not Left, one line each: its agent, or else anything that
@@ -397,6 +449,7 @@ cmd_join() {
   fi
 
   set_route
+  set_firewall_zone
   make_model_dir
   report_gpu_devices
   local config_changed=false
@@ -432,9 +485,10 @@ cmd_leave() {
 cmd_purge() {
   need_env LAB_SUBNET
   stop_and_clean
-  log "Removing k3s, its images, its files and the route (keeping $MODEL_DIR and $AUTOMATION_USER)"
+  log "Removing k3s, its images, its files, the route and the firewalld zone (keeping $MODEL_DIR and $AUTOMATION_USER)"
   remove_install
   remove_route
+  remove_firewall_zone
   check_left purge
 }
 
