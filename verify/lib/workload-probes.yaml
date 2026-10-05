@@ -1,5 +1,6 @@
 # A client inside a Workload's namespace, so the Workload's policies apply to it.
 # policy-denies.sh applies it into each Workload namespace, and deletes it afterwards.
+# Its label matches no Workload's, so no Workload's Services or allows pick it up.
 apiVersion: v1
 kind: Pod
 metadata:

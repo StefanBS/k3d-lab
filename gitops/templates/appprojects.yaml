@@ -74,6 +74,9 @@ spec:
   sourceRepos: []
   sourceNamespaces: []
   destinations: []
+  # ArgoCD creates it allowing every cluster-scoped kind; an apply only clears that
+  # when it says so.
+  clusterResourceWhitelist: []
   namespaceResourceBlacklist:
     - group: '*'
       kind: '*'

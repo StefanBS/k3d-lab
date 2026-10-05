@@ -38,6 +38,9 @@ spec:
                   namespace: ($namespace)
                 syncPolicy:
                   automated: {}
+                  # No retries, so the sync fails at once: without retry, ArgoCD
+                  # retries an automated sync 5 times, for minutes.
+                  retry: {}
         - apply:
             resource:
               apiVersion: argoproj.io/v1alpha1

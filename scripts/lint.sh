@@ -77,6 +77,8 @@ render_component() {
 # its template, then its templatePatch over it, each through Go templates with the
 # component.yaml's keys as `.`. Helm runs the templates, with the same Sprig functions
 # as ArgoCD. The patch is merged plainly, map into map, which is all it relies on.
+# Helm renders a key that component.yaml lacks as empty, where ArgoCD's missingkey=error
+# fails, so an optional key read without hasKey isn't caught here.
 render_application() {
   local appset
   appset=$(helm template gitops gitops --show-only templates/applicationsets.yaml |
@@ -92,10 +94,11 @@ render_application() {
     yq '.templatePatch' <<<"$appset"
     echo '{{- end }}'
   } >"$application_chart/templates/application.yaml"
-  # What the git generator adds to component.yaml's keys.
+  # The chart's values: component.yaml's keys, and what the git generator adds to them.
+  P=$1 B=${1##*/} yq '. + {"path": {"path": strenv(P), "basename": strenv(B)}}' \
+    "$1/component.yaml" >"$application_chart/values.yaml"
   # shellcheck disable=SC2016 # $doc is yq's, not the shell's.
-  P=$1 B=${1##*/} yq '. + {"path": {"path": strenv(P), "basename": strenv(B)}}' "$1/component.yaml" |
-    helm template application "$application_chart" --values - |
+  helm template application "$application_chart" |
     yq ea '. as $doc ireduce ({}; . * $doc)' >"$manifests"
 }
 
