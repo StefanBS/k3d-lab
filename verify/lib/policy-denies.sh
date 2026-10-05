@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Usage: policy-denies.sh <check namespace>
 # Checks that the Workloads' network policies deny what they don't allow, both ways:
-# - out: the probe in each Workload namespace (workload-probes.yaml) can't reach the web
-#   probe in the check's namespace;
+# - out: a probe in each Workload namespace (workload-probes.yaml) can't reach the web
+#   probe in the check's namespace. The Workload namespaces are the ones labelled
+#   k3d-lab/group=workloads, which the Platform sets;
 # - in: the check's client can't reach podinfo directly, at its pod's address.
 # Each attempt must fail, and Hubble must record it as DROPPED by policy, so a request
 # that fails for any other reason, such as a pod that isn't up, doesn't count.
@@ -13,7 +14,27 @@ set -euo pipefail
 source "$(dirname "$0")/checks.sh"
 
 namespace=$1
-workload_namespaces=(rollouts-demo comfyui)
+mapfile -t workload_namespaces < <(kubectl get namespaces -l k3d-lab/group=workloads \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+((${#workload_namespaces[@]})) || {
+  echo "FAIL  no namespace is labelled k3d-lab/group=workloads"
+  exit 1
+}
+
+# The probes are applied here, not by Chainsaw, which only knows the namespaces it's
+# told. They're deleted on the way out, however the script ends.
+probes=$(dirname "$0")/workload-probes.yaml
+# shellcheck disable=SC2329 # Run by the trap below.
+delete_probes() {
+  local ns
+  for ns in "${workload_namespaces[@]}"; do
+    kubectl -n "$ns" delete -f "$probes" --ignore-not-found --wait=false >/dev/null
+  done
+}
+trap delete_probes EXIT
+for ns in "${workload_namespaces[@]}"; do
+  kubectl -n "$ns" apply -f "$probes" >/dev/null
+done
 
 # Usage: hubble_denied <hubble observe filters>...
 # Succeeds once Hubble Relay holds a flow matching the filters that was dropped by policy.

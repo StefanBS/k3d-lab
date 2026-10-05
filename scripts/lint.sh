@@ -11,7 +11,10 @@ k8s_version=$(yq '.image' k3d/cluster.yaml | sed -n 's/.*:v\([0-9.]*\)-k3s.*/\1/
 
 # Where each render goes. kubeconform only reads files named .yaml or .json.
 manifests=$(mktemp --suffix=.yaml)
-trap 'rm -f "$manifests"' EXIT
+# A chart whose one template is a component's Application, as its ApplicationSet
+# generates it (render_application).
+application_chart=$(mktemp -d)
+trap 'rm -rf "$manifests" "$application_chart"' EXIT
 
 # The ApplicationSets template these fields into each component's Application.
 lint_component_folder() {
@@ -25,6 +28,37 @@ lint_component_folder() {
     yq -e ".$key" "$dir/component.yaml" >/dev/null 2>&1 || fail "$dir/component.yaml: '$key' is missing"
   done
   [[ -f $dir/$file ]] || fail "$dir/$file is missing"
+  # Optional, and only a Workload's: the workloads ApplicationSet labels its namespace.
+  if [[ $(yq 'has("isolation")' "$dir/component.yaml") == true ]]; then
+    if [[ $dir != workloads/* ]]; then
+      fail "$dir/component.yaml: only a Workload sets 'isolation'"
+    elif [[ $(yq '.isolation' "$dir/component.yaml") != strict ]]; then
+      fail "$dir/component.yaml: 'isolation' can only be 'strict'"
+    fi
+  fi
+}
+
+# The gitops chart can't read component.yaml, so it lists the Platform's namespaces
+# itself, for the workloads project to refuse. Checks it lists exactly those.
+lint_platform_namespaces() {
+  local dir listed actual=() actual_sorted
+  listed=$(yq '.platformNamespaces[]' gitops/values.yaml | sort)
+  for dir in "${components[@]}"; do
+    case $dir in
+      platform/*) actual+=("$(component_namespace "$dir")") ;;
+      workloads/*)
+        if grep -qxF "$(component_namespace "$dir")" <<<"$listed"; then
+          fail "$dir's namespace is one of the Platform's (gitops/values.yaml)"
+        fi
+        ;;
+    esac
+  done
+  actual_sorted=$(printf '%s\n' "${actual[@]}" | sort -u)
+  if [[ $listed == "$actual_sorted" ]]; then
+    ok "gitops/values.yaml lists the Platform's namespaces"
+  else
+    fail "gitops/values.yaml's platformNamespaces aren't the Platform's namespaces:"$'\n'"$(diff <(echo "$listed") <(echo "$actual_sorted"))"
+  fi
 }
 
 # Renders a component into $manifests the way ArgoCD does: its pinned chart and values,
@@ -39,6 +73,32 @@ render_component() {
   helm template "${1##*/}" "${args[@]}" --include-crds --kube-version "$k8s_version" >"$manifests"
 }
 
+# Renders a component's Application into $manifests the way its ApplicationSet does:
+# its template, then its templatePatch over it, each through Go templates with the
+# component.yaml's keys as `.`. Helm runs the templates, with the same Sprig functions
+# as ArgoCD. The patch is merged plainly, map into map, which is all it relies on.
+render_application() {
+  local appset
+  appset=$(helm template gitops gitops --show-only templates/applicationsets.yaml |
+    GROUP=${1%%/*} yq 'select(.metadata.name == strenv(GROUP)) | .spec')
+  printf 'apiVersion: v2\nname: application\nversion: 0.1.0\n' >"$application_chart/Chart.yaml"
+  mkdir -p "$application_chart/templates"
+  {
+    echo '{{- with .Values }}'
+    echo 'apiVersion: argoproj.io/v1alpha1'
+    echo 'kind: Application'
+    yq '.template' <<<"$appset"
+    echo '---'
+    yq '.templatePatch' <<<"$appset"
+    echo '{{- end }}'
+  } >"$application_chart/templates/application.yaml"
+  # What the git generator adds to component.yaml's keys.
+  # shellcheck disable=SC2016 # $doc is yq's, not the shell's.
+  P=$1 B=${1##*/} yq '. + {"path": {"path": strenv(P), "basename": strenv(B)}}' "$1/component.yaml" |
+    helm template application "$application_chart" --values - |
+    yq ea '. as $doc ireduce ({}; . * $doc)' >"$manifests"
+}
+
 # Renders what the root Application syncs into $manifests.
 render_gitops() {
   helm template gitops gitops --kube-version "$k8s_version" >"$manifests"
@@ -46,7 +106,8 @@ render_gitops() {
 
 # The probes that verify's checks deploy are plain manifests: nothing to render.
 render_probes() {
-  cat verify/lib/probes.yaml <(echo ---) verify/lib/gpu-probes.yaml >"$manifests"
+  cat verify/lib/probes.yaml <(echo ---) verify/lib/gpu-probes.yaml \
+    <(echo ---) verify/lib/workload-probes.yaml >"$manifests"
 }
 
 # Schemas are cached between runs: the CRDs catalog is pinned, so they never change
@@ -114,7 +175,9 @@ duplicates=$(printf '%s\n' "${components[@]##*/}" | sort | uniq -d)
 for dir in "${components[@]}"; do
   lint_component_folder "$dir"
   lint_rendering "$dir" render_component "$dir"
+  lint_rendering "$dir's Application" render_application "$dir"
 done
+lint_platform_namespaces
 lint_rendering gitops render_gitops
 
 # Every fact the scripts read from the Platform's values, so a renamed value fails

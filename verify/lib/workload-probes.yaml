@@ -1,11 +1,9 @@
-# A client inside a Workload's namespace, which network-policy-enforced applies into
-# each Workload namespace in turn ($workload_namespace), so the Workload's policies
-# apply to it. policy-denies.sh waits for it.
+# A client inside a Workload's namespace, so the Workload's policies apply to it.
+# policy-denies.sh applies it into each Workload namespace, and deletes it afterwards.
 apiVersion: v1
 kind: Pod
 metadata:
   name: network-policy-probe
-  namespace: ($workload_namespace)
   labels: {app: network-policy-probe}
 spec:
   # `sleep infinity` ignores SIGTERM, so deleting the pod would otherwise wait 30s.

@@ -1,7 +1,8 @@
 {{- /*
 One ApplicationSet per group: an Application for every <group>/<component>/ folder.
 It installs the chart its component.yaml names, with the values.yaml beside it, or,
-when component.yaml names no chart, the folder's kustomization.yaml.
+when component.yaml names no chart, the folder's kustomization.yaml. Each group's
+Applications run in the ArgoCD project of the same name (appprojects.yaml).
 The `{{`...`}}` parts are left for the ApplicationSet's own templating.
 */}}
 {{- range $group := list "platform" "workloads" }}
@@ -26,7 +27,7 @@ spec:
       labels:
         k3d-lab/group: {{ $group }}
     spec:
-      project: default
+      project: {{ $group }}
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{`{{.namespace}}`}}'
@@ -66,10 +67,23 @@ spec:
           kind: HTTPRoute
           jqPathExpressions:
             - .spec.rules[].backendRefs[]?.weight
-  # The sources depend on whether component.yaml names a chart, which the template
-  # itself can't test: with missingkey=error, a missing .chart fails it.
+  # The sources depend on whether component.yaml names a chart, and a Workload's
+  # namespace labels on whether it sets `isolation`, which the template itself can't
+  # test: with missingkey=error, a missing key fails it.
   templatePatch: |
     spec:
+      {{- if eq $group "workloads" }}
+      # The Platform labels each Workload's namespace, so a Workload never labels its
+      # own: k3d-lab/group finds them, and k3d-lab/isolation says how strictly their
+      # pods are kept apart.
+      syncPolicy:
+        managedNamespaceMetadata:
+          labels:
+            k3d-lab/group: workloads
+          {{`{{- if hasKey . "isolation" }}`}}
+            k3d-lab/isolation: '{{`{{.isolation}}`}}'
+          {{`{{- end }}`}}
+      {{- end }}
       sources:
       {{`{{- if hasKey . "chart" }}`}}
         - repoURL: '{{`{{.repoURL}}`}}'
