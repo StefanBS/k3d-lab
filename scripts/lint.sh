@@ -39,7 +39,9 @@ lint_component_folder() {
 }
 
 # The gitops chart can't read component.yaml, so it lists the Platform's namespaces
-# itself, for the workloads project to refuse. Checks it lists exactly those.
+# itself, for the workloads project to refuse. Checks it lists exactly those: each
+# Platform component's own, and any other its render creates or installs into, such as
+# Cilium's cilium-secrets (rendered_namespaces).
 lint_platform_namespaces() {
   local dir listed actual
   listed=$(yq '.platformNamespaces[]' gitops/values.yaml | sort)
@@ -48,9 +50,12 @@ lint_platform_namespaces() {
       fail "$dir's namespace is one of the Platform's (gitops/values.yaml)"
     fi
   done
-  actual=$(for dir in "${components[@]}"; do
-    if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
-  done | sort -u)
+  actual=$({
+    for dir in "${components[@]}"; do
+      if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
+    done
+    printf '%s' "$platform_rendered_namespaces"
+  } | grep . | sort -u)
   if [[ $listed == "$actual" ]]; then
     ok "gitops/values.yaml lists the Platform's namespaces"
   else
@@ -68,6 +73,13 @@ render_component() {
   fi
   mapfile -t args < <(component_helm_args "$1")
   helm template "${1##*/}" "${args[@]}" --include-crds --kube-version "$k8s_version" >"$manifests"
+}
+
+# The namespaces the render in $manifests creates, or names for a resource. One that
+# names none is installed into its component's namespace.
+rendered_namespaces() {
+  yq -N 'select(.kind == "Namespace") | .metadata.name, (select(.kind != "Namespace") | .metadata.namespace // "")' \
+    "$manifests" | grep . || true
 }
 
 # Renders a component's Application into $manifests the way its ApplicationSet does:
@@ -180,9 +192,14 @@ mapfile -t components < <(component_dirs)
 duplicates=$(printf '%s\n' "${components[@]##*/}" | sort | uniq -d)
 [[ -z $duplicates ]] || fail "component names used twice: $(paste -sd' ' <<<"$duplicates")"
 write_application_chart
+# What the Platform's renders create or install into, for lint_platform_namespaces.
+platform_rendered_namespaces=
 for dir in "${components[@]}"; do
   lint_component_folder "$dir"
   lint_rendering "$dir" render_component "$dir"
+  if [[ $dir == platform/* ]]; then
+    platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
+  fi
   lint_rendering "$dir's Application" render_application "$dir"
 done
 lint_platform_namespaces

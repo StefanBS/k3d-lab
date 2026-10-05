@@ -10,6 +10,7 @@ platformNamespaces:
   - argo-rollouts
   - argocd
   - cert-manager
+  - cilium-secrets
   - external-secrets
   - gateway
   - kube-system
