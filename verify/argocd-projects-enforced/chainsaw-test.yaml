@@ -14,8 +14,9 @@ spec:
       value: (x_k8s_get($client, 'argoproj.io/v1alpha1', 'Application', 'argocd', 'root'))
   steps:
     - try:
-        # Labelled, so applications-synced-and-healthy leaves them out. The finalizer
-        # deletes whatever they did create if a project ever lets them through.
+        # Labelled, so applications-synced-and-healthy leaves them out. No finalizer: a
+        # refused sync creates nothing, and one would hold up Chainsaw's cleanup while
+        # a sync runs.
         - apply:
             resource:
               apiVersion: argoproj.io/v1alpha1
@@ -25,8 +26,6 @@ spec:
                 namespace: argocd
                 labels:
                   k3d-lab/verify: argocd-projects-enforced
-                finalizers:
-                  - resources-finalizer.argocd.argoproj.io
               spec:
                 project: workloads
                 source:
@@ -50,8 +49,6 @@ spec:
                 namespace: argocd
                 labels:
                   k3d-lab/verify: argocd-projects-enforced
-                finalizers:
-                  - resources-finalizer.argocd.argoproj.io
               spec:
                 project: default
                 source:
