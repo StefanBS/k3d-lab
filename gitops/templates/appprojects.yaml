@@ -1,7 +1,7 @@
 {{- /*
 The ArgoCD projects the Lab's Applications run in: one per ApplicationSet. `just up`
-applies the `platform` project from this file before the root Application, which runs
-in it, and ArgoCD takes it over from there.
+applies this file before the root Application, which runs in `platform`, and ArgoCD
+takes the projects over from there.
 Projects come first in a sync, so the Applications that name them find them.
 */}}
 {{- /* Where no Workload goes: the Platform's namespaces and Kubernetes' own. */}}

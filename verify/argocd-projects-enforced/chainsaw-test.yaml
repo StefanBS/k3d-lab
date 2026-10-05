@@ -14,52 +14,18 @@ spec:
       value: (x_k8s_get($client, 'argoproj.io/v1alpha1', 'Application', 'argocd', 'root'))
   steps:
     - try:
-        # Labelled, so applications-synced-and-healthy leaves them out. No finalizer: a
-        # refused sync creates nothing, and one would hold up Chainsaw's cleanup while
-        # a sync runs.
         - apply:
-            resource:
-              apiVersion: argoproj.io/v1alpha1
-              kind: Application
-              metadata:
-                name: argocd-projects-enforced-workloads
-                namespace: argocd
-                labels:
-                  k3d-lab/verify: argocd-projects-enforced
-              spec:
-                project: workloads
-                source:
-                  repoURL: ($root.spec.source.repoURL)
-                  targetRevision: ($root.spec.source.targetRevision)
-                  path: verify/argocd-projects-enforced/forbidden
-                destination:
-                  server: https://kubernetes.default.svc
-                  namespace: ($namespace)
-                syncPolicy:
-                  automated: {}
-                  # No retries, so the sync fails at once: without retry, ArgoCD
-                  # retries an automated sync 5 times, for minutes.
-                  retry: {}
+            file: application.yaml
+            template: true
+            bindings:
+              - name: project
+                value: workloads
         - apply:
-            resource:
-              apiVersion: argoproj.io/v1alpha1
-              kind: Application
-              metadata:
-                name: argocd-projects-enforced-default
-                namespace: argocd
-                labels:
-                  k3d-lab/verify: argocd-projects-enforced
-              spec:
-                project: default
-                source:
-                  repoURL: ($root.spec.source.repoURL)
-                  targetRevision: ($root.spec.source.targetRevision)
-                  path: verify/argocd-projects-enforced/forbidden
-                destination:
-                  server: https://kubernetes.default.svc
-                  namespace: ($namespace)
-                syncPolicy:
-                  automated: {}
+            file: application.yaml
+            template: true
+            bindings:
+              - name: project
+                value: default
         - assert:
             resource:
               apiVersion: argoproj.io/v1alpha1

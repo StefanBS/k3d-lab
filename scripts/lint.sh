@@ -11,7 +11,7 @@ k8s_version=$(yq '.image' k3d/cluster.yaml | sed -n 's/.*:v\([0-9.]*\)-k3s.*/\1/
 
 # Where each render goes. kubeconform only reads files named .yaml or .json.
 manifests=$(mktemp --suffix=.yaml)
-# A chart whose one template is a component's Application, as its ApplicationSet
+# A chart with a template per group: a component's Application, as its ApplicationSet
 # generates it (render_application).
 application_chart=$(mktemp -d)
 trap 'rm -rf "$manifests" "$application_chart"' EXIT
@@ -41,23 +41,20 @@ lint_component_folder() {
 # The gitops chart can't read component.yaml, so it lists the Platform's namespaces
 # itself, for the workloads project to refuse. Checks it lists exactly those.
 lint_platform_namespaces() {
-  local dir listed actual=() actual_sorted
+  local dir listed actual
   listed=$(yq '.platformNamespaces[]' gitops/values.yaml | sort)
   for dir in "${components[@]}"; do
-    case $dir in
-      platform/*) actual+=("$(component_namespace "$dir")") ;;
-      workloads/*)
-        if grep -qxF "$(component_namespace "$dir")" <<<"$listed"; then
-          fail "$dir's namespace is one of the Platform's (gitops/values.yaml)"
-        fi
-        ;;
-    esac
+    if [[ $dir == workloads/* ]] && grep -qxF "$(component_namespace "$dir")" <<<"$listed"; then
+      fail "$dir's namespace is one of the Platform's (gitops/values.yaml)"
+    fi
   done
-  actual_sorted=$(printf '%s\n' "${actual[@]}" | sort -u)
-  if [[ $listed == "$actual_sorted" ]]; then
+  actual=$(for dir in "${components[@]}"; do
+    if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
+  done | sort -u)
+  if [[ $listed == "$actual" ]]; then
     ok "gitops/values.yaml lists the Platform's namespaces"
   else
-    fail "gitops/values.yaml's platformNamespaces aren't the Platform's namespaces:"$'\n'"$(diff <(echo "$listed") <(echo "$actual_sorted"))"
+    fail "gitops/values.yaml's platformNamespaces aren't the Platform's namespaces:"$'\n'"$(diff <(echo "$listed") <(echo "$actual"))"
   fi
 }
 
@@ -80,26 +77,33 @@ render_component() {
 # Helm renders a key that component.yaml lacks as empty, where ArgoCD's missingkey=error
 # fails, so an optional key read without hasKey isn't caught here.
 render_application() {
-  local appset
-  appset=$(helm template gitops gitops --show-only templates/applicationsets.yaml |
-    GROUP=${1%%/*} yq 'select(.metadata.name == strenv(GROUP)) | .spec')
-  printf 'apiVersion: v2\nname: application\nversion: 0.1.0\n' >"$application_chart/Chart.yaml"
-  mkdir -p "$application_chart/templates"
-  {
-    echo '{{- with .Values }}'
-    echo 'apiVersion: argoproj.io/v1alpha1'
-    echo 'kind: Application'
-    yq '.template' <<<"$appset"
-    echo '---'
-    yq '.templatePatch' <<<"$appset"
-    echo '{{- end }}'
-  } >"$application_chart/templates/application.yaml"
   # The chart's values: component.yaml's keys, and what the git generator adds to them.
   P=$1 B=${1##*/} yq '. + {"path": {"path": strenv(P), "basename": strenv(B)}}' \
     "$1/component.yaml" >"$application_chart/values.yaml"
   # shellcheck disable=SC2016 # $doc is yq's, not the shell's.
-  helm template application "$application_chart" |
+  helm template application "$application_chart" --show-only "templates/${1%%/*}.yaml" |
     yq ea '. as $doc ireduce ({}; . * $doc)' >"$manifests"
+}
+
+# The chart render_application renders, written once: the ApplicationSets don't change
+# between components.
+write_application_chart() {
+  local group appsets appset
+  printf 'apiVersion: v2\nname: application\nversion: 0.1.0\n' >"$application_chart/Chart.yaml"
+  mkdir "$application_chart/templates"
+  appsets=$(helm template gitops gitops --show-only templates/applicationsets.yaml)
+  for group in $(yq -N '.metadata.name' <<<"$appsets"); do
+    appset=$(GROUP=$group yq 'select(.metadata.name == strenv(GROUP)) | .spec' <<<"$appsets")
+    {
+      echo '{{- with .Values }}'
+      echo 'apiVersion: argoproj.io/v1alpha1'
+      echo 'kind: Application'
+      yq '.template' <<<"$appset"
+      echo '---'
+      yq '.templatePatch' <<<"$appset"
+      echo '{{- end }}'
+    } >"$application_chart/templates/$group.yaml"
+  done
 }
 
 # Renders what the root Application syncs into $manifests.
@@ -175,6 +179,7 @@ mapfile -t components < <(component_dirs)
 # Each folder's name is its Application's name, and those share one namespace.
 duplicates=$(printf '%s\n' "${components[@]##*/}" | sort | uniq -d)
 [[ -z $duplicates ]] || fail "component names used twice: $(paste -sd' ' <<<"$duplicates")"
+write_application_chart
 for dir in "${components[@]}"; do
   lint_component_folder "$dir"
   lint_rendering "$dir" render_component "$dir"

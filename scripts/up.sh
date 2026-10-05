@@ -115,10 +115,10 @@ secret_store_trust_lab
 # and installs everything else.
 log "Handing the Lab over to ArgoCD, tracking $revision"
 # The root Application runs in the platform project, which the root Application itself
-# syncs. So it's applied first, rendered from the same chart, as ArgoCD then renders it.
-helm template gitops "$LAB_ROOT/gitops" --show-only templates/appprojects.yaml \
-  --set-string repoURL="$LAB_REPO",revision="$revision" |
-  yq 'select(.metadata.name == "platform")' | kc apply -f - >/dev/null
+# syncs. So the projects are applied first, rendered from the same chart, as ArgoCD then
+# renders them.
+helm template gitops "$LAB_ROOT/gitops" --show-only templates/appprojects.yaml |
+  kc apply -f - >/dev/null
 kc apply -f - >/dev/null <<EOF
 apiVersion: argoproj.io/v1alpha1
 kind: Application
