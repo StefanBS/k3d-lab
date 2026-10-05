@@ -5,7 +5,8 @@ metadata:
 spec:
   description: >-
     The demo Rollout (workloads/rollouts-demo/) is Healthy: fully promoted, with all of
-    its traffic on the stable version. From the Host, the demo answers through the
+    its traffic on the stable version, and it receives the load generator's requests
+    through the Gateway. From the Host, the demo answers through the
     Gateway at https://rollouts-demo.lab.localhost, and the Argo Rollouts dashboard at
     https://rollouts.lab.localhost, both with a certificate from the Lab CA.
   steps:
@@ -20,6 +21,8 @@ spec:
                 namespace: rollouts-demo
               status:
                 phase: Healthy
+        - script:
+            content: ../lib/demo-receives-load.sh
         # --cacert replaces the Host's trust store, so only the Lab CA can make these
         # pass. verify.sh exports LAB_CA_CERT.
         - script:
