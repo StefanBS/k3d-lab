@@ -136,12 +136,21 @@ A Workload sends its traces over OTLP to `alloy.monitoring.svc`: port 4317 for g
 - **Tempo** (`platform/tempo/`) comes from the `grafana-community` chart. It runs as one process and keeps 7 days of traces on a 5 Gi volume. Its metrics generator turns every trace into a service graph (`traces_service_graph_*`) and span metrics (`traces_spanmetrics_*`, per `service` and `span_name`), which it remote-writes to Prometheus.
 - **Grafana** links a span to its pod's logs in Loki, through those two tags, and to its service's span metrics in Prometheus. Its service graph shows who calls whom.
 
-## Network flows
+## Networking
 
 Cilium is the Lab's network, and Hubble shows what travels over it. Hubble is part of Cilium (`platform/cilium/values.yaml`); `platform/hubble/` adds its UI's HTTPRoute and its ServiceMonitor.
 
 - **Hubble UI**, at https://hubble.lab.localhost, shows every namespace's flows live, from Hubble Relay, which gathers them from the cilium-agent on every node, the GPU Node included while it's Joined.
 - **Flow metrics**: every cilium-agent counts the flows it sees, forwarded and dropped, by namespace at both ends, and Alloy scrapes them like any other ServiceMonitor. The dashboard "Hubble network" shows drops by reason and by namespace. DNS and HTTP counts only cover the traffic that a network policy's DNS or HTTP rule sends through Cilium's proxies.
+
+### Network policies
+
+Each Workload's namespace denies all traffic, in and out, except what its own `network-policy.yaml` allows: a `CiliumNetworkPolicy` `default-deny` that allows only DNS, and one per pod for what it needs. The Platform's namespaces have none yet. A denied flow shows in Hubble UI and in `hubble observe --verdict DROPPED` as `Policy denied`.
+
+To find what a Workload needs, watch its flows in Hubble UI before writing the policy, then watch for drops after. Two things that Hubble shows and aren't obvious:
+
+- The Gateway's Envoy has the `ingress` identity, so a Workload allows requests through the Gateway with `fromEntities: [ingress]`.
+- A pod calling a Workload through the Gateway, such as the demo's load generator, needs egress to the Workload's pods, not to the Gateway: Envoy checks the caller's policy against the backend, and answers 403 when it's denied.
 
 ## Progressive delivery
 

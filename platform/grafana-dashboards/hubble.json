@@ -316,8 +316,8 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "label_replace(sum by (source_namespace, rcode) (rate(hubble_dns_queries_total[$__rate_interval])), \"source_namespace\", \"(no pod)\", \"source_namespace\", \"\")",
-          "legendFormat": "{{source_namespace}} {{rcode}}"
+          "expr": "label_replace(sum by (source_namespace) (rate(hubble_dns_queries_total[$__rate_interval])), \"source_namespace\", \"(no pod)\", \"source_namespace\", \"\")",
+          "legendFormat": "{{source_namespace}}"
         }
       ]
     },
