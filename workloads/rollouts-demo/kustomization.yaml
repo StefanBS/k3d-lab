@@ -6,6 +6,7 @@ resources:
   - rollout.yaml
   - analysis.yaml
   - load.yaml
+  - network-policy.yaml
 images:
   - name: ghcr.io/stefanprodan/podinfo
     newTag: 6.15.0

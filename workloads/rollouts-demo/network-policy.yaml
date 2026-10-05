@@ -1,0 +1,59 @@
+# Every pod here may only send or receive what a policy below allows. The flows were
+# found with Hubble, not assumed. The kubelet's probes need no rule: Cilium always lets
+# a node reach its own pods.
+#
+# Surprising: a request through the Lab's Gateway is checked against the sender's
+# egress policy to the backend pod behind the Gateway, not to the Gateway itself. Envoy
+# makes that check, after reading the request, and answers 403 when the policy denies
+# it. So the load generator needs egress to podinfo, and none to the Gateway's address.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  endpointSelector: {}
+  enableDefaultDeny: {ingress: true, egress: true}
+  # Name lookups, through Cilium's DNS proxy, so Hubble sees each query.
+  egress:
+    - toEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: kube-system, k8s-app: kube-dns}
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+          rules:
+            dns: [{matchPattern: "*"}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: podinfo
+spec:
+  endpointSelector:
+    matchLabels: {app: rollouts-demo}
+  ingress:
+    # The Gateway, whose Envoy has the ingress identity. The HTTP rule allows every
+    # request, and sends them through Cilium's L7 proxy, so Hubble sees each one.
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "9898", protocol: TCP}]
+          rules:
+            http: [{}]
+    # Alloy scraping the metrics, through the PodMonitor (analysis.yaml). The canary
+    # analysis queries Prometheus, never the pods.
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: monitoring, app.kubernetes.io/name: alloy}
+      toPorts:
+        - ports: [{port: "9797", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: load
+spec:
+  endpointSelector:
+    matchLabels: {app: load}
+  # Through the Gateway, but allowed as podinfo: see the top of this file.
+  egress:
+    - toEndpoints:
+        - matchLabels: {app: rollouts-demo}
+      toPorts:
+        - ports: [{port: "9898", protocol: TCP}]

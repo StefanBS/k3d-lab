@@ -5,6 +5,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - comfyui.yaml
+  - network-policy.yaml
 # A change to any of these restarts ComfyUI, through the ConfigMap's name.
 configMapGenerator:
   - name: comfyui
