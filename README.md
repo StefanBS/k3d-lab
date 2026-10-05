@@ -69,9 +69,10 @@ The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA
 | ArgoCD | https://argocd.lab.localhost |
 | Grafana | https://grafana.lab.localhost |
 | Argo Rollouts | https://rollouts.lab.localhost |
+| Hubble | https://hubble.lab.localhost |
 | ComfyUI (while the GPU Node is Joined) | https://comfyui.lab.localhost |
 
-`just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard has no login at all.
+`just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard and Hubble UI have no login at all.
 
 A component adds its UI with an HTTPRoute for its own `<name>.lab.localhost`, whose `parentRefs` is the `https` listener of the Gateway `lab` in the namespace `gateway`.
 
@@ -134,6 +135,13 @@ A Workload sends its traces over OTLP to `alloy.monitoring.svc`: port 4317 for g
 - **Alloy** receives traces only from the pods on its own node: the Service `alloy` routes each pod to the Alloy there. It tags every span with the `k8s.namespace.name` and `k8s.pod.name` of the pod that sent it, found by the pod's IP, and forwards it to Tempo.
 - **Tempo** (`platform/tempo/`) comes from the `grafana-community` chart. It runs as one process and keeps 7 days of traces on a 5 Gi volume. Its metrics generator turns every trace into a service graph (`traces_service_graph_*`) and span metrics (`traces_spanmetrics_*`, per `service` and `span_name`), which it remote-writes to Prometheus.
 - **Grafana** links a span to its pod's logs in Loki, through those two tags, and to its service's span metrics in Prometheus. Its service graph shows who calls whom.
+
+## Network flows
+
+Cilium is the Lab's network, and Hubble shows what travels over it. Hubble is part of Cilium (`platform/cilium/values.yaml`); `platform/hubble/` adds its UI's HTTPRoute and its ServiceMonitor.
+
+- **Hubble UI**, at https://hubble.lab.localhost, shows every namespace's flows live, from Hubble Relay, which gathers them from the cilium-agent on every node, the GPU Node included while it's Joined.
+- **Flow metrics**: every cilium-agent counts the flows it sees, forwarded and dropped, by namespace at both ends, and Alloy scrapes them like any other ServiceMonitor. The dashboard "Hubble network" shows drops by reason and by namespace. DNS and HTTP counts only cover the traffic that a network policy's DNS or HTTP rule sends through Cilium's proxies.
 
 ## Progressive delivery
 

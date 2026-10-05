@@ -5,8 +5,8 @@ metadata:
 spec:
   description: >-
     For every Ready node, the GPU Node included when Joined, Prometheus holds metrics
-    that Alloy scraped there and remote-wrote: the kubelet's, cAdvisor's and
-    node-exporter's. kube-state-metrics' reach it too.
+    that Alloy scraped there and remote-wrote: the kubelet's, cAdvisor's,
+    node-exporter's and Hubble's flow metrics. kube-state-metrics' reach it too.
   steps:
     - try:
         - script:
