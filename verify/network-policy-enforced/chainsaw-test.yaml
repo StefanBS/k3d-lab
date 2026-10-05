@@ -8,7 +8,7 @@ spec:
     probe pod in rollouts-demo and one in comfyui can't reach a pod in another
     namespace, and a pod in another namespace can't reach podinfo directly. Hubble
     records each attempt as DROPPED by policy. What the policies allow is covered by
-    demo-rollout-healthy, traces-reach-tempo and comfyui.
+    demo-rollout-healthy, gpu-node-dns-proxy and comfyui.
   steps:
     - use:
         template: ../lib/deploy-probes.yaml

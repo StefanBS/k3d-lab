@@ -1,6 +1,7 @@
 # Every pod here may only send or receive what a policy below allows. The flows were
 # found with Hubble, not assumed. The kubelet's probes need no rule: Cilium always lets
-# a node reach its own pods.
+# a node reach its own pods. Nothing here sends traces: podinfo isn't configured to, so
+# there's no egress to Alloy's OTLP ports.
 #
 # Surprising: a request through the Lab's Gateway is checked against the sender's
 # egress policy to the backend pod behind the Gateway, not to the Gateway itself. Envoy
