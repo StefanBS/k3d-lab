@@ -1,0 +1,3 @@
+# No chart: the kustomization.yaml beside this is the component. Hubble itself is part
+# of Cilium (platform/cilium/values.yaml); this adds what Cilium's chart can't.
+namespace: kube-system
