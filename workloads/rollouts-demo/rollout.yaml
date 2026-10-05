@@ -44,7 +44,7 @@ spec:
             - {name: PODINFO_PORT_METRICS, value: "9797"}
             # A deliberately failing version: set this to "true", and about a fifth of the
             # requests fail.
-            - {name: PODINFO_RANDOM_ERROR, value: "true"}
+            - {name: PODINFO_RANDOM_ERROR, value: "false"}
           ports:
             - {name: http, containerPort: 9898}
             - {name: metrics, containerPort: 9797}
