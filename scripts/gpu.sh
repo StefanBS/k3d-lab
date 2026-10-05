@@ -5,6 +5,8 @@
 # Usage: gpu.sh join [eviction=<size>] | leave [purge] | status
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=gpu-node-state.sh
+source "$(dirname "$0")/gpu-node-state.sh"
 
 # Runs gpu-node.sh as root on the GPU Node: run_on_gpu_node <stdin> <subcommand> [<VAR=value>...]
 # The script goes over stdin, then the first argument, which only join reads: so the
@@ -147,17 +149,7 @@ cmd_status() {
     node=$(gpu_node_in_lab)
   fi
 
-  if [[ $lab == false ]]; then
-    echo "Lab: none"
-  elif [[ -z $node ]]; then
-    echo "Lab: the GPU Node is Left"
-  elif [[ $node == *" True" ]]; then
-    echo "Lab: the GPU Node is Joined as ${node% *}, Ready"
-  elif [[ $machine == "agent: stopped"* ]]; then
-    echo "Lab: the GPU Node's agent is stopped, as after a reboot, so it's Left; ${node% *} stays NotReady until 'just gpu join'"
-  else
-    echo "Lab: the GPU Node is Joined as ${node% *}, NotReady: it's off"
-  fi
+  gpu_node_lab_view "$lab" "$node" "${machine%%$'\n'*}"
   if [[ -n $machine ]]; then
     while read -r line; do echo "GPU Node: $line"; done <<<"$machine"
   else
