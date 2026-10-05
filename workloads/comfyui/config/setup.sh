@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # renovate: datasource=git-refs depName=https://github.com/Comfy-Org/ComfyUI branch=master
-COMFYUI_COMMIT=b87fe48b0491425f682f7ffdaed56d0387cb6c5d
+COMFYUI_COMMIT=5c460d8172fe30761ff67c0df3d5643bb74e0d70
 
 runtime=/models/comfyui/runtime
 stamp=$(cat /config/requirements.txt - <<<"$COMFYUI_COMMIT" | sha256sum | cut -d' ' -f1)
