@@ -27,5 +27,4 @@ missing_metrics() {
 }
 
 require_ready_nodes
-retry missing_metrics
-report 'no metrics from %s' "${nodes[@]}" kube-state-metrics
+eventually 'no metrics from %s' "${nodes[@]}" kube-state-metrics -- missing_metrics

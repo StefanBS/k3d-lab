@@ -51,31 +51,30 @@ prometheus_query() {
   monitoring_get prometheus-server:http "api/v1/query?query=$(uri_encode "$1")" | yq -p json "$2"
 }
 
-# Usage: retry <command>...
+# Usage: eventually <printf format> <target>... -- <command>...
 # Runs the command until it prints nothing: each line it prints is something it didn't
-# find yet. Leaves what it printed last in the array missing, and exits if it fails.
-# Tries 24 times, 5s apart: 2m, within the exec timeout (.chainsaw.yaml).
-retry() {
-  local attempt out
+# find yet. Tries 24 times, 5s apart: 2m, within the exec timeout (.chainsaw.yaml).
+# Then says OK for each target nothing is missing from, and FAIL for each line the
+# command printed last, through the format. A line is missing from a target when it's
+# the target itself, or starts with "<target>: ". Fails if anything is missing.
+eventually() {
+  local format=$1 targets=() missing=() attempt out target line ok
+  shift
+  while [[ $1 != -- ]]; do
+    targets+=("$1")
+    shift
+  done
+  shift
   for attempt in {1..24}; do
     out=$("$@")
     [[ -n $out ]] || {
       missing=()
-      return 0
+      break
     }
     mapfile -t missing <<<"$out"
     ((attempt == 24)) || sleep 5
   done
-}
-
-# Usage: report <printf format> <target>...
-# After retry: says OK for each target nothing is missing from, then FAIL for each line
-# in missing, through the format. A line is missing from a target when it's the target
-# itself, or starts with "<target>: ". Fails if anything is missing.
-report() {
-  local format=$1 target line ok
-  shift
-  for target; do
+  for target in "${targets[@]}"; do
     ok=1
     for line in "${missing[@]}"; do
       [[ $line == "$target" || $line == "$target: "* ]] && ok=0

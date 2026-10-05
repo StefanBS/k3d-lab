@@ -28,5 +28,4 @@ missing_series() {
   done
 }
 
-retry missing_series
-report 'no %s' "${targets[@]}"
+eventually 'no %s' "${targets[@]}" -- missing_series

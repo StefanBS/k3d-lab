@@ -32,5 +32,4 @@ missing_logs() {
 }
 
 require_ready_nodes
-retry missing_logs
-report 'no logs from %s' "${nodes[@]}"
+eventually 'no logs from %s' "${nodes[@]}" -- missing_logs

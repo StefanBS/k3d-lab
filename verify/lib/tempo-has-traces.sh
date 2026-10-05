@@ -36,5 +36,4 @@ missing_traces() {
 }
 
 require_ready_nodes
-retry missing_traces
-report 'no trace from %s, tagged with its client pod' "${nodes[@]}"
+eventually 'no trace from %s, tagged with its client pod' "${nodes[@]}" -- missing_traces
