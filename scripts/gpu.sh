@@ -5,6 +5,8 @@
 # Usage: gpu.sh join [eviction=<size>] | leave [purge] | status
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=gpu-node-state.sh
+source "$(dirname "$0")/gpu-node-state.sh"
 
 # Runs gpu-node.sh as root on the GPU Node: run_on_gpu_node <stdin> <subcommand> [<VAR=value>...]
 # The script goes over stdin, then the first argument, which only join reads: so the
@@ -30,8 +32,7 @@ lab_ca_hash() {
   lab_exists && token=$(lab_token) && echo "${token%%::*}"
 }
 
-# Succeeds once the GPU Node is Joined, for retry.
-gpu_node_joined() { gpu_node_state && [[ $GPU_NODE_STATE == joined ]]; }
+gpu_node_registered() { [[ -n $(gpu_node_in_lab) ]]; }
 
 # The Platform's Applications, as ArgoCD names them, separated by spaces.
 platform_applications() {
@@ -54,7 +55,7 @@ platform_daemonsets_ready() {
 }
 
 cmd_join() {
-  local eviction=20Gi arg why server_ip version token apps
+  local eviction=20Gi arg why server_ip version token node apps
   for arg; do
     case $arg in
       eviction=?*) eviction=${arg#eviction=} ;;
@@ -80,8 +81,7 @@ cmd_join() {
     SERVER_VERSION="$version" EVICTION="$eviction" NODE_LABEL="$GPU_NODE_LABEL" NODE_TAINT="$GPU_NODE_TAINT"
 
   log "Waiting for the GPU Node to be Ready"
-  retry 120 gpu_node_joined ||
-    die "the GPU Node didn't register with the Lab${GPU_NODE_ERROR:+ ($GPU_NODE_ERROR)}; see 'journalctl -u k3s-agent' on it"
+  retry 120 gpu_node_registered || die "the GPU Node didn't register with the Lab; see 'journalctl -u k3s-agent' on it"
   kc wait --for=condition=Ready nodes -l "$GPU_NODE_LABEL_KEY" --timeout=3m >/dev/null
   log "Waiting for the Platform's DaemonSets to run on it"
   # The DaemonSet controller counts the new node a moment after it's Ready.
@@ -91,7 +91,8 @@ cmd_join() {
   # ArgoCD sees a DaemonSet Healthy again a few seconds after its pods are. Only the
   # Platform's: a GPU Workload's Application is Healthy once its pod runs, in its own time.
   kc -n argocd wait applications -l k3d-lab/group=platform --for=jsonpath='{.status.health.status}'=Healthy --timeout=3m >/dev/null
-  log "The GPU Node is Joined as $GPU_NODE_NAME"
+  node=$(gpu_node_in_lab)
+  log "The GPU Node is Joined as ${node%% *}"
 }
 
 cmd_leave() {
@@ -102,17 +103,14 @@ cmd_leave() {
     *) die "unknown argument '$1'; usage: just gpu leave [purge]" ;;
   esac
   need_env GPU_NODE_IP GPU_NODE_SSH
-  if ! gpu_node_state; then
-    # Deleting by label below takes whatever Node objects there are.
-    warn "$GPU_NODE_ERROR"
-    node="every Node object labelled $GPU_NODE_LABEL_KEY"
-  elif [[ -n $GPU_NODE_NAME ]]; then
-    node="the Node object $GPU_NODE_NAME"
+  if lab_exists; then
+    node=$(gpu_node_in_lab)
+    node=${node%% *}
   fi
 
   if ! gpu_node_reachable; then
     if [[ -n $node ]]; then
-      log "Deleting $node"
+      log "Deleting the GPU Node's Node object, $node"
       kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
       warn "can't reach the GPU Node as $GPU_NODE_SSH: the next 'just gpu join' cleans it up"
     else
@@ -125,48 +123,33 @@ cmd_leave() {
   if [[ -n $node ]]; then
     log "Draining $node"
     kc drain -l "$GPU_NODE_LABEL_KEY" --ignore-daemonsets --delete-emptydir-data --force --timeout=60s >/dev/null 2>&1 ||
-      warn "couldn't drain $node within 60s; its pods are stopped with the agent"
+      warn "$node didn't drain within 60s; its pods are stopped with the agent"
   fi
   # gpu-node.sh fails, listing them, if anything is left that mustn't be.
   run_on_gpu_node "" "$mode" || left=false
   # Only once the agent is stopped, or it would register again.
   if [[ -n $node ]]; then
-    log "Deleting $node"
+    log "Deleting the Node object $node"
     kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
   fi
   [[ $left == true ]] || die "the GPU Node didn't $mode cleanly (above)"
   log "The GPU Node is Left$([[ $mode == purge ]] && echo ", and purged")"
 }
 
-# The Lab's view and the machine's: the GPU Node's agent, when it answers, tells a
-# rebooted GPU Node (Left) from one that's off (Joined, NotReady).
+# The Lab's view and the machine's: a NotReady Node object means the GPU Node is off,
+# unless the machine answers with its agent stopped, as after a reboot.
 cmd_status() {
-  local machine="" line
+  local lab=false node="" machine="" line
   need_env GPU_NODE_IP GPU_NODE_SSH
   if gpu_node_reachable; then
     machine=$(run_on_gpu_node "" status)
   fi
-  gpu_node_state "${machine%%$'\n'*}" || die "$GPU_NODE_ERROR"
+  if lab_exists; then
+    lab=true
+    node=$(gpu_node_in_lab)
+  fi
 
-  case $GPU_NODE_STATE in
-    none) echo "Lab: none" ;;
-    left)
-      if [[ -n $GPU_NODE_NAME ]]; then
-        echo "Lab: the GPU Node's agent is stopped, as after a reboot, so it's Left; its Node object $GPU_NODE_NAME stays until 'just gpu join' or 'just gpu leave'"
-      else
-        echo "Lab: the GPU Node is Left"
-      fi
-      ;;
-    joined)
-      if [[ $GPU_NODE_READY == true ]]; then
-        echo "Lab: the GPU Node is Joined as $GPU_NODE_NAME, Ready"
-      elif [[ -n $machine ]]; then
-        echo "Lab: the GPU Node is Joined as $GPU_NODE_NAME, NotReady, though its agent is running"
-      else
-        echo "Lab: the GPU Node is Joined as $GPU_NODE_NAME, NotReady: it's off"
-      fi
-      ;;
-  esac
+  gpu_node_lab_view "$lab" "$node" "${machine%%$'\n'*}"
   if [[ -n $machine ]]; then
     while read -r line; do echo "GPU Node: $line"; done <<<"$machine"
   else
