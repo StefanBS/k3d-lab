@@ -14,6 +14,11 @@ spec:
     metadata:
       labels: {app: load}
     spec:
+      # Cilium sends a pod's requests to the Gateway's Service to the Envoy on the pod's
+      # own node, and Envoy only listens on the Server (platform/cilium/values.yaml):
+      # from any other node, they time out.
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       # The shell ignores SIGTERM, so deleting the pod would otherwise wait 30s.
       terminationGracePeriodSeconds: 0
       containers:

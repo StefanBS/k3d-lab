@@ -1,0 +1,31 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: hubble-healthy
+spec:
+  description: >-
+    Hubble Relay is up and returns flows from every Ready node, the GPU Node included
+    when Joined. From the Host, Hubble UI answers at https://hubble.lab.localhost with a
+    certificate from the Lab CA.
+  steps:
+    - try:
+        - assert:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: hubble-relay
+                namespace: kube-system
+              status:
+                availableReplicas: 1
+        - script:
+            content: ../lib/hubble-has-flows.sh
+        # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
+        # verify.sh exports LAB_CA_CERT.
+        - script:
+            content: >-
+              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
+              --cacert "$LAB_CA_CERT" -o /dev/null https://hubble.lab.localhost/
+      catch:
+        - script:
+            content: kubectl -n kube-system get pods -l 'k8s-app in (hubble-relay, hubble-ui)' -o wide

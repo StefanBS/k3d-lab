@@ -69,9 +69,10 @@ The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA
 | ArgoCD | https://argocd.lab.localhost |
 | Grafana | https://grafana.lab.localhost |
 | Argo Rollouts | https://rollouts.lab.localhost |
+| Hubble | https://hubble.lab.localhost |
 | ComfyUI (while the GPU Node is Joined) | https://comfyui.lab.localhost |
 
-`just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard has no login at all.
+`just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard and Hubble UI have no login at all.
 
 A component adds its UI with an HTTPRoute for its own `<name>.lab.localhost`, whose `parentRefs` is the `https` listener of the Gateway `lab` in the namespace `gateway`.
 
@@ -134,6 +135,22 @@ A Workload sends its traces over OTLP to `alloy.monitoring.svc`: port 4317 for g
 - **Alloy** receives traces only from the pods on its own node: the Service `alloy` routes each pod to the Alloy there. It tags every span with the `k8s.namespace.name` and `k8s.pod.name` of the pod that sent it, found by the pod's IP, and forwards it to Tempo.
 - **Tempo** (`platform/tempo/`) comes from the `grafana-community` chart. It runs as one process and keeps 7 days of traces on a 5 Gi volume. Its metrics generator turns every trace into a service graph (`traces_service_graph_*`) and span metrics (`traces_spanmetrics_*`, per `service` and `span_name`), which it remote-writes to Prometheus.
 - **Grafana** links a span to its pod's logs in Loki, through those two tags, and to its service's span metrics in Prometheus. Its service graph shows who calls whom.
+
+## Networking
+
+Cilium is the Lab's network, and Hubble shows what travels over it. Hubble is part of Cilium (`platform/cilium/values.yaml`); `platform/hubble/` adds its UI's HTTPRoute and its ServiceMonitor.
+
+- **Hubble UI**, at https://hubble.lab.localhost, shows every namespace's flows live, from Hubble Relay, which gathers them from the cilium-agent on every node, the GPU Node included while it's Joined.
+- **Flow metrics**: every cilium-agent counts the flows it sees, forwarded and dropped, by namespace at both ends, and Alloy scrapes them like any other ServiceMonitor. The dashboard "Hubble network" shows drops by reason and by namespace. DNS and HTTP counts only cover the traffic that a network policy's DNS or HTTP rule sends through Cilium's proxies.
+
+### Network policies
+
+Each Workload's namespace denies all traffic, in and out, except what its own `network-policy.yaml` allows: a `CiliumNetworkPolicy` `default-deny` that allows only DNS, and one per pod for what it needs. The Platform's namespaces have none yet. A denied flow shows in Hubble UI and in `hubble observe --verdict DROPPED` as `Policy denied`.
+
+To find what a Workload needs, watch its flows in Hubble UI before writing the policy, then watch for drops after. Two things that Hubble shows and aren't obvious:
+
+- The Gateway's Envoy has the `ingress` identity, so a Workload allows requests through the Gateway with `fromEntities: [ingress]`.
+- A pod calling a Workload through the Gateway, such as the demo's load generator, needs egress to the Workload's pods, not to the Gateway: Envoy checks the caller's policy against the backend, and answers 403 when it's denied.
 
 ## Progressive delivery
 
@@ -209,9 +226,9 @@ Once, after `just host wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` i
 
 | Command | What it does |
 |---|---|
-| `just gpu join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first, keeping its images unless k3s goes back a version. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`, which every GPU Workload can write to. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. It waits for the Platform to run there, not for GPU Workloads, which start in their own time. |
-| `just gpu leave` | Takes the GPU back: it drains the node, stops the agent and its pods (freeing VRAM), removes Cilium's state from the GPU Node, and deletes the Node object. The install and the route stay, so the next join is quick. If the GPU Node is off, it only deletes the Node object, and the next `just gpu join` cleans the machine up. |
-| `just gpu leave purge` | Also removes k3s, its images, its files and the route. Only the `k3dlab` user, its key and the model directory stay. |
+| `just gpu join [eviction=20Gi]` | Lends the GPU Node to the Lab. If k3s is already installed for this Lab, it only starts the agent. If the install is from an earlier Lab, it cleans that up first, keeping its images unless k3s goes back a version. It also sets the route to the Lab's subnet through `HOST_LAN_IP`, a firewalld zone that lets Cilium's proxies work there, absolute eviction thresholds (`eviction=`), and the model directory `/var/lib/k3d-lab/models`, which every GPU Workload can write to. It reports whether GPU Workloads need `supplementalGroups` for the GPU's devices. It waits for the Platform to run there, not for GPU Workloads, which start in their own time. |
+| `just gpu leave` | Takes the GPU back: it drains the node, stops the agent and its pods (freeing VRAM), removes Cilium's state from the GPU Node, and deletes the Node object. The install, the route and the firewalld zone stay, so the next join is quick. If the GPU Node is off, it only deletes the Node object, and the next `just gpu join` cleans the machine up. |
+| `just gpu leave purge` | Also removes k3s, its images, its files, the route and the firewalld zone. Only the `k3dlab` user, its key and the model directory stay. |
 | `just gpu status` | Shows the GPU Node's state in the Lab and on the machine, with anything left behind. |
 
 The agent is never enabled at boot. After any reboot the GPU Node is Left, and the GPU is entirely yours until the next `just gpu join`. While it's Joined but powered off, `just verify` WARNs about it and skips its checks. The Platform's DaemonSets stop counting it while it's off, so every Application stays Healthy.

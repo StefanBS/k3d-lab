@@ -18,12 +18,38 @@ cgroup:
   autoMount:
     enabled: false
   hostRoot: /sys/fs/cgroup
-# Hubble's certificates come from a Job in the Lab, not from Helm: Helm generates new
-# ones on every render, so ArgoCD would find Cilium out of sync forever.
 hubble:
+  # Hubble's certificates come from a Job in the Lab, not from Helm: Helm generates new
+  # ones on every render, so ArgoCD would find Cilium out of sync forever.
   tls:
     auto:
       method: cronJob
+  # The relay gathers the flows every node's agent sees, for the UI. The UI has no
+  # login, like the Rollouts dashboard: its HTTPRoute for https://hubble.lab.localhost
+  # is in platform/hubble.
+  relay:
+    enabled: true
+    resources:
+      requests: {cpu: 5m, memory: 32Mi}
+  ui:
+    enabled: true
+    frontend:
+      resources:
+        requests: {cpu: 5m, memory: 16Mi}
+    backend:
+      resources:
+        requests: {cpu: 5m, memory: 32Mi}
+  # Each agent serves metrics of the flows it sees, labelled with the namespaces at
+  # both ends. http only counts flows that pass through Cilium's L7 proxy, which only
+  # an L7 rule in a network policy sends them through. Alloy scrapes them through the
+  # ServiceMonitor in platform/hubble, not the chart's: `just up` installs Cilium
+  # before the ServiceMonitor CRD exists.
+  metrics:
+    enabled:
+      - dns:labelsContext=source_namespace,destination_namespace
+      - drop:labelsContext=source_namespace,destination_namespace
+      - flow:labelsContext=source_namespace,destination_namespace
+      - httpV2:labelsContext=source_namespace,destination_namespace
 # The Lab's Gateway (platform/gateway), whose CRDs `just up` applies before Cilium.
 # Envoy listens on the Server's own network, which k3d publishes on the Host: there's no
 # LoadBalancer. Only the Server listens, so a Joined GPU Node never opens ports 80 and

@@ -1,0 +1,49 @@
+# Every pod here may only send or receive what a policy below allows. The pod runs on
+# the GPU Node, across the routed Docker bridge (ADR 0002); Cilium enforces this there
+# as on the k3d Nodes. The kubelet's probes need no rule: Cilium always lets a node
+# reach its own pods.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  endpointSelector: {}
+  enableDefaultDeny: {ingress: true, egress: true}
+  # Name lookups, through Cilium's DNS proxy, so Hubble sees each query, and so the
+  # FQDN rules below know which addresses each name had.
+  egress:
+    - toEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: kube-system, k8s-app: kube-dns}
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+          rules:
+            dns: [{matchPattern: "*"}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: comfyui
+spec:
+  endpointSelector:
+    matchLabels: {app: comfyui}
+  ingress:
+    # The Gateway, whose Envoy has the ingress identity, from the Server across the
+    # tunnel.
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8188", protocol: TCP}]
+  # What the weights and setup steps download, only when the GPU Node doesn't have it
+  # yet (ADR 0007): the weights from Hugging Face, which redirects to its CDN, ComfyUI
+  # from GitHub, which redirects to codeload, and its packages from PyPI. ComfyUI
+  # itself reaches nothing.
+  egress:
+    - toFQDNs:
+        - matchName: huggingface.co
+        - matchPattern: "**.huggingface.co"
+        - matchPattern: "**.hf.co"
+        - matchName: github.com
+        - matchName: codeload.github.com
+        - matchName: pypi.org
+        - matchName: files.pythonhosted.org
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

@@ -9,8 +9,9 @@ set -euo pipefail
 # shellcheck source=checks.sh
 source "$(dirname "$0")/checks.sh"
 
-# The jobs Alloy scrapes on each node (platform/alloy/values.yaml).
-node_jobs=(kubelet cadvisor node-exporter)
+# The jobs Alloy scrapes on each node (platform/alloy/values.yaml), Hubble's flow
+# metrics among them (platform/hubble).
+node_jobs=(kubelet cadvisor node-exporter hubble-metrics)
 
 # Prints "<node>: <job>" for each node's target that isn't up yet, and
 # kube-state-metrics if it isn't.

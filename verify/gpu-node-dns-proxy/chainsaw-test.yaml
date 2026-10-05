@@ -1,0 +1,50 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: gpu-node-dns-proxy
+  # Runs only while the GPU Node is Joined and Ready (scripts/verify.sh).
+  labels:
+    k3d-lab/gpu: amd
+spec:
+  description: >-
+    Cilium's proxies work on the GPU Node: a pod there, under comfyui's network
+    policies, resolves names through Cilium's DNS proxy. firewalld on the GPU Node
+    drops what Cilium redirects to its proxies unless join's k3d-lab zone lets it
+    through (ADR 0002). ComfyUI itself only looks names up when it installs, so its
+    own check can't tell.
+  steps:
+    - try:
+        # In comfyui, so its default-deny policy, whose DNS rule goes through the
+        # proxy, applies. Chainsaw deletes it afterwards.
+        - apply:
+            resource:
+              apiVersion: v1
+              kind: Pod
+              metadata:
+                name: gpu-dns-probe
+                namespace: comfyui
+                labels: {app: gpu-dns-probe}
+              spec:
+                nodeSelector: {k3d-lab/gpu: amd}
+                tolerations:
+                  - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+                # `sleep infinity` ignores SIGTERM, so deleting the pod would otherwise wait 30s.
+                terminationGracePeriodSeconds: 0
+                containers:
+                  - name: client
+                    image: busybox:1.38
+                    command: [sleep, infinity]
+                    resources:
+                      requests: {cpu: 5m, memory: 8Mi}
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Pod
+              metadata:
+                name: gpu-dns-probe
+                namespace: comfyui
+              (status.conditions[?type == 'Ready'] | [0].status): 'True'
+        - script:
+            content: >-
+              kubectl -n comfyui exec gpu-dns-probe --
+              nslookup -timeout=5 kubernetes.default.svc.cluster.local

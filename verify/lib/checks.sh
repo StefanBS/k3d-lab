@@ -87,3 +87,14 @@ eventually() {
   done
   ((${#missing[@]} == 0))
 }
+
+# Usage: hubble_observe <hubble observe args>...
+# Runs `hubble observe` against Hubble Relay, which gathers every node's flows. The relay
+# has no hubble CLI, so it's asked from a cilium-agent, which has one. The agent runs on
+# the host network, where cluster DNS doesn't resolve, so the relay is reached at its
+# ClusterIP.
+hubble_observe() {
+  local relay
+  relay=$(kubectl -n kube-system get service hubble-relay -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}')
+  kubectl -n kube-system exec ds/cilium -c cilium-agent -- hubble observe --server "$relay" "$@"
+}
