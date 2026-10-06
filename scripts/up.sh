@@ -144,10 +144,13 @@ spec:
       selfHeal: true
 EOF
 
-# The root Application is Healthy once both ApplicationSets have generated their
-# Applications, so from then on every Application exists to be waited for.
+# The root Application is Healthy as soon as it has created both ApplicationSets, which
+# may not have generated their Applications yet. Once each says ResourcesUpToDate,
+# every Application exists to be waited for: `wait --all` waits only for those it
+# finds when it starts.
 log "Waiting for ArgoCD to sync the Lab"
 kc -n argocd wait application/root --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
+kc -n argocd wait applicationsets --all --for=condition=ResourcesUpToDate --timeout=5m >/dev/null
 kc -n argocd wait applications --all --for=jsonpath='{.status.sync.status}'=Synced --timeout=15m >/dev/null
 kc -n argocd wait applications --all --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
 

@@ -36,8 +36,11 @@ spec:
               status:
                 operationState:
                   phase: Failed
-                  (length(syncResult.resources[?kind == 'ClusterRole' && contains(message, 'not permitted in project workloads')])): 1
-                  (length(syncResult.resources[?kind == 'ConfigMap' && contains(message, 'namespace monitoring is not permitted')])): 1
+                  # Nested, as a running sync has no syncResult yet: length() of a
+                  # missing field is an error, which ends the assert at once.
+                  syncResult:
+                    (length(resources[?kind == 'ClusterRole' && contains(message, 'not permitted in project workloads')])): 1
+                    (length(resources[?kind == 'ConfigMap' && contains(message, 'namespace monitoring is not permitted')])): 1
         # ArgoCD doesn't sync an Application whose spec its project refuses.
         - assert:
             resource:
