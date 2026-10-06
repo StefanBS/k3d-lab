@@ -151,7 +151,10 @@ EOF
 log "Waiting for ArgoCD to sync the Lab"
 mapfile -t appsets < <(helm template gitops "$LAB_ROOT/gitops" --show-only templates/applicationsets.yaml |
   yq -N 'select(.kind == "ApplicationSet") | "applicationset/" + .metadata.name')
-kc -n argocd wait "${appsets[@]}" --for=create --timeout=5m >/dev/null
+# One at a time: given several, --for=create fails at once on any that don't exist yet.
+for appset in "${appsets[@]}"; do
+  kc -n argocd wait "$appset" --for=create --timeout=5m >/dev/null
+done
 kc -n argocd wait "${appsets[@]}" --for=condition=ResourcesUpToDate --timeout=5m >/dev/null
 kc -n argocd wait application/root --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
 kc -n argocd wait applications --all --for=jsonpath='{.status.sync.status}'=Synced --timeout=15m >/dev/null
