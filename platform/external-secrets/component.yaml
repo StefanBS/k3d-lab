@@ -1,5 +1,5 @@
 # Where this Platform component's chart comes from.
 chart: external-secrets
 repoURL: https://charts.external-secrets.io
-version: 2.11.0
+version: 2.12.0
 namespace: external-secrets
