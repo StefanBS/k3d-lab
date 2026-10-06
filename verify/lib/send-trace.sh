@@ -32,5 +32,12 @@ body="{\"resourceSpans\": [
 $(resource_spans "$namespace-client" "$client_span" "" 3),
 $(resource_spans "$namespace-web" "$web_span" "$client_span" 2)
 ]}"
-wget -qO- -T 5 --header 'Content-Type: application/json' --post-data "$body" \
-  http://alloy.monitoring.svc:4318/v1/traces
+# Right after `just up`, with every check starting at once, Alloy can take more than 5s
+# to answer, so it gets 3 tries. A try that timed out may still have arrived, and
+# Tempo keeps both copies: tempo-has-traces.sh allows for that.
+for attempt in 1 2 3; do
+  wget -qO- -T 5 --header 'Content-Type: application/json' --post-data "$body" \
+    http://alloy.monitoring.svc:4318/v1/traces && exit 0
+  [ "$attempt" = 3 ] || sleep 2
+done
+exit 1

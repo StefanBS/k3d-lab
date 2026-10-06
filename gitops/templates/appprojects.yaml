@@ -1,0 +1,82 @@
+{{- /*
+The ArgoCD projects the Lab's Applications run in: one per ApplicationSet. `just up`
+applies this file before the root Application, which runs in `platform`, and ArgoCD
+takes the projects over from there.
+Projects come first in a sync, so the Applications that name them find them.
+*/}}
+{{- /* Where no Workload goes: the Platform's namespaces and Kubernetes' own. */}}
+{{- $refused := concat .Values.platformNamespaces (list "default" "kube-*") }}
+# The Platform installs anything, anywhere: CRDs, webhooks, RBAC, and its own
+# namespaces.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: The Platform, and the root Application that installs it
+  sourceRepos:
+    - '*'
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+# A Workload only creates namespaced resources, in any namespace but the Platform's
+# and Kubernetes' own. A destination is allowed when an allow rule matches it and no
+# `!` rule does.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: workloads
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Workloads, confined to namespaced resources outside the Platform's namespaces
+  sourceRepos:
+    - '*'
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: '*'
+    {{- range $refused }}
+    - server: https://kubernetes.default.svc
+      namespace: '!{{ . }}'
+    {{- end }}
+  # The one cluster-scoped kind: ArgoCD checks the namespace that CreateNamespace makes
+  # against the project, like any other resource. It can't be narrowed to the
+  # Workload's own namespace, but the Platform's and Kubernetes' are refused.
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  clusterResourceBlacklist:
+    {{- range $refused }}
+    - group: ''
+      kind: Namespace
+      name: '{{ . }}'
+    {{- end }}
+---
+# ArgoCD's own catch-all, locked as ArgoCD recommends: an Application that lands in it
+# by mistake fails rather than getting every permission. ArgoCD creates it at start;
+# this replaces its spec.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  sourceRepos: []
+  sourceNamespaces: []
+  destinations: []
+  # ArgoCD creates it allowing every cluster-scoped kind; an apply only clears that
+  # when it says so.
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: '*'
+      kind: '*'

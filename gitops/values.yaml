@@ -2,3 +2,16 @@
 # Platform and Workloads from the same Git revision as this chart.
 repoURL: https://github.com/StefanBS/k3d-lab.git
 revision: main
+# The namespaces the Platform installs into, which no Workload may deploy into or
+# create. This chart can't read platform/*/component.yaml, so lint checks that every
+# Platform component's namespace is here, and that no Workload's is.
+platformNamespaces:
+  - amd-gpu
+  - argo-rollouts
+  - argocd
+  - cert-manager
+  - cilium-secrets
+  - external-secrets
+  - gateway
+  - kube-system
+  - monitoring

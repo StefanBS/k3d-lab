@@ -4,11 +4,13 @@ metadata:
   name: applications-synced-and-healthy
 spec:
   description: >-
-    Every ArgoCD Application is Synced and Healthy. The root Application is among them,
-    and it isn't Healthy while an ApplicationSet fails to generate its Applications.
+    Every ArgoCD Application is Synced and Healthy, and none is in the default project.
+    The root Application is among them, and it isn't Healthy while an ApplicationSet
+    fails to generate its Applications. The Applications that other checks create,
+    labelled k3d-lab/verify, are left out.
   steps:
     - try:
-        # The error below passes when there are no Applications at all.
+        # The errors below pass when there are no Applications at all.
         - assert:
             resource:
               apiVersion: argoproj.io/v1alpha1
@@ -22,9 +24,16 @@ spec:
               kind: Application
               metadata:
                 namespace: argocd
-              (status.sync.status != 'Synced' || status.health.status != 'Healthy'): true
+              (metadata.labels."k3d-lab/verify" == null && (status.sync.status != 'Synced' || status.health.status != 'Healthy')): true
+        - error:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Application
+              metadata:
+                namespace: argocd
+              (metadata.labels."k3d-lab/verify" == null && spec.project == 'default'): true
       catch:
         - script:
             content: >-
               kubectl -n argocd get applications
-              -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+              -o custom-columns=NAME:.metadata.name,PROJECT:.spec.project,SYNC:.status.sync.status,HEALTH:.status.health.status

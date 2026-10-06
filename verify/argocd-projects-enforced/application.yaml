@@ -1,0 +1,25 @@
+# An Application in project $project that asks ArgoCD to sync forbidden/, which
+# argocd-projects-enforced applies once per project. Labelled, so
+# applications-synced-and-healthy leaves it out. No finalizer: a refused sync creates
+# nothing, and one would hold up Chainsaw's cleanup while a sync runs.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: (join('-', ['argocd-projects-enforced', $project]))
+  namespace: argocd
+  labels:
+    k3d-lab/verify: argocd-projects-enforced
+spec:
+  project: ($project)
+  source:
+    repoURL: ($root.spec.source.repoURL)
+    targetRevision: ($root.spec.source.targetRevision)
+    path: verify/argocd-projects-enforced/forbidden
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ($namespace)
+  syncPolicy:
+    automated: {}
+    # No retries, so the sync fails at once: without retry, ArgoCD retries an
+    # automated sync 5 times, for minutes.
+    retry: {}

@@ -13,11 +13,12 @@ source "$(dirname "$0")/checks.sh"
 namespace=$1
 
 # Usage: pod_tags <trace ID>
-# Prints "<namespace> <pod>" for each service in the trace, as Alloy tagged it. Tempo's
-# chart names its HTTP API port tempo-prom-metrics.
+# Prints "<service> <namespace> <pod>" for each span in the trace, as Alloy tagged it.
+# Tempo's chart names its HTTP API port tempo-prom-metrics.
 pod_tags() {
   monitoring_get tempo:tempo-prom-metrics "api/v2/traces/$1" |
     yq -p json '.trace.resourceSpans[].resource.attributes |
+      (.[] | select(.key == "service.name") | .value.stringValue) + " " +
       (.[] | select(.key == "k8s.namespace.name") | .value.stringValue) + " " +
       (.[] | select(.key == "k8s.pod.name") | .value.stringValue)'
 }
@@ -30,8 +31,10 @@ missing_traces() {
     trace=$(printf '%s/%s' "$namespace" "$node" | md5sum | cut -c1-32)
     pod=$(node_pod "$namespace" app=client "$node" 2>/dev/null) || pod=""
     found=$(pod_tags "$trace" 2>&1) || found=""
-    # Both services' spans came from that pod.
-    [[ -n $pod && $(grep -cxF "$namespace $pod" <<<"$found") == 2 ]] || echo "$node"
+    # Both services' spans came from that pod. send-trace.sh may have sent them twice.
+    [[ -n $pod ]] &&
+      grep -qxF "$namespace-client $namespace $pod" <<<"$found" &&
+      grep -qxF "$namespace-web $namespace $pod" <<<"$found" || echo "$node"
   done
 }
 

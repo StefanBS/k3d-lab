@@ -1,0 +1,59 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: argocd-projects-enforced
+spec:
+  description: >-
+    ArgoCD's projects confine what lands in them (gitops/templates/appprojects.yaml).
+    An Application in the workloads project fails to sync a ClusterRole and a ConfigMap
+    in the Platform's namespace monitoring, each refused by the project. One in the
+    default project is refused outright, so ArgoCD never syncs it.
+  bindings:
+    # ArgoCD reads forbidden/ from the Git revision the Lab tracks, like everything else.
+    - name: root
+      value: (x_k8s_get($client, 'argoproj.io/v1alpha1', 'Application', 'argocd', 'root'))
+  steps:
+    - try:
+        - apply:
+            file: application.yaml
+            template: true
+            bindings:
+              - name: project
+                value: workloads
+        - apply:
+            file: application.yaml
+            template: true
+            bindings:
+              - name: project
+                value: default
+        - assert:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Application
+              metadata:
+                name: argocd-projects-enforced-workloads
+                namespace: argocd
+              status:
+                operationState:
+                  phase: Failed
+                  # Nested, as a running sync has no syncResult yet: length() of a
+                  # missing field is an error, which ends the assert at once.
+                  syncResult:
+                    (length(resources[?kind == 'ClusterRole' && contains(message, 'not permitted in project workloads')])): 1
+                    (length(resources[?kind == 'ConfigMap' && contains(message, 'namespace monitoring is not permitted')])): 1
+        # ArgoCD doesn't sync an Application whose spec its project refuses.
+        - assert:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Application
+              metadata:
+                name: argocd-projects-enforced-default
+                namespace: argocd
+              status:
+                (length(conditions[?type == 'InvalidSpecError' && contains(message, `"project 'default'"`)]) > `0`): true
+                (operationState == null): true
+      catch:
+        - script:
+            content: >-
+              kubectl -n argocd get applications -l k3d-lab/verify=argocd-projects-enforced
+              -o yaml | yq '.items[] | {.metadata.name: .status | pick(["conditions", "operationState"])}'

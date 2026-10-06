@@ -4,32 +4,19 @@ metadata:
   name: network-policy-enforced
 spec:
   description: >-
-    Each Workload namespace denies what its network policies don't allow, both ways: a
-    probe pod in rollouts-demo and one in comfyui can't reach a pod in another
-    namespace, and a pod in another namespace can't reach podinfo directly. Hubble
-    records each attempt as DROPPED by policy. What the policies allow is covered by
+    Each Workload namespace, found by its label k3d-lab/group=workloads, denies what its
+    network policies don't allow, both ways: a probe pod in each can't reach a pod in
+    another namespace, and a pod in another namespace can't reach podinfo directly.
+    Hubble records each attempt as DROPPED by policy. What the policies allow is covered by
     demo-rollout-healthy, gpu-node-dns-proxy and comfyui.
   steps:
     - use:
         template: ../lib/deploy-probes.yaml
     - try:
-        # Into the Workloads' namespaces, so their policies apply to them. Chainsaw
-        # deletes them afterwards. They don't match any Workload's labels, so its
-        # Services and policies' allows don't pick them up.
-        - apply:
-            file: ../lib/workload-probes.yaml
-            template: true
-            bindings:
-              - name: workload_namespace
-                value: rollouts-demo
-        - apply:
-            file: ../lib/workload-probes.yaml
-            template: true
-            bindings:
-              - name: workload_namespace
-                value: comfyui
         - script:
             content: ../lib/policy-denies.sh "$NAMESPACE"
       catch:
         - script:
-            content: kubectl get ciliumnetworkpolicies -n rollouts-demo; kubectl get ciliumnetworkpolicies -n comfyui
+            content: >-
+              for ns in $(kubectl get ns -l k3d-lab/group=workloads -o name); do
+              kubectl get ciliumnetworkpolicies -n "${ns#namespace/}"; done

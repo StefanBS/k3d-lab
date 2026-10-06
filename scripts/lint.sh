@@ -11,7 +11,10 @@ k8s_version=$(yq '.image' k3d/cluster.yaml | sed -n 's/.*:v\([0-9.]*\)-k3s.*/\1/
 
 # Where each render goes. kubeconform only reads files named .yaml or .json.
 manifests=$(mktemp --suffix=.yaml)
-trap 'rm -f "$manifests"' EXIT
+# A chart with a template per group: a component's Application, as its ApplicationSet
+# generates it (render_application).
+application_chart=$(mktemp -d)
+trap 'rm -rf "$manifests" "$application_chart"' EXIT
 
 # The ApplicationSets template these fields into each component's Application.
 lint_component_folder() {
@@ -25,6 +28,39 @@ lint_component_folder() {
     yq -e ".$key" "$dir/component.yaml" >/dev/null 2>&1 || fail "$dir/component.yaml: '$key' is missing"
   done
   [[ -f $dir/$file ]] || fail "$dir/$file is missing"
+  # Optional, and only a Workload's: the workloads ApplicationSet labels its namespace.
+  if [[ $(yq 'has("isolation")' "$dir/component.yaml") == true ]]; then
+    if [[ $dir != workloads/* ]]; then
+      fail "$dir/component.yaml: only a Workload sets 'isolation'"
+    elif [[ $(yq '.isolation' "$dir/component.yaml") != strict ]]; then
+      fail "$dir/component.yaml: 'isolation' can only be 'strict'"
+    fi
+  fi
+}
+
+# The gitops chart can't read component.yaml, so it lists the Platform's namespaces
+# itself, for the workloads project to refuse. Checks it lists exactly those: each
+# Platform component's own, and any other its render creates or installs into, such as
+# Cilium's cilium-secrets (rendered_namespaces).
+lint_platform_namespaces() {
+  local dir listed actual
+  listed=$(yq '.platformNamespaces[]' gitops/values.yaml | sort)
+  for dir in "${components[@]}"; do
+    if [[ $dir == workloads/* ]] && grep -qxF "$(component_namespace "$dir")" <<<"$listed"; then
+      fail "$dir's namespace is one of the Platform's (gitops/values.yaml)"
+    fi
+  done
+  actual=$({
+    for dir in "${components[@]}"; do
+      if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
+    done
+    printf '%s' "$platform_rendered_namespaces"
+  } | grep . | sort -u)
+  if [[ $listed == "$actual" ]]; then
+    ok "gitops/values.yaml lists the Platform's namespaces"
+  else
+    fail "gitops/values.yaml's platformNamespaces aren't the Platform's namespaces:"$'\n'"$(diff <(echo "$listed") <(echo "$actual"))"
+  fi
 }
 
 # Renders a component into $manifests the way ArgoCD does: its pinned chart and values,
@@ -39,6 +75,49 @@ render_component() {
   helm template "${1##*/}" "${args[@]}" --include-crds --kube-version "$k8s_version" >"$manifests"
 }
 
+# The namespaces the render in $manifests creates, or names for a resource. One that
+# names none is installed into its component's namespace.
+rendered_namespaces() {
+  yq -N 'select(.kind == "Namespace") | .metadata.name, (select(.kind != "Namespace") | .metadata.namespace // "")' \
+    "$manifests" | grep . || true
+}
+
+# Renders a component's Application into $manifests the way its ApplicationSet does:
+# its template, then its templatePatch over it, each through Go templates with the
+# component.yaml's keys as `.`. Helm runs the templates, with the same Sprig functions
+# as ArgoCD. The patch is merged plainly, map into map, which is all it relies on.
+# Helm renders a key that component.yaml lacks as empty, where ArgoCD's missingkey=error
+# fails, so an optional key read without hasKey isn't caught here.
+render_application() {
+  # The chart's values: component.yaml's keys, and what the git generator adds to them.
+  P=$1 B=${1##*/} yq '. + {"path": {"path": strenv(P), "basename": strenv(B)}}' \
+    "$1/component.yaml" >"$application_chart/values.yaml"
+  # shellcheck disable=SC2016 # $doc is yq's, not the shell's.
+  helm template application "$application_chart" --show-only "templates/${1%%/*}.yaml" |
+    yq ea '. as $doc ireduce ({}; . * $doc)' >"$manifests"
+}
+
+# The chart render_application renders, written once: the ApplicationSets don't change
+# between components.
+write_application_chart() {
+  local group appsets appset
+  printf 'apiVersion: v2\nname: application\nversion: 0.1.0\n' >"$application_chart/Chart.yaml"
+  mkdir "$application_chart/templates"
+  appsets=$(helm template gitops gitops --show-only templates/applicationsets.yaml)
+  for group in $(yq -N '.metadata.name' <<<"$appsets"); do
+    appset=$(GROUP=$group yq 'select(.metadata.name == strenv(GROUP)) | .spec' <<<"$appsets")
+    {
+      echo '{{- with .Values }}'
+      echo 'apiVersion: argoproj.io/v1alpha1'
+      echo 'kind: Application'
+      yq '.template' <<<"$appset"
+      echo '---'
+      yq '.templatePatch' <<<"$appset"
+      echo '{{- end }}'
+    } >"$application_chart/templates/$group.yaml"
+  done
+}
+
 # Renders what the root Application syncs into $manifests.
 render_gitops() {
   helm template gitops gitops --kube-version "$k8s_version" >"$manifests"
@@ -46,7 +125,8 @@ render_gitops() {
 
 # The probes that verify's checks deploy are plain manifests: nothing to render.
 render_probes() {
-  cat verify/lib/probes.yaml <(echo ---) verify/lib/gpu-probes.yaml >"$manifests"
+  cat verify/lib/probes.yaml <(echo ---) verify/lib/gpu-probes.yaml \
+    <(echo ---) verify/lib/workload-probes.yaml >"$manifests"
 }
 
 # Schemas are cached between runs: the CRDs catalog is pinned, so they never change
@@ -111,10 +191,18 @@ mapfile -t components < <(component_dirs)
 # Each folder's name is its Application's name, and those share one namespace.
 duplicates=$(printf '%s\n' "${components[@]##*/}" | sort | uniq -d)
 [[ -z $duplicates ]] || fail "component names used twice: $(paste -sd' ' <<<"$duplicates")"
+write_application_chart
+# What the Platform's renders create or install into, for lint_platform_namespaces.
+platform_rendered_namespaces=
 for dir in "${components[@]}"; do
   lint_component_folder "$dir"
   lint_rendering "$dir" render_component "$dir"
+  if [[ $dir == platform/* ]]; then
+    platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
+  fi
+  lint_rendering "$dir's Application" render_application "$dir"
 done
+lint_platform_namespaces
 lint_rendering gitops render_gitops
 
 # Every fact the scripts read from the Platform's values, so a renamed value fails
