@@ -1,7 +1,8 @@
 # A UI is served through the Lab's one Gateway: an HTTPRoute attaches to the https
 # listener of the Gateway lab in the namespace gateway, for a name under lab.localhost,
-# the only names the Lab CA signs and the Host resolves. The Gateway's own namespace is
-# left out, as its plain-HTTP redirect is the one route on the http listener.
+# the only names the Lab CA signs and the Host resolves. The one exception is the
+# Gateway's own plain-HTTP redirect: a route in the namespace gateway on its http
+# listener, for every name.
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:
@@ -17,24 +18,28 @@ spec:
         apiVersions: ["*"]
         operations: [CREATE, UPDATE]
         resources: [httproutes]
-    namespaceSelector:
-      matchExpressions:
-        - key: kubernetes.io/metadata.name
-          operator: NotIn
-          values: [gateway]
+  variables:
+    # Each parentRef's listener of the Gateway lab, or '' for any other parent.
+    - name: listeners
+      expression: >-
+        has(object.spec.parentRefs) ? object.spec.parentRefs.map(p,
+        ((!has(p.group) || p.group == 'gateway.networking.k8s.io') &&
+        (!has(p.kind) || p.kind == 'Gateway') && p.name == 'lab' &&
+        (has(p.namespace) ? p.namespace : object.metadata.namespace) == 'gateway' &&
+        has(p.sectionName)) ? p.sectionName : '') : []
+    - name: isRedirect
+      expression: >-
+        object.metadata.namespace == 'gateway' && size(variables.listeners) > 0 &&
+        variables.listeners.all(l, l == 'http')
   validations:
     - expression: >-
-        has(object.spec.parentRefs) && size(object.spec.parentRefs) > 0 &&
-        object.spec.parentRefs.all(p,
-        (!has(p.group) || p.group == 'gateway.networking.k8s.io') &&
-        (!has(p.kind) || p.kind == 'Gateway') &&
-        p.name == 'lab' &&
-        has(p.namespace) && p.namespace == 'gateway' &&
-        has(p.sectionName) && p.sectionName == 'https')
+        variables.isRedirect ||
+        (size(variables.listeners) > 0 && variables.listeners.all(l, l == 'https'))
       message: >-
         parentRefs must be the https listener of the Gateway lab in the namespace gateway:
         {name: lab, namespace: gateway, sectionName: https}
     - expression: >-
-        has(object.spec.hostnames) && size(object.spec.hostnames) > 0 &&
-        object.spec.hostnames.all(h, h.endsWith('.lab.localhost'))
+        variables.isRedirect ||
+        (has(object.spec.hostnames) && size(object.spec.hostnames) > 0 &&
+        object.spec.hostnames.all(h, h.endsWith('.lab.localhost')))
       message: hostnames must be set, and each under lab.localhost

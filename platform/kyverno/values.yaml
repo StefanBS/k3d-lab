@@ -16,6 +16,7 @@ config:
 # mutates existing objects or cleans up.
 admissionController:
   container:
+    # Modest requests for a Host short on RAM.
     resources:
       requests: {cpu: 25m, memory: 128Mi}
   # Alloy scrapes these ServiceMonitors (platform/alloy/values.yaml): the results of
@@ -31,6 +32,7 @@ reportsController:
       extraResources:
         - apiGroups: [gateway.networking.k8s.io]
           resources: [httproutes]
+  # Modest requests for a Host short on RAM.
   resources:
     requests: {cpu: 10m, memory: 64Mi}
   serviceMonitor:

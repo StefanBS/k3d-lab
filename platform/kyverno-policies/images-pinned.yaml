@@ -1,7 +1,8 @@
-# Every container's image, init and ephemeral containers included, has a tag other than
-# latest, or a digest, so what runs only changes through Git (and Renovate). Checked on
-# each pod, as admitted: after Kustomize's images overrides, which set many of the
-# Lab's tags.
+# Every container's image, init containers included, has a tag other than latest, or a
+# digest, so what runs only changes through Git (and Renovate). Checked on each pod, as
+# admitted: after Kustomize's images overrides, which set many of the Lab's tags. Kyverno
+# also checks each pod controller's template (autogen). Ephemeral containers, added
+# through their own subresource, are only caught by the background scan.
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:
