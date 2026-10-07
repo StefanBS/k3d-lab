@@ -88,13 +88,32 @@ rendered_namespaces() {
 # as ArgoCD. The patch is merged plainly, map into map, which is all it relies on.
 # Helm renders a key that component.yaml lacks as empty, where ArgoCD's missingkey=error
 # fails, so an optional key read without hasKey isn't caught here.
+# Usage: render_application <component folder> [<yq expression>]
+# The expression, if given, changes component.yaml's keys first.
 render_application() {
   # The chart's values: component.yaml's keys, and what the git generator adds to them.
-  P=$1 B=${1##*/} yq '. + {"path": {"path": strenv(P), "basename": strenv(B)}}' \
+  P=$1 B=${1##*/} yq "${2:-.} | . + {\"path\": {\"path\": strenv(P), \"basename\": strenv(B)}}" \
     "$1/component.yaml" >"$application_chart/values.yaml"
   # shellcheck disable=SC2016 # $doc is yq's, not the shell's.
   helm template application "$application_chart" --show-only "templates/${1%%/*}.yaml" |
     yq ea '. as $doc ireduce ({}; . * $doc)' >"$manifests"
+}
+
+# A Workload's Application gets the baseline's same-namespace allow as a source, unless
+# it's `isolation: strict`. No Workload is yet, so one is rendered as if it were.
+lint_same_namespace_source() {
+  local dir=$1 source='.spec.sources[] | select(.path == "platform/workload-network-policy/same-namespace")'
+  render_application "$dir"
+  if [[ -z $(yq "$source" "$manifests") ]]; then
+    fail "$dir's Application doesn't get the same-namespace allow"
+    return
+  fi
+  render_application "$dir" '.isolation = "strict"'
+  if [[ -n $(yq "$source" "$manifests") ]]; then
+    fail "$dir's Application gets the same-namespace allow even when it's isolation: strict"
+    return
+  fi
+  ok "a Workload's Application gets the same-namespace allow, unless it's isolation: strict"
 }
 
 # The chart render_application renders, written once: the ApplicationSets don't change
@@ -126,7 +145,7 @@ render_gitops() {
 # The probes that verify's checks deploy are plain manifests: nothing to render.
 render_probes() {
   local file
-  for file in verify/lib/{probes,gpu-probes,workload-probes,baseline-workload,baseline-exposed,baseline-own-policy}.yaml; do
+  for file in verify/lib/{probes,gpu-probes,workload-probes,baseline-workload,baseline-exposed,baseline-apiserver-allow}.yaml; do
     cat "$file"
     echo ---
   done >"$manifests"
@@ -213,6 +232,7 @@ for dir in "${components[@]}"; do
 done
 lint_platform_namespaces
 lint_rendering "the same-namespace allow" render_same_namespace_allow
+lint_same_namespace_source workloads/rollouts-demo
 lint_rendering gitops render_gitops
 
 # Every fact the scripts read from the Platform's values, so a renamed value fails

@@ -152,8 +152,8 @@ Cilium is the Lab's network, and Hubble shows what travels over it. Hubble is pa
 Each Workload's namespace denies all traffic, in and out, except what a policy allows. The Platform writes most of that policy, in three tiers (ADR 0008):
 
 - **The guardrails** (`platform/workload-network-policy/guardrails.yaml`): no Workload reaches the kube-apiserver or the cloud metadata address, whatever its own policy allows.
-- **The baseline**, which every Workload gets without writing anything: DNS, through Cilium's DNS proxy; the Gateway to any port named `http`; Alloy to any port named `metrics`; and every pod in the namespace to every other. The first three are cluster-wide policies in `platform/workload-network-policy/`, for every namespace labelled `k3d-lab/group: workloads`. The same-namespace allow is a `CiliumNetworkPolicy` named `same-namespace`, which the `workloads` ApplicationSet adds to the Workload's own namespace.
-- **The Workload's own** `network-policy.yaml`, only for what's its business: egress to the internet by FQDN, calls to another namespace, and L7 rules.
+- **The baseline**, which every Workload gets without writing anything: DNS, through Cilium's DNS proxy; the Gateway to any port named `http`; Alloy to any port named `metrics`; and every pod in the namespace to every other. All but the last are cluster-wide policies in `platform/workload-network-policy/`, for every namespace labelled `k3d-lab/group: workloads`. The same-namespace allow is a `CiliumNetworkPolicy` named `same-namespace`, which the `workloads` ApplicationSet adds to the Workload's own namespace.
+- **The Workload policy**, its own `network-policy.yaml`, only for what's its business: egress to the internet by FQDN, calls to another namespace, and L7 rules.
 
 So a new Workload that names its ports `http` and `metrics` writes no policy until it calls the internet or another namespace. Naming the ports doesn't expose anything by itself: the Gateway only reaches a pod through an HTTPRoute, and Alloy through a PodMonitor or ServiceMonitor. The Platform's namespaces have no policies yet.
 

@@ -1,4 +1,4 @@
-# A Workload with no network policy of its own, which workload-baseline.sh applies into
+# A Workload with no network policy of its own, which workload-network-baseline.sh applies into
 # each namespace it labels as a Workload's: podinfo, with its ports named as the
 # Workload baseline expects, and a client to call it from.
 apiVersion: apps/v1

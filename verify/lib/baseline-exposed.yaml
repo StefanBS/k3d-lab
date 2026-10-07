@@ -1,5 +1,5 @@
 # What exposes baseline-workload.yaml's podinfo, as a Workload's folder would: an
-# HTTPRoute through the Lab's Gateway, whose hostname workload-baseline.sh sets, and a
+# HTTPRoute through the Lab's Gateway, whose hostname workload-network-baseline.sh sets, and a
 # PodMonitor for Alloy.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -10,7 +10,7 @@ spec:
     - name: lab
       namespace: gateway
       sectionName: https
-  hostnames: [set-by-workload-baseline.lab.localhost]
+  hostnames: [set-by-workload-network-baseline.lab.localhost]
   rules:
     - backendRefs:
         - {name: podinfo, port: 80}
