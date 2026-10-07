@@ -101,8 +101,7 @@
       ],
     },
     {
-      // The policies are ValidatingPolicies (platform/kyverno-policies/), checked by this
-      // Kyverno's CEL engine.
+      // The policies (platform/kyverno-policies/) are ValidatingPolicies in Kyverno's CEL.
       groupName: 'Admission policy',
       matchDepNames: ['kyverno'],
       prBodyNotes: [

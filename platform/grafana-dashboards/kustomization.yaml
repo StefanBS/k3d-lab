@@ -18,3 +18,6 @@ configMapGenerator:
   - name: dashboard-hubble
     files:
       - hubble.json
+  - name: dashboard-admission-policy
+    files:
+      - admission-policy.json
