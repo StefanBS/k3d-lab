@@ -68,8 +68,8 @@ spec:
           jqPathExpressions:
             - .spec.rules[].backendRefs[]?.weight
   # The sources depend on whether component.yaml names a chart, and a Workload's
-  # namespace labels on whether it sets `isolation`, which the template itself can't
-  # test: with missingkey=error, a missing key fails it.
+  # namespace labels and baseline on whether it sets `isolation`, which the template
+  # itself can't test: with missingkey=error, a missing key fails it.
   templatePatch: |
     spec:
       {{- if eq $group "workloads" }}
@@ -102,4 +102,14 @@ spec:
           targetRevision: {{ $.Values.revision }}
           path: '{{`{{.path.path}}`}}'
       {{`{{- end }}`}}
+      {{- if eq $group "workloads" }}
+      # The baseline's same-namespace allow, which has to live in the Workload's own
+      # namespace (ADR 0008), unless the Workload is `isolation: strict`: lint allows
+      # no other value.
+      {{`{{- if not (hasKey . "isolation") }}`}}
+        - repoURL: {{ $.Values.repoURL }}
+          targetRevision: {{ $.Values.revision }}
+          path: platform/workload-network-policy/same-namespace
+      {{`{{- end }}`}}
+      {{- end }}
 {{- end }}

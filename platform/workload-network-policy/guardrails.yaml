@@ -1,0 +1,14 @@
+# What no Workload may reach, whatever its own policy allows: Cilium applies a deny
+# over any allow. No Workload needs either. One that ever does needs this narrowed,
+# for example to exempt its service account, not an allow of its own.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: workload-guardrails
+spec:
+  endpointSelector:
+    matchLabels: {k8s:io.cilium.k8s.namespace.labels.k3d-lab/group: workloads}
+  egressDeny:
+    - toEntities: [kube-apiserver]
+    # The cloud metadata address, which hands out a cloud node's credentials.
+    - toCIDR: [169.254.169.254/32]

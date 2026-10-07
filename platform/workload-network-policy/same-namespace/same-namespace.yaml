@@ -1,0 +1,15 @@
+# The baseline's same-namespace allow: every pod in a Workload's namespace to every
+# other. It can't be cluster-wide, where `fromEndpoints: [{}]` means every pod in the
+# cluster, so the workloads ApplicationSet adds this folder to each Workload's
+# Application, which puts it in the Workload's namespace. A Workload that sets
+# `isolation: strict` doesn't get it, and allows its pod-to-pod flows itself.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: same-namespace
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints: [{}]
+  egress:
+    - toEndpoints: [{}]

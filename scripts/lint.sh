@@ -125,8 +125,17 @@ render_gitops() {
 
 # The probes that verify's checks deploy are plain manifests: nothing to render.
 render_probes() {
-  cat verify/lib/probes.yaml <(echo ---) verify/lib/gpu-probes.yaml \
-    <(echo ---) verify/lib/workload-probes.yaml >"$manifests"
+  local file
+  for file in verify/lib/{probes,gpu-probes,workload-probes,baseline-workload,baseline-exposed,baseline-own-policy}.yaml; do
+    cat "$file"
+    echo ---
+  done >"$manifests"
+}
+
+# The baseline's same-namespace allow, which the workloads ApplicationSet adds to each
+# Workload's Application as a plain folder: nothing to render either.
+render_same_namespace_allow() {
+  cat platform/workload-network-policy/same-namespace/*.yaml >"$manifests"
 }
 
 # Schemas are cached between runs: the CRDs catalog is pinned, so they never change
@@ -203,6 +212,7 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir's Application" render_application "$dir"
 done
 lint_platform_namespaces
+lint_rendering "the same-namespace allow" render_same_namespace_allow
 lint_rendering gitops render_gitops
 
 # Every fact the scripts read from the Platform's values, so a renamed value fails

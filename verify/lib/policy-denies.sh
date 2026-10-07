@@ -15,7 +15,9 @@ set -euo pipefail
 source "$(dirname "$0")/checks.sh"
 
 namespace=$1
-mapfile -t workload_namespaces < <(kubectl get namespaces -l k3d-lab/group=workloads \
+# Leaves out the namespaces workload-network-baseline labels as a Workload's for its
+# own run, which it labels k3d-lab/verify.
+mapfile -t workload_namespaces < <(kubectl get namespaces -l 'k3d-lab/group=workloads,!k3d-lab/verify' \
   -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
 # The Platform labels exactly the namespaces of the Workloads' Applications.
 expected=$(kubectl -n argocd get applications -l k3d-lab/group=workloads \
@@ -43,36 +45,6 @@ for ns in "${workload_namespaces[@]}"; do
   kubectl -n "$ns" apply -f "$probes" >/dev/null
 done
 
-# Usage: hubble_denied <hubble observe filters>...
-# Succeeds once Hubble Relay holds a flow matching the filters that was dropped by policy.
-# The agent that dropped it reports it within a few seconds.
-hubble_denied() {
-  local attempt
-  for attempt in {1..10}; do
-    hubble_observe --verdict DROPPED --since 5m -o jsonpb "$@" 2>/dev/null |
-      grep -Eq '"drop_reason_desc":"POLICY_DEN(IED|Y)"' && return 0
-    ((attempt == 10)) || sleep 3
-  done
-  return 1
-}
-
-# Usage: expect_denied <description> <namespace> <pod> <address> <destination pod>
-# Says OK if the pod's request to http://<address>/ fails and Hubble records it, from
-# the pod to <destination pod> (namespace/name), as dropped by policy. Otherwise says
-# FAIL, and why, and fails.
-expect_denied() {
-  local what=$1 ns=$2 pod=$3 address=$4 to=$5
-  if kubectl -n "$ns" exec "$pod" -- wget -qO /dev/null -T 3 "http://$address/" 2>/dev/null; then
-    echo "FAIL  $what: allowed"
-    return 1
-  fi
-  if ! hubble_denied --from-pod "$ns/$pod" --to-pod "$to"; then
-    echo "FAIL  $what: failed, but Hubble has no drop by policy"
-    return 1
-  fi
-  echo "OK    $what: dropped by policy"
-}
-
 web_pod=$(kubectl -n "$namespace" get pods -l app=web -o jsonpath='{.items[0].metadata.name}')
 web_ip=$(kubectl -n "$namespace" get pod "$web_pod" -o jsonpath='{.status.podIP}')
 client=$(kubectl -n "$namespace" get pods -l app=client -o jsonpath='{.items[0].metadata.name}')
@@ -83,9 +55,9 @@ podinfo_ip=$(kubectl -n rollouts-demo get pod "$podinfo" -o jsonpath='{.status.p
 bad=0
 for ns in "${workload_namespaces[@]}"; do
   kubectl -n "$ns" wait --for=condition=Ready pod/network-policy-probe --timeout=1m >/dev/null
-  expect_denied "$ns to another namespace" "$ns" network-policy-probe "$web_ip" \
-    "$namespace/$web_pod" || bad=1
+  expect_denied "$ns to another namespace" "$ns" network-policy-probe "http://$web_ip/" \
+    --to-pod "$namespace/$web_pod" || bad=1
 done
-expect_denied "another namespace to rollouts-demo" "$namespace" "$client" "$podinfo_ip:9898" \
-  "rollouts-demo/$podinfo" || bad=1
+expect_denied "another namespace to rollouts-demo" "$namespace" "$client" "http://$podinfo_ip:9898/" \
+  --to-pod "rollouts-demo/$podinfo" || bad=1
 exit "$bad"

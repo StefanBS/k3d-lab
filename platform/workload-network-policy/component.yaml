@@ -1,0 +1,4 @@
+# No chart: the kustomization.yaml beside this is the component. Its policies are
+# cluster-wide, so they have no namespace of their own; this is only the Application's
+# destination.
+namespace: kube-system

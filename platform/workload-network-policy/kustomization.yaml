@@ -1,0 +1,10 @@
+# Network policy for a Workload, the Platform's tiers of it (ADR 0008): the guardrails
+# and the baseline, for every pod in a namespace the workloads ApplicationSet labels
+# k3d-lab/group: workloads. The Workload's own policy, in its folder, adds to them.
+# same-namespace/ is the rest of the baseline: the workloads ApplicationSet adds it to
+# each Workload's Application, so it's not listed here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - guardrails.yaml
+  - baseline.yaml
