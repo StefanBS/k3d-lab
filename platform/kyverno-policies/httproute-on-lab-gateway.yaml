@@ -15,7 +15,8 @@ spec:
   matchConstraints:
     resourceRules:
       - apiGroups: [gateway.networking.k8s.io]
-        apiVersions: ["*"]
+        # One version: the background scan can't resolve "*".
+        apiVersions: [v1]
         operations: [CREATE, UPDATE]
         resources: [httproutes]
   variables:
