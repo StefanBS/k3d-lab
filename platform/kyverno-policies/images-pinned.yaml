@@ -7,6 +7,9 @@ kind: ValidatingPolicy
 metadata:
   name: images-pinned
 spec:
+  # Audit only, though nothing in the Lab breaks it: the Platform's charts pick their
+  # own images, and a chart update that unpinned one should show up in a PolicyReport,
+  # not stop that component's pods from starting.
   validationActions: [Audit]
   # While Kyverno is down, objects are admitted unchecked, rather than not at all.
   failurePolicy: Ignore

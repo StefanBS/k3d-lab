@@ -7,7 +7,8 @@ kind: ValidatingPolicy
 metadata:
   name: httproute-on-lab-gateway
 spec:
-  validationActions: [Audit]
+  # Enforced, since the Lab passed it in Audit.
+  validationActions: [Deny]
   # While Kyverno is down, objects are admitted unchecked, rather than not at all.
   failurePolicy: Ignore
   matchConstraints:
