@@ -75,13 +75,14 @@ else
   bad=1
 fi
 
-# Prints the namespace until Alloy's last scrape of its podinfo succeeded.
+scraped="Alloy scrapes podinfo in $open"
+# Prints $scraped until Alloy's last scrape of podinfo there succeeded.
 # shellcheck disable=SC2329 # Run by eventually.
 not_scraped() {
-  [[ $(prometheus_query "max(up{namespace=\"$1\"})" '.data.result[0].value[1] // ""') == 1 ]] ||
-    echo "$1"
+  [[ $(prometheus_query "max(up{namespace=\"$open\"})" '.data.result[0].value[1] // ""') == 1 ]] ||
+    echo "$scraped"
 }
-eventually "Alloy doesn't scrape podinfo in %s" "$open" -- not_scraped "$open" || bad=1
+eventually '%s: no successful scrape' "$scraped" -- not_scraped || bad=1
 
 pod=$(podinfo_pod "$open")
 if kubectl -n "$open" exec client -- wget -qO /dev/null -T 3 "http://$(pod_ip "$open" "$pod"):9898/"; then

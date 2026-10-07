@@ -63,3 +63,21 @@ _Avoid_: application, app (clashes with ArgoCD's `Application`)
 **GPU Workload**:
 A Workload that requests the GPU Node's GPU (`amd.com/gpu`) and tolerates its taint, so it runs only on the GPU Node, and only while it's Joined.
 _Avoid_: GPU job, GPU app
+
+### Network policy
+
+**Guardrails**:
+The Platform's deny rules for every Workload, which a Workload's own policy can't undo: no egress to the kube-apiserver or the cloud metadata address.
+_Avoid_: deny list, hard limits
+
+**Baseline**:
+What the Platform allows every Workload without a policy of its own: DNS, the Gateway to a port named `http`, Alloy to a port named `metrics`, and every pod in its namespace to every other. Everything else is denied.
+_Avoid_: default policy, defaults
+
+**Workload policy**:
+The `CiliumNetworkPolicy` in a Workload's own folder, for what only the Workload knows: egress by FQDN, calls to another namespace, and L7 rules.
+_Avoid_: app policy, custom policy
+
+**Strict isolation**:
+A Workload's opt-out of the Baseline's same-namespace allow, set with `isolation: strict` in its `component.yaml`, so its pods only reach each other where its Workload policy says so.
+_Avoid_: zero trust, locked down
