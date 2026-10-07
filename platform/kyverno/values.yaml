@@ -23,6 +23,14 @@ admissionController:
   serviceMonitor:
     enabled: true
 reportsController:
+  # It scans what already runs, which it reads through Kubernetes' view role. That role
+  # doesn't cover Gateway API's routes, and a policy on a kind it can't read is never
+  # Ready.
+  rbac:
+    clusterRole:
+      extraResources:
+        - apiGroups: [gateway.networking.k8s.io]
+          resources: [httproutes]
   resources:
     requests: {cpu: 10m, memory: 64Mi}
   serviceMonitor:
