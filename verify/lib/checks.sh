@@ -98,3 +98,36 @@ hubble_observe() {
   relay=$(kubectl -n kube-system get service hubble-relay -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}')
   kubectl -n kube-system exec ds/cilium -c cilium-agent -- hubble observe --server "$relay" "$@"
 }
+
+# Usage: [DENIED_BY=POLICY_DENY] hubble_denied <hubble observe filters>...
+# Succeeds once Hubble Relay holds a flow matching the filters that was dropped by
+# policy: for want of an allow (POLICY_DENIED) or by a deny rule (POLICY_DENY), or only
+# the one DENIED_BY names. The agent that dropped it reports it within a few seconds.
+hubble_denied() {
+  local attempt reason=${DENIED_BY:-POLICY_DEN(IED|Y)}
+  for attempt in {1..10}; do
+    hubble_observe --verdict DROPPED --since 5m -o jsonpb "$@" 2>/dev/null |
+      grep -Eq "\"drop_reason_desc\":\"$reason\"" && return 0
+    ((attempt == 10)) || sleep 3
+  done
+  return 1
+}
+
+# Usage: [DENIED_BY=POLICY_DENY] expect_denied <description> <namespace> <pod> <url> <hubble observe filters>...
+# Says OK if the pod's request to the URL, with busybox's wget, fails and Hubble records
+# a flow from the pod matching the filters as dropped by policy. Otherwise says FAIL,
+# and why, and fails. The drop is what proves the policy denied it: a request that
+# fails for any other reason, such as a pod that isn't up, leaves none.
+expect_denied() {
+  local what=$1 ns=$2 pod=$3 url=$4
+  shift 4
+  if kubectl -n "$ns" exec "$pod" -- wget -qO /dev/null -T 3 "$url" 2>/dev/null; then
+    echo "FAIL  $what: allowed"
+    return 1
+  fi
+  if ! hubble_denied --from-pod "$ns/$pod" "$@"; then
+    echo "FAIL  $what: failed, but Hubble has no drop by policy"
+    return 1
+  fi
+  echo "OK    $what: dropped by policy"
+}

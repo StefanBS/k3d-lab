@@ -7,15 +7,15 @@ metadata:
     k3d-lab/gpu: amd
 spec:
   description: >-
-    Cilium's proxies work on the GPU Node: a pod there, under comfyui's network
-    policies, resolves names through Cilium's DNS proxy. firewalld on the GPU Node
-    drops what Cilium redirects to its proxies unless join's k3d-lab zone lets it
-    through (ADR 0002). ComfyUI itself only looks names up when it installs, so its
-    own check can't tell.
+    Cilium's proxies work on the GPU Node: a pod there, in comfyui, resolves names
+    through Cilium's DNS proxy, as the Workload baseline sends it. firewalld on the GPU
+    Node drops what Cilium redirects to its proxies unless join's k3d-lab zone lets it
+    through (ADR 0002). ComfyUI itself only looks names up when it installs, so its own
+    check can't tell.
   steps:
     - try:
-        # In comfyui, so its default-deny policy, whose DNS rule goes through the
-        # proxy, applies. Chainsaw deletes it afterwards.
+        # In comfyui, so the Workload baseline, whose DNS rule goes through the proxy,
+        # applies. Chainsaw deletes it afterwards.
         - apply:
             resource:
               apiVersion: v1

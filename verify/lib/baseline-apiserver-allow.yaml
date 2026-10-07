@@ -1,0 +1,10 @@
+# A Workload policy that tries to undo a guardrail: egress to the kube-apiserver.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: kube-apiserver
+spec:
+  endpointSelector:
+    matchLabels: {app: client}
+  egress:
+    - toEntities: [kube-apiserver]
