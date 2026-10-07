@@ -1,0 +1,38 @@
+# Every container's image, init containers included, has a tag other than latest, or a
+# digest, so what runs only changes through Git (and Renovate). Checked on each pod, as
+# admitted: after Kustomize's images overrides, which set many of the Lab's tags. Kyverno
+# also checks each pod controller's template (autogen). Ephemeral containers, added
+# through their own subresource, are only caught by the background scan.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: images-pinned
+spec:
+  # Audit only, though nothing in the Lab breaks it: the Platform's charts pick their
+  # own images, and a chart update that unpinned one should show up in a PolicyReport,
+  # not stop that component's pods from starting.
+  validationActions: [Audit]
+  # While Kyverno is down, objects are admitted unchecked, rather than not at all.
+  failurePolicy: Ignore
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  variables:
+    - name: images
+      expression: >-
+        object.spec.containers.map(c, c.image) +
+        (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : []) +
+        (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers.map(c, c.image) : [])
+    # A digest pins it, whatever the tag. A tag is after the last ':' of the image's
+    # last path segment: registry:5000/image has none.
+    - name: unpinned
+      expression: >-
+        variables.images.filter(i, !i.contains('@') &&
+        (!i.matches(':[^/:]+$') || i.endsWith(':latest')))
+  validations:
+    - expression: size(variables.unpinned) == 0
+      messageExpression: >-
+        'images without a tag, or tagged latest: ' + variables.unpinned.join(', ')

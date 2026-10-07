@@ -29,7 +29,7 @@ spec:
         # The sidecar loads dashboards a few seconds after Grafana starts: until then, 404.
         - script:
             content: |
-              for uid in k3d-lab hubble; do
+              for uid in k3d-lab hubble admission-policy; do
                 curl -sS --fail --retry 12 --retry-all-errors --retry-delay 5 \
                   -o /dev/null "https://grafana.lab.localhost/api/dashboards/uid/$uid" || exit 1
               done

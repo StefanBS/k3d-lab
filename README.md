@@ -164,6 +164,20 @@ A denied flow shows in Hubble UI, and in `hubble observe -n <namespace> --verdic
 - The Gateway's Envoy has the `ingress` identity, so a rule for requests through the Gateway, such as an L7 one, says `fromEntities: [ingress]`.
 - A pod calling a Workload through the Gateway, such as the demo's load generator, needs egress to the Workload's pods, not to the Gateway: Envoy checks the caller's policy against the backend, and answers 403 when it's denied. In the same namespace, the baseline already allows it.
 
+## Admission policy
+
+Kyverno (`platform/kyverno/`) checks every object as it's admitted against the Lab's policies in `platform/kyverno-policies/` (ADR 0010):
+
+| Policy | What it checks | Mode |
+|---|---|---|
+| `gpu-workload-shape` | A pod template that requests `amd.com/gpu` is a DaemonSet's, selects `k3d-lab/gpu=amd` and tolerates the `amd.com/gpu` taint (ADR 0006). | Enforced |
+| `httproute-on-lab-gateway` | An HTTPRoute's `parentRefs` is the `https` listener of the Gateway `lab` in `gateway`, and its hostnames are under `lab.localhost`. | Enforced |
+| `images-pinned` | Every container's image has a tag other than `latest`, or a digest, as admitted, after Kustomize's `images` overrides. | Audit |
+
+An enforced policy rejects a bad object, so its Application fails to sync with the policy named in the error. An Audit policy admits it, and records the violation in a PolicyReport in its namespace (`kubectl get policyreports -A`). The dashboard "Admission policy" shows both. Kyverno doesn't check `kube-system`, `argocd` or its own namespace, and while it's down, objects are admitted unchecked.
+
+To add a policy, write a `ValidatingPolicy` (`policies.kyverno.io/v1`, in CEL) in `platform/kyverno-policies/`, list it in its `kustomization.yaml`, and start it with `validationActions: [Audit]`. Once the Lab has no PolicyReport failing it, switch it to `[Deny]` and add a bad object to `verify/policies-enforced/`. A policy on a kind beyond pods and their controllers needs that kind in the reports controller's role in `platform/kyverno/values.yaml`, or it never becomes Ready.
+
 ## Progressive delivery
 
 **Argo Rollouts** (`platform/argo-rollouts/`) releases Workloads by canary, and its dashboard at https://rollouts.lab.localhost shows every Rollout. Anyone on the Host can promote or abort a Rollout there. A canary's traffic is split for real, by weight, at the Lab's Gateway: Rollouts' Gateway API plugin sets the weights of the Rollout's HTTPRoute, which Cilium applies. ArgoCD leaves those weights alone, as it does the version that Rollouts adds to each of the Rollout's Services' selectors (see GitOps).

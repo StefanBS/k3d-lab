@@ -1,0 +1,10 @@
+# The Lab's admission policies, which Kyverno (platform/kyverno/) checks every object
+# against as it's admitted, outside the namespaces its values.yaml skips. Each is a
+# ValidatingPolicy: Audit records a violation in the object's PolicyReport, Deny also
+# rejects the object. A new policy starts in Audit until the Lab passes it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - gpu-workload-shape.yaml
+  - httproute-on-lab-gateway.yaml
+  - images-pinned.yaml
