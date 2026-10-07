@@ -1,0 +1,33 @@
+# Kyverno checks each object against the Lab's admission policies as it's admitted, and
+# writes what it finds in PolicyReports. The policies themselves are a component of
+# their own (platform/kyverno-policies/), as they need these CRDs.
+config:
+  # Kyverno's webhooks skip these namespaces, so the Lab comes up, and ArgoCD keeps
+  # running, whatever the policies say and whether or not Kyverno is up. Kyverno's own
+  # namespace is skipped too (excludeKyvernoNamespace).
+  webhooks:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, argocd]
+# Only the admission controller, which admits, and the reports controller, which writes
+# the PolicyReports and scans what already runs, are needed: no policy generates,
+# mutates existing objects or cleans up.
+admissionController:
+  container:
+    resources:
+      requests: {cpu: 25m, memory: 128Mi}
+  # Alloy scrapes these ServiceMonitors (platform/alloy/values.yaml): the results of
+  # every policy, as kyverno_validating_policy_results_total.
+  serviceMonitor:
+    enabled: true
+reportsController:
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+  serviceMonitor:
+    enabled: true
+backgroundController:
+  enabled: false
+cleanupController:
+  enabled: false

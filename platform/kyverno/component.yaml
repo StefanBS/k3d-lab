@@ -1,0 +1,5 @@
+# Where this Platform component's chart comes from.
+chart: kyverno
+repoURL: https://kyverno.github.io/kyverno/
+version: 3.9.1
+namespace: kyverno

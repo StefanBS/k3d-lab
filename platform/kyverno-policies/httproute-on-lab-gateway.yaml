@@ -1,0 +1,39 @@
+# A UI is served through the Lab's one Gateway: an HTTPRoute attaches to the https
+# listener of the Gateway lab in the namespace gateway, for a name under lab.localhost,
+# the only names the Lab CA signs and the Host resolves. The Gateway's own namespace is
+# left out, as its plain-HTTP redirect is the one route on the http listener.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: httproute-on-lab-gateway
+spec:
+  validationActions: [Audit]
+  # While Kyverno is down, objects are admitted unchecked, rather than not at all.
+  failurePolicy: Ignore
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [gateway.networking.k8s.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE]
+        resources: [httproutes]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [gateway]
+  validations:
+    - expression: >-
+        has(object.spec.parentRefs) && size(object.spec.parentRefs) > 0 &&
+        object.spec.parentRefs.all(p,
+        (!has(p.group) || p.group == 'gateway.networking.k8s.io') &&
+        (!has(p.kind) || p.kind == 'Gateway') &&
+        p.name == 'lab' &&
+        has(p.namespace) && p.namespace == 'gateway' &&
+        has(p.sectionName) && p.sectionName == 'https')
+      message: >-
+        parentRefs must be the https listener of the Gateway lab in the namespace gateway:
+        {name: lab, namespace: gateway, sectionName: https}
+    - expression: >-
+        has(object.spec.hostnames) && size(object.spec.hostnames) > 0 &&
+        object.spec.hostnames.all(h, h.endsWith('.lab.localhost'))
+      message: hostnames must be set, and each under lab.localhost

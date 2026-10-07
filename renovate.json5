@@ -101,6 +101,15 @@
       ],
     },
     {
+      // The policies are ValidatingPolicies (platform/kyverno-policies/), checked by this
+      // Kyverno's CEL engine.
+      groupName: 'Admission policy',
+      matchDepNames: ['kyverno'],
+      prBodyNotes: [
+        "**Before merging:** check Kyverno's release notes for changes to `ValidatingPolicy` and to its webhooks' `failurePolicy`, then run `just verify kyverno-healthy policies-enforced` on a Lab built from this branch.",
+      ],
+    },
+    {
       groupName: 'GPU',
       matchDepNames: ['amd-gpu', 'docker.io/rocm/k8s-device-plugin'],
     },
