@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Checks how the running Lab behaves: runs the Chainsaw tests in verify/, one per check
 # (ADR 0004). Exits non-zero if any check fails.
-# Usage: verify.sh [<check>...] [<chainsaw test flags>...]
+# Usage: [VERBOSE=1] verify.sh [<check>...] [<chainsaw test flags>...]
 # Leading plain words name the checks to run, the folders in verify/; without any, every
-# check runs. The rest go to `chainsaw test`, such as --pause-on-failure.
+# check runs. The rest go to `chainsaw test`, such as --pause-on-failure. VERBOSE=1 also
+# shows what each passing step did, such as the OK lines of a check's script.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
@@ -27,7 +28,7 @@ kc get --raw /readyz --request-timeout=10s >/dev/null || die "the Lab doesn't an
 
 args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" --kube-context "$LAB_CONTEXT")
 # Only failures, their errors and the summary: a passing step says nothing.
-args+=(--quiet)
+[[ -n ${VERBOSE:-} ]] || args+=(--quiet)
 [[ -t 1 ]] || args+=(--no-color)
 # Chainsaw names each check chainsaw/<check>, and matches the regex against that.
 ((${#checks[@]} == 0)) || args+=(--include-test-regex "^chainsaw/($(IFS='|' && echo "${checks[*]}"))\$")

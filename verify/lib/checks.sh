@@ -3,6 +3,14 @@
 # named chainsaw, so this calls plain kubectl, not scripts/lib.sh's kc (ADR 0004).
 # shellcheck shell=bash
 
+# Run by hand, plain kubectl would act on whatever cluster the current context names,
+# which may not be the Lab. So a script only runs under Chainsaw: `just verify <check>`,
+# with VERBOSE=1 to see each of its OK lines.
+if [[ $(kubectl config current-context 2>/dev/null) != chainsaw ]]; then
+  echo "FAIL  kubectl isn't pointed at the Lab by Chainsaw; run this through 'just verify <check>'"
+  exit 1
+fi
+
 # A command that fails inside $(...) fails it, as it would outside, so a broken check
 # stops its script rather than passing.
 shopt -s inherit_errexit
