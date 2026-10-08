@@ -1,2 +1,26 @@
+# Only these top-level entries are part of the repo; anything else in the root is
+# ignored. A tool run in the root can unpack into it: in #73, `helm pull --untar` left
+# a whole chart there, and `git add -A` committed it. Add a new top-level entry here.
+/*
+!/.env.example
+!/.github/
+!/.gitignore
+!/.shellcheckrc
+!/AGENTS.md
+!/CODING_STANDARDS.md
+!/CONTEXT.md
+!/Justfile
+!/README.md
+!/docs/
+!/gitops/
+!/just/
+!/k3d/
+!/mise.toml
+!/platform/
+!/renovate.json5
+!/scripts/
+!/verify/
+!/workloads/
+
 # Machine-specific values (IPs, SSH destinations); commit only .env.example
 .env

@@ -17,6 +17,10 @@ yq's expressions look like jq's, but these behave differently. For logic over JS
 
 - `IFS=$'\t' read -r a b c` merges consecutive tabs, so an empty column shifts every column after it. Print a placeholder for an empty field, or use a delimiter that isn't whitespace.
 
+## mise
+
+- `mise -C <repo> exec -- <tool>` runs the tool in the repo root, so whatever it writes to its working directory lands there: `helm pull --untar` unpacks the whole chart into the root (#73). Point the output at a temporary directory, such as `helm pull --untar --untardir "$(mktemp -d)"`. `.gitignore` ignores any top-level entry it doesn't list, so a stray one isn't committed, but it stays on disk.
+
 ## kubectl
 
 - `kubectl get <kind> <name> -o json` returns the object, not a List: `.items` is empty. Use `--field-selector metadata.name=<name>` when the code reads `.items`.
