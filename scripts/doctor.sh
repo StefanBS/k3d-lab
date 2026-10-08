@@ -31,8 +31,9 @@ else
   fail "Docker CE isn't reachable at $DOCKER_HOST (ADR 0001): https://docs.docker.com/engine/install/fedora/"
 fi
 
-# k3s evicts pods and taints the node when its image filesystem drops below 15% free,
-# and the k3d Nodes keep theirs in Docker's data directory (ADR 0001).
+# Below 15% free, the kubelet deletes unused images, which slows the next `just up`;
+# below 5%, it evicts pods and taints the node disk-pressure. The k3d Nodes keep their
+# images in Docker's data directory (ADR 0001).
 # Where `just host setup` put it, when Docker CE can't say.
 data_root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null) || data_root=$DOCKER_DATA_ROOT
 if [[ ! -d $data_root ]]; then
@@ -41,7 +42,7 @@ else
   read -r avail size < <(df --output=avail,size --block-size=1G "$data_root" | tail -1)
   free_pct=$((100 * avail / size))
   if ((free_pct < 20)); then
-    warn "Docker's data directory $data_root has only ${avail} GiB free (${free_pct}%); k3s evicts pods below 15%"
+    warn "Docker's data directory $data_root has only ${avail} GiB free (${free_pct}%); the kubelet deletes unused images below 15% and evicts pods below 5%"
   else
     ok "Docker's data directory $data_root has ${avail} GiB free (${free_pct}%)"
   fi
