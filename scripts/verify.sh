@@ -9,6 +9,8 @@
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
+# shellcheck source=host-memory.sh
+source "$(dirname "$0")/host-memory.sh"
 
 # The checks that call the Lab from the Host trust only the Lab CA.
 export LAB_CA_CERT
@@ -21,6 +23,16 @@ while (($#)) && [[ $1 != -* ]]; do
   checks+=("$1")
   shift
 done
+
+# warn_if_short_on_memory <consequence>: WARNs, with the numbers, while the Host is short
+# on memory, since k3s then stalls and may die on its own datastore.
+warn_if_short_on_memory() {
+  local memory
+  if memory=$(host_memory_short </proc/meminfo); then warn "Host is short on memory: $memory; $1"; fi
+}
+
+# Before the Lab's own checks, since memory may be why it doesn't answer.
+warn_if_short_on_memory "checks may fail while k3s stalls on its datastore"
 
 # Without a Lab, every check would fail for the same reason.
 lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
@@ -48,4 +60,8 @@ fi
 # Go's test runner announces every check as it starts, pauses and resumes it, even with
 # --quiet. The PASS or FAIL for each check says all of that. With pipefail, the
 # pipeline fails if Chainsaw does.
-chainsaw test "${args[@]}" "$@" | grep --line-buffered -Ev '^=== (RUN|PAUSE|CONT) '
+if ! chainsaw test "${args[@]}" "$@" | grep --line-buffered -Ev '^=== (RUN|PAUSE|CONT) '; then
+  # The Host may have run short during the run, though it wasn't at the start.
+  warn_if_short_on_memory "that may be why checks failed"
+  exit 1
+fi

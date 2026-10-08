@@ -56,14 +56,14 @@ SECRET_STORE_FIREWALL_RULES=(
 HOST_STEPS+=(
   secret_store_firewalled root "only the Lab's subnet can reach the Secret Store's port $SECRET_STORE_PORT"
   owner_lingers owner "$LAB_OWNER's user services start at boot (lingering)"
-  secret_store_unseal_key_exists owner "the Secret Store's unseal key exists ($SECRET_STORE_UNSEAL_KEY)"
-  secret_store_tls_valid owner "the Secret Store's TLS certificate is from the Lab CA, and valid for 30 more days"
-  secret_store_config_current owner "the Secret Store's configuration is up to date"
-  secret_store_quadlet_current owner "the Secret Store's Quadlet is up to date"
-  secret_store_runs_current_config owner "the Secret Store is running, started since its configuration last changed"
-  secret_store_initialised owner "the Secret Store is initialised"
-  secret_store_unsealed owner "the Secret Store is unsealed"
-  secret_store_has_kv_mount owner "the Secret Store has the KV v2 mount lab/"
+  secret_store_unseal_key_exists owner "Secret Store's unseal key exists ($SECRET_STORE_UNSEAL_KEY)"
+  secret_store_tls_valid owner "Secret Store's TLS certificate is from the Lab CA, and valid for 30 more days"
+  secret_store_config_current owner "Secret Store's configuration is up to date"
+  secret_store_quadlet_current owner "Secret Store's Quadlet is up to date"
+  secret_store_runs_current_config owner "Secret Store is running, started since its configuration last changed"
+  secret_store_initialised owner "Secret Store is initialised"
+  secret_store_unsealed owner "Secret Store is unsealed"
+  secret_store_has_kv_mount owner "Secret Store has the KV v2 mount lab/"
 )
 
 # In the running firewall. Only root can query the permanent configuration without

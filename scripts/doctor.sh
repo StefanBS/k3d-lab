@@ -7,6 +7,8 @@ source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/host.sh"
 # shellcheck source=secret-store.sh
 source "$(dirname "$0")/secret-store.sh"
+# shellcheck source=host-memory.sh
+source "$(dirname "$0")/host-memory.sh"
 
 # The variable names a .env-style file assigns, sorted.
 env_keys() {
@@ -48,11 +50,17 @@ else
   fi
 fi
 
+if memory=$(host_memory_short </proc/meminfo); then
+  warn "Host is short on memory: $memory; close what you can before 'just up' or 'just verify'"
+else
+  ok "Host has memory to spare: $memory"
+fi
+
 # The Lab's Gateway is published on these (k3d/cluster.yaml); a running Lab holds them itself.
 if ! lab_exists; then
   taken=$(lab_host_ports_taken)
   if [[ -n $taken ]]; then
-    fail "the Lab's Gateway needs Host ports ${LAB_HOST_PORTS[*]}, but something listens on $(paste -sd' ' <<<"$taken")"
+    fail "Lab's Gateway needs Host ports ${LAB_HOST_PORTS[*]}, but something listens on $(paste -sd' ' <<<"$taken")"
   else
     ok "Host ports ${LAB_HOST_PORTS[*]} are free for the Lab's Gateway"
   fi
