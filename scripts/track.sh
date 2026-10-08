@@ -31,7 +31,9 @@ REVISION=$revision yq -n -o json '
 wait_caught_up() {
   local behind last='' deadline=$((SECONDS + 900))
   while :; do
-    behind=$(kc -n argocd get applications "$@" -o json | applications_behind "$LAB_REPO" "$commit")
+    # A sync can be heavy enough for k3s to restart, so a failed get is waited out too.
+    behind=$(kc -n argocd get applications "$@" -o json 2>/dev/null |
+      applications_behind "$LAB_REPO" "$commit") || behind="the Lab's API isn't answering"
     [[ -n $behind ]] || return 0
     if [[ $behind != "$last" ]]; then
       log "Still behind: $(cut -d: -f1 <<<"$behind" | paste -sd' ')"
@@ -45,8 +47,10 @@ wait_caught_up() {
 # True once the ApplicationSet controller has taken every refresh asked of it: it removes
 # the annotation when it has.
 applicationsets_refreshed() {
-  [[ -z $(kc -n argocd get applicationsets \
-    -o jsonpath='{.items[*].metadata.annotations.argocd\.argoproj\.io/application-set-refresh}') ]]
+  local pending
+  pending=$(kc -n argocd get applicationsets \
+    -o jsonpath='{.items[*].metadata.annotations.argocd\.argoproj\.io/application-set-refresh}' 2>/dev/null) &&
+    [[ -z $pending ]]
 }
 
 log "Waiting for the root Application to sync $revision"
