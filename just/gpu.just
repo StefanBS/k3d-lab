@@ -1,6 +1,10 @@
 # The GPU Node's recipes, as `just gpu <recipe>`. Recipes stay thin; the logic lives in
 # scripts/. They run in just/, so they name scripts from the repo's root.
 
+# List the recipes; `just <module>` runs a module's first recipe
+_default:
+    @just --justfile {{ justfile() }} --list {{ module_path() }}
+
 # Walk through the GPU Node step only you can do: creating the user the Host logs in as
 wizard:
     @{{ justfile_directory() }}/scripts/gpu-wizard.sh
