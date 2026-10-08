@@ -14,7 +14,10 @@ manifests=$(mktemp --suffix=.yaml)
 # A chart with a template per group: a component's Application, as its ApplicationSet
 # generates it (render_application).
 application_chart=$(mktemp -d)
-trap 'rm -rf "$manifests" "$application_chart"' EXIT
+# The enforced admission policies, which reject an object rather than only report it,
+# so a component that breaks one fails its sync (write_enforced_policies).
+enforced_policies=$(mktemp --suffix=.yaml)
+trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies"' EXIT
 
 # The ApplicationSets template these fields into each component's Application.
 lint_component_folder() {
@@ -188,6 +191,52 @@ lint_rendering() {
   fi
 }
 
+# The admission policies, and the good and bad objects each is tested on.
+policies=platform/kyverno-policies
+policy_tests=$policies/tests
+
+# Each policy's fixtures get the results its kyverno-test.yaml expects.
+lint_policy_fixtures() {
+  local file name out excluded
+  for file in $(yq '.resources[]' "$policies/kustomization.yaml"); do
+    name=$(yq '.metadata.name' "$policies/$file")
+    [[ -f $policy_tests/$name/kyverno-test.yaml ]] || fail "$policies/$file has no fixtures in $policy_tests/$name/"
+  done
+  if ! out=$(kyverno test "$policy_tests" --require-tests --detailed-results --remove-color 2>&1); then
+    fail "the admission policies' fixtures don't get their expected results:"$'\n'"$(grep '│ Fail ' <<<"$out" || echo "$out")"
+  # kyverno test passes a fixture its policy doesn't match, whatever result it expects.
+  elif excluded=$(grep '│ Excluded ' <<<"$out"); then
+    fail "fixtures their policy doesn't match (a kind missing from its matchConstraints?):"$'\n'"$excluded"
+  else
+    ok "the admission policies' fixtures get their expected results ($(sed -n 's/^Test Summary: //p' <<<"$out"))"
+  fi
+}
+
+# Writes the enforced policies into $enforced_policies, as one file.
+write_enforced_policies() {
+  local file
+  for file in $(yq '.resources[]' "$policies/kustomization.yaml"); do
+    if [[ $(yq '.spec.validationActions | contains(["Deny"])' "$policies/$file") == true ]]; then
+      cat "$policies/$file"
+      echo ---
+    fi
+  done >"$enforced_policies"
+}
+
+# The component rendered in $manifests passes the enforced policies, as admitted: each
+# object without a namespace gets its component's, as ArgoCD installs it there.
+lint_admission() {
+  local dir=$1 rendered out
+  rendered=$(mktemp --suffix=.yaml)
+  NS=$(component_namespace "$dir") yq 'select(.kind != null) | .metadata.namespace = (.metadata.namespace // strenv(NS)) | ... comments = ""' "$manifests" >"$rendered"
+  if out=$(kyverno apply "$enforced_policies" --resource "$rendered" --remove-color 2>&1); then
+    ok "$dir passes the enforced policies"
+  else
+    fail "$dir breaks an enforced policy:"$'\n'"$out"
+  fi
+  rm -f "$rendered"
+}
+
 log "Shell scripts"
 if git ls-files -z --cached --others --exclude-standard '*.sh' | xargs -0 shellcheck --external-sources; then
   ok "shellcheck finds nothing"
@@ -213,6 +262,9 @@ for file in Justfile just/*.just; do
   fi
 done
 
+log "Admission policies"
+lint_policy_fixtures
+
 log "Components"
 mapfile -t components < <(component_dirs)
 ((${#components[@]})) || fail "no component folders found"
@@ -220,6 +272,7 @@ mapfile -t components < <(component_dirs)
 duplicates=$(printf '%s\n' "${components[@]##*/}" | sort | uniq -d)
 [[ -z $duplicates ]] || fail "component names used twice: $(paste -sd' ' <<<"$duplicates")"
 write_application_chart
+write_enforced_policies
 # What the Platform's renders create or install into, for lint_platform_namespaces.
 platform_rendered_namespaces=
 for dir in "${components[@]}"; do
@@ -228,6 +281,7 @@ for dir in "${components[@]}"; do
   if [[ $dir == platform/* ]]; then
     platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
   fi
+  lint_admission "$dir"
   lint_rendering "$dir's Application" render_application "$dir"
 done
 lint_platform_namespaces

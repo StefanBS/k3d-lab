@@ -1,0 +1,75 @@
+# A tag after the registry's port, a digest even after latest: pinned. No tag, or latest:
+# unpinned, init containers included.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tagged
+  namespace: demo
+spec:
+  containers:
+    - {name: main, image: busybox:1.38}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: digest
+  namespace: demo
+spec:
+  containers:
+    - {name: main, image: busybox@sha256:0000000000000000000000000000000000000000000000000000000000000000}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: latest-with-digest
+  namespace: demo
+spec:
+  containers:
+    - {name: main, image: busybox:latest@sha256:0000000000000000000000000000000000000000000000000000000000000000}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: registry-port-tagged
+  namespace: demo
+spec:
+  containers:
+    - {name: main, image: registry.lab.localhost:5000/team/app:1.0}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: untagged
+  namespace: demo
+spec:
+  containers:
+    - {name: main, image: busybox}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: latest
+  namespace: demo
+spec:
+  containers:
+    - {name: main, image: busybox:latest}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: registry-port-untagged
+  namespace: demo
+spec:
+  containers:
+    - {name: main, image: registry.lab.localhost:5000/team/app}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-container-latest
+  namespace: demo
+spec:
+  initContainers:
+    - {name: init, image: "busybox:latest"}
+  containers:
+    - {name: main, image: "busybox:1.38"}
