@@ -17,7 +17,9 @@ application_chart=$(mktemp -d)
 # The enforced admission policies, which reject an object rather than only report it,
 # so a component that breaks one fails its sync (write_enforced_policies).
 enforced_policies=$(mktemp --suffix=.yaml)
-trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies"' EXIT
+# The render in $manifests as Kyverno admits it (lint_admission).
+admitted=$(mktemp --suffix=.yaml)
+trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies" "$admitted"' EXIT
 
 # The ApplicationSets template these fields into each component's Application.
 lint_component_folder() {
@@ -191,16 +193,30 @@ lint_rendering() {
   fi
 }
 
-# The admission policies, and the good and bad objects each is tested on.
+# The admission policies, and their fixtures: good and bad objects, each with the result
+# it should get, in a folder per policy.
 policies=platform/kyverno-policies
 policy_tests=$policies/tests
 
+# The admission policies' files, as their kustomization lists them.
+policy_files() { yq '.resources[]' "$policies/kustomization.yaml"; }
+
 # Each policy's fixtures get the results its kyverno-test.yaml expects.
 lint_policy_fixtures() {
-  local file name out excluded
-  for file in $(yq '.resources[]' "$policies/kustomization.yaml"); do
+  local file name test fixtures out excluded
+  for file in $(policy_files); do
     name=$(yq '.metadata.name' "$policies/$file")
-    [[ -f $policy_tests/$name/kyverno-test.yaml ]] || fail "$policies/$file has no fixtures in $policy_tests/$name/"
+    test=$policy_tests/$name/kyverno-test.yaml
+    if [[ ! -f $test ]]; then
+      fail "$policies/$file has no fixtures in $policy_tests/$name/"
+      continue
+    fi
+    # kyverno test ignores a fixture without an expected result. Each folder tests one
+    # policy, so each fixture is listed once.
+    mapfile -t fixtures < <(yq ".resources[] | \"${test%/*}/\" + ." "$test")
+    if [[ $(yq '[.results[].resources[]] | length' "$test") != "$(yq ea '[select(.kind != null)] | length' "${fixtures[@]}")" ]]; then
+      fail "$test doesn't give every fixture an expected result"
+    fi
   done
   if ! out=$(kyverno test "$policy_tests" --require-tests --detailed-results --remove-color 2>&1); then
     fail "the admission policies' fixtures don't get their expected results:"$'\n'"$(grep '│ Fail ' <<<"$out" || echo "$out")"
@@ -215,26 +231,26 @@ lint_policy_fixtures() {
 # Writes the enforced policies into $enforced_policies, as one file.
 write_enforced_policies() {
   local file
-  for file in $(yq '.resources[]' "$policies/kustomization.yaml"); do
+  for file in $(policy_files); do
     if [[ $(yq '.spec.validationActions | contains(["Deny"])' "$policies/$file") == true ]]; then
       cat "$policies/$file"
       echo ---
     fi
   done >"$enforced_policies"
+  # Without one, lint_admission would pass every component.
+  [[ -s $enforced_policies ]] || fail "no admission policy is enforced (validationActions: [Deny])"
 }
 
 # The component rendered in $manifests passes the enforced policies, as admitted: each
 # object without a namespace gets its component's, as ArgoCD installs it there.
 lint_admission() {
-  local dir=$1 rendered out
-  rendered=$(mktemp --suffix=.yaml)
-  NS=$(component_namespace "$dir") yq 'select(.kind != null) | .metadata.namespace = (.metadata.namespace // strenv(NS)) | ... comments = ""' "$manifests" >"$rendered"
-  if out=$(kyverno apply "$enforced_policies" --resource "$rendered" --remove-color 2>&1); then
+  local dir=$1 out
+  NS=$(component_namespace "$dir") yq 'select(.kind != null) | .metadata.namespace = (.metadata.namespace // strenv(NS)) | ... comments = ""' "$manifests" >"$admitted"
+  if out=$(kyverno apply "$enforced_policies" --resource "$admitted" --remove-color 2>&1); then
     ok "$dir passes the enforced policies"
   else
     fail "$dir breaks an enforced policy:"$'\n'"$out"
   fi
-  rm -f "$rendered"
 }
 
 log "Shell scripts"
@@ -277,11 +293,13 @@ write_enforced_policies
 platform_rendered_namespaces=
 for dir in "${components[@]}"; do
   lint_component_folder "$dir"
+  fails_before=$fails
   lint_rendering "$dir" render_component "$dir"
   if [[ $dir == platform/* ]]; then
     platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
   fi
-  lint_admission "$dir"
+  # Only a render that lint passed is worth admitting.
+  ((fails > fails_before)) || lint_admission "$dir"
   lint_rendering "$dir's Application" render_application "$dir"
 done
 lint_platform_namespaces

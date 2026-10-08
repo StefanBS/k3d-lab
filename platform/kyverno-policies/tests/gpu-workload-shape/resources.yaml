@@ -178,7 +178,7 @@ spec:
         - name: cpu
           image: busybox:1.38
 ---
-# verify/policies-enforced's.
+# The bad Deployment verify/policies-enforced/ deploys.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
