@@ -6,7 +6,7 @@ spec:
   description: >-
     Kyverno's admission controller, which checks each object as it's admitted, and its
     reports controller, which writes the PolicyReports, are up. Every policy in Git
-    (platform/kyverno-policies/) is Ready.
+    (platform/kyverno-policies/) is Ready, and has a result in a PolicyReport.
   steps:
     - try:
         - assert:
