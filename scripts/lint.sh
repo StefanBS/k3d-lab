@@ -15,9 +15,9 @@ manifests=$(mktemp --suffix=.yaml)
 # generates it (render_application).
 application_chart=$(mktemp -d)
 # The enforced admission policies, which reject an object rather than only report it,
-# so a component that breaks one fails its sync (write_enforced_policies).
+# so a component that breaks one fails its sync (read_policies).
 enforced_policies=$(mktemp --suffix=.yaml)
-# The render in $manifests as Kyverno admits it (lint_admission).
+# Every component's render, as Kyverno admits it (add_admitted).
 admitted=$(mktemp --suffix=.yaml)
 trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies" "$admitted"' EXIT
 
@@ -198,21 +198,25 @@ lint_rendering() {
 policies=platform/kyverno-policies
 policy_tests=$policies/tests
 
-# The admission policies' files, as their kustomization lists them.
-policy_files() { yq '.resources[]' "$policies/kustomization.yaml"; }
+# Reads the admission policies as ArgoCD applies them: their names into $policy_names,
+# and the enforced ones into $enforced_policies.
+read_policies() {
+  render_component "$policies"
+  policy_names=$(yq -N 'select(.kind == "ValidatingPolicy") | .metadata.name' "$manifests")
+  yq 'select(.spec.validationActions | contains(["Deny"]))' "$manifests" >"$enforced_policies"
+  # Without one, lint_admission would pass every component.
+  [[ -s $enforced_policies ]] || fail "no admission policy is enforced (validationActions: [Deny])"
+}
 
 # Each policy's fixtures get the results its kyverno-test.yaml expects.
 lint_policy_fixtures() {
-  local file name test fixtures fixture out excluded
-  for file in $(policy_files); do
-    name=$(yq '.metadata.name' "$policies/$file")
+  local name test fixtures fixture listed found status=0 out results wrong
+  for name in $policy_names; do
     test=$policy_tests/$name/kyverno-test.yaml
     if [[ ! -f $test ]]; then
-      fail "$policies/$file has no fixtures in $policy_tests/$name/"
+      fail "the policy $name has no fixtures in $policy_tests/$name/"
       continue
     fi
-    # kyverno test ignores a fixture without an expected result. Each folder tests one
-    # policy, so each fixture is listed once.
     mapfile -t fixtures < <(yq ".resources[] | \"${test%/*}/\" + ." "$test")
     # Some are verify's own bad objects, which a move in verify/ can break.
     for fixture in "${fixtures[@]}"; do
@@ -221,42 +225,41 @@ lint_policy_fixtures() {
         continue 2
       fi
     done
-    if [[ $(yq '[.results[].resources[]] | length' "$test") != "$(yq ea '[select(.kind != null)] | length' "${fixtures[@]}")" ]]; then
-      fail "$test doesn't give every fixture an expected result"
-    fi
+    # kyverno test ignores a fixture without an expected result. Each folder tests one
+    # policy, so each fixture is listed once.
+    listed=$(yq '[.results[].resources[]] | length' "$test")
+    found=$(yq ea '[select(.kind != null)] | length' "${fixtures[@]}")
+    [[ $listed == "$found" ]] || fail "$test gives $listed of its $found fixtures an expected result"
   done
-  if ! out=$(kyverno test "$policy_tests" --require-tests --detailed-results --remove-color 2>&1); then
-    fail "the admission policies' fixtures don't get their expected results:"$'\n'"$(grep '│ Fail ' <<<"$out" || echo "$out")"
-  # kyverno test passes a fixture its policy doesn't match, whatever result it expects.
-  elif excluded=$(grep '│ Excluded ' <<<"$out"); then
-    fail "fixtures their policy doesn't match (a kind missing from its matchConstraints?):"$'\n'"$excluded"
+  out=$(kyverno test "$policy_tests" --require-tests --detailed-results -o json 2>&1) || status=$?
+  # A result per fixture: Pass and Ok when it gets the one expected. kyverno test also
+  # passes a fixture its policy doesn't match, whatever result it expects: Excluded.
+  results=$(sed -n '/^\[/,/^\]/p' <<<"$out" | yq -p json -o tsv '.[] | [.RESULT, .REASON, .RESOURCE]') || status=$?
+  wrong=$(grep -Pv '^Pass\tOk\t' <<<"$results" || true)
+  if [[ -n $wrong ]]; then
+    fail "fixtures that don't get their expected result, or that their policy doesn't match:"$'\n'"$wrong"
+  elif ((status != 0)) || [[ -z $results ]]; then
+    fail "kyverno test failed:"$'\n'"$out"
   else
-    ok "the admission policies' fixtures get their expected results ($(sed -n 's/^Test Summary: //p' <<<"$out"))"
+    ok "the admission policies' fixtures get their expected results ($(wc -l <<<"$results"))"
   fi
 }
 
-# Writes the enforced policies into $enforced_policies, as one file.
-write_enforced_policies() {
-  local file
-  for file in $(policy_files); do
-    if [[ $(yq '.spec.validationActions | contains(["Deny"])' "$policies/$file") == true ]]; then
-      cat "$policies/$file"
-      echo ---
-    fi
-  done >"$enforced_policies"
-  # Without one, lint_admission would pass every component.
-  [[ -s $enforced_policies ]] || fail "no admission policy is enforced (validationActions: [Deny])"
+# Adds the component rendered in $manifests to $admitted, as admitted: each object
+# without a namespace gets its component's, as ArgoCD installs it there.
+add_admitted() {
+  echo --- >>"$admitted"
+  NS=$(component_namespace "$1") yq 'select(.kind != null) | .metadata.namespace = (.metadata.namespace // strenv(NS)) | ... comments = ""' "$manifests" >>"$admitted"
 }
 
-# The component rendered in $manifests passes the enforced policies, as admitted: each
-# object without a namespace gets its component's, as ArgoCD installs it there.
+# Every component passes the enforced policies, in one kyverno apply: a process per
+# component costs half a second each.
 lint_admission() {
-  local dir=$1 out
-  NS=$(component_namespace "$dir") yq 'select(.kind != null) | .metadata.namespace = (.metadata.namespace // strenv(NS)) | ... comments = ""' "$manifests" >"$admitted"
+  local out
   if out=$(kyverno apply "$enforced_policies" --resource "$admitted" --remove-color 2>&1); then
-    ok "$dir passes the enforced policies"
+    ok "every component passes the enforced policies (${#components[@]})"
   else
-    fail "$dir breaks an enforced policy:"$'\n'"$out"
+    fail "a component breaks an enforced policy:"$'\n'"$out"
   fi
 }
 
@@ -286,6 +289,7 @@ for file in Justfile just/*.just; do
 done
 
 log "Admission policies"
+read_policies
 lint_policy_fixtures
 
 log "Components"
@@ -295,20 +299,19 @@ mapfile -t components < <(component_dirs)
 duplicates=$(printf '%s\n' "${components[@]##*/}" | sort | uniq -d)
 [[ -z $duplicates ]] || fail "component names used twice: $(paste -sd' ' <<<"$duplicates")"
 write_application_chart
-write_enforced_policies
 # What the Platform's renders create or install into, for lint_platform_namespaces.
 platform_rendered_namespaces=
 for dir in "${components[@]}"; do
   lint_component_folder "$dir"
-  fails_before=$fails
   lint_rendering "$dir" render_component "$dir"
   if [[ $dir == platform/* ]]; then
     platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
   fi
-  # Only a render that lint passed is worth admitting.
-  ((fails > fails_before)) || lint_admission "$dir"
+  # A render that failed left $manifests empty.
+  add_admitted "$dir"
   lint_rendering "$dir's Application" render_application "$dir"
 done
+lint_admission
 lint_platform_namespaces
 lint_rendering "the same-namespace allow" render_same_namespace_allow
 lint_same_namespace_source workloads/rollouts-demo

@@ -93,7 +93,7 @@ The Platform also sets up each Workload's namespace: it's labelled `k3d-lab/grou
 
 Every Application syncs automatically, with pruning and self-heal: a change made by hand with `kubectl` is undone. There are two exceptions, in every Application, because Argo Rollouts sets them during a canary (see Progressive delivery): the backend weights of an HTTPRoute, and the `rollouts-pod-template-hash` key of a Service's selector. ArgoCD neither reports nor reverts them. Applications sync in no particular order, Platform and Workloads alike. One that needs CRDs another component installs fails, and retries until they exist.
 
-`just lint` renders every component with its pinned chart and values, or its kustomization, and its Application as the ApplicationSet generates it, and validates the output with `kubeconform`. It also checks each component's render against the enforced admission policies.
+`just lint` renders every component with its pinned chart and values, or its kustomization, and its Application as the ApplicationSet generates it, and validates the output with `kubeconform`.
 
 ## Keeping versions current
 
