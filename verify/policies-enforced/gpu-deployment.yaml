@@ -1,0 +1,22 @@
+# The bad Deployment this check applies, and that lint tests gpu-workload-shape on
+# (platform/kyverno-policies/tests/). A GPU Workload is a DaemonSet (ADR 0006).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-deployment
+spec:
+  replicas: 0
+  selector:
+    matchLabels: {app: gpu-deployment}
+  template:
+    metadata:
+      labels: {app: gpu-deployment}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      containers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            limits: {amd.com/gpu: 1}

@@ -178,28 +178,6 @@ spec:
         - name: cpu
           image: busybox:1.38
 ---
-# The bad Deployment verify/policies-enforced/ deploys.
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: gpu-deployment
-  namespace: demo
-spec:
-  selector:
-    matchLabels: {app: gpu-deployment}
-  template:
-    metadata:
-      labels: {app: gpu-deployment}
-    spec:
-      nodeSelector: {k3d-lab/gpu: amd}
-      tolerations:
-        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
-      containers:
-        - name: gpu
-          image: busybox:1.38
-          resources:
-            limits: {amd.com/gpu: 1}
----
 apiVersion: batch/v1
 kind: Job
 metadata:

@@ -203,7 +203,7 @@ policy_files() { yq '.resources[]' "$policies/kustomization.yaml"; }
 
 # Each policy's fixtures get the results its kyverno-test.yaml expects.
 lint_policy_fixtures() {
-  local file name test fixtures out excluded
+  local file name test fixtures fixture out excluded
   for file in $(policy_files); do
     name=$(yq '.metadata.name' "$policies/$file")
     test=$policy_tests/$name/kyverno-test.yaml
@@ -214,6 +214,13 @@ lint_policy_fixtures() {
     # kyverno test ignores a fixture without an expected result. Each folder tests one
     # policy, so each fixture is listed once.
     mapfile -t fixtures < <(yq ".resources[] | \"${test%/*}/\" + ." "$test")
+    # Some are verify's own bad objects, which a move in verify/ can break.
+    for fixture in "${fixtures[@]}"; do
+      if [[ ! -f $fixture ]]; then
+        fail "$test names $(realpath -m --relative-to=. "$fixture"), which doesn't exist"
+        continue 2
+      fi
+    done
     if [[ $(yq '[.results[].resources[]] | length' "$test") != "$(yq ea '[select(.kind != null)] | length' "${fixtures[@]}")" ]]; then
       fail "$test doesn't give every fixture an expected result"
     fi

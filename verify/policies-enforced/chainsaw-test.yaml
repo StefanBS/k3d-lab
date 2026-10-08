@@ -12,47 +12,14 @@ spec:
     None of it reaches a node.
   steps:
     - try:
-        # A GPU Workload is a DaemonSet on the GPU Node (ADR 0006).
+        # Both objects are fixtures of lint's tests of their policy too.
         - apply:
-            resource:
-              apiVersion: apps/v1
-              kind: Deployment
-              metadata:
-                name: gpu-deployment
-              spec:
-                replicas: 0
-                selector:
-                  matchLabels: {app: gpu-deployment}
-                template:
-                  metadata:
-                    labels: {app: gpu-deployment}
-                  spec:
-                    nodeSelector: {k3d-lab/gpu: amd}
-                    tolerations:
-                      - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
-                    containers:
-                      - name: gpu
-                        image: busybox:1.38
-                        resources:
-                          limits: {amd.com/gpu: 1}
+            file: gpu-deployment.yaml
             expect:
               - check:
                   (contains($error || '', 'gpu-workload-shape')): true
         - apply:
-            resource:
-              apiVersion: gateway.networking.k8s.io/v1
-              kind: HTTPRoute
-              metadata:
-                name: other-listener
-              spec:
-                parentRefs:
-                  - name: lab
-                    namespace: gateway
-                    sectionName: http
-                hostnames: [policies-enforced.lab.localhost]
-                rules:
-                  - backendRefs:
-                      - {name: web, port: 80}
+            file: other-listener.yaml
             expect:
               - check:
                   (contains($error || '', 'httproute-on-lab-gateway')): true

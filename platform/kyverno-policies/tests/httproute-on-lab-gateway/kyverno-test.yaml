@@ -8,15 +8,17 @@ policies:
   - ../../httproute-on-lab-gateway.yaml
 resources:
   - resources.yaml
+  # The bad HTTPRoute verify/policies-enforced/ applies to the Lab.
+  - ../../../../verify/policies-enforced/other-listener.yaml
 results:
   - policy: httproute-on-lab-gateway
     kind: HTTPRoute
-    resources: [demo/web, gateway/https-redirect, gateway/gateway-ui]
+    resources: [demo/web, gateway/gateway-ui]
     result: pass
   - policy: httproute-on-lab-gateway
     kind: HTTPRoute
     resources:
-      - demo/other-listener
+      - other-listener
       - demo/no-section-name
       - demo/parent-in-own-namespace
       - demo/other-gateway

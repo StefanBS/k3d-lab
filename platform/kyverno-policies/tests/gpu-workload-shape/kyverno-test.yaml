@@ -8,6 +8,8 @@ policies:
   - ../../gpu-workload-shape.yaml
 resources:
   - resources.yaml
+  # The bad Deployment verify/policies-enforced/ applies to the Lab.
+  - ../../../../verify/policies-enforced/gpu-deployment.yaml
 results:
   - policy: gpu-workload-shape
     kind: DaemonSet
