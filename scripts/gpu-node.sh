@@ -3,7 +3,8 @@
 # Node, never on the Host: scripts/gpu.sh sends it over SSH stdin, as
 #   ssh $GPU_NODE_SSH sudo env KEY=value … bash -s -- <subcommand>
 # so it never sources lib.sh. It knows only the GPU Node; every value about the Lab comes
-# from the Host in the environment, and the join token on stdin, after this script.
+# from the Host in the environment, and the join token on stdin, after this script. Its
+# run subcommand also runs a GPU Workload's tools in its image (comfyui-lock.sh).
 #
 # Subcommands:
 #   setup <public key>  Creates the k3dlab user that the Host logs in as. Run once, by
@@ -27,8 +28,7 @@
 #                       Runs the command in the image, from the agent's image store,
 #                       pulling it first if it isn't there. It gets this machine's
 #                       network and DNS, and the rest of stdin, after this script. Only
-#                       while the agent runs: its containerd runs it. For tools such as
-#                       `just comfyui lock`, which need a GPU Workload's image.
+#                       while the agent runs: its containerd runs it.
 # shellcheck disable=SC2329  # main calls the cmd_* functions by name, and they the rest
 set -euo pipefail
 

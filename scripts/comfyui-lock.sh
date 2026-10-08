@@ -20,9 +20,11 @@ image=$(yq -e '.images[] | select(.name == "docker.io/rocm/pytorch") | .name + "
   "$COMFYUI/kustomization.yaml") || die "can't read rocm/pytorch's digest from $COMFYUI/kustomization.yaml"
 
 log "Locking ComfyUI $commit's packages in $image on the GPU Node"
+# The lock goes last, with its line count, and a newline after its last line even if the
+# file has none: the image reads exactly that many lines, never waiting on the pipe's end.
 packages=$(
-  cat "$LAB_ROOT/scripts/gpu-node.sh" "$LAB_ROOT/scripts/comfyui-lock-image.sh" "$LOCK" |
-    gpu_ssh "sudo bash -s -- run $(printf '%q ' "$image" bash -s -- "$commit" "$(wc -l <"$LOCK")")"
+  { cat "$LAB_ROOT/scripts/gpu-node.sh" "$LAB_ROOT/scripts/comfyui-lock-image.sh" && awk 1 "$LOCK"; } |
+    gpu_ssh "sudo bash -s -- run $(printf '%q ' "$image" bash -s -- "$commit" "$(grep -c '' "$LOCK")")"
 ) || die "the lock wasn't regenerated (above); $LOCK is unchanged"
 grep -q '==' <<<"$packages" || die "the GPU Node printed no packages; $LOCK is unchanged"
 
