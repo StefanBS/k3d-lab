@@ -93,11 +93,18 @@ lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
 # so it warns when the branch checked out here isn't that commit.
 pushed_commit() {
   local revision=$1 commit
-  commit=$(git ls-remote "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" | awk 'NR == 1 { print $1 }')
+  # An annotated tag is listed twice: as itself, then peeled (^{}) to its commit, which
+  # is what ArgoCD records. A branch comes first, as ArgoCD prefers it too.
+  commit=$(git ls-remote "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" "refs/tags/$revision^{}" |
+    awk -v branch="refs/heads/$revision" -v tag="refs/tags/$revision" '
+      $2 == branch { b = $1 }
+      $2 == tag "^{}" { peeled = $1 }
+      $2 == tag { plain = $1 }
+      END { print (b != "" ? b : peeled != "" ? peeled : plain) }')
   [[ -n $commit ]] || die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
   if [[ $revision == "$(git -C "$LAB_ROOT" branch --show-current)" &&
     $commit != "$(git -C "$LAB_ROOT" rev-parse HEAD)" ]]; then
-    warn "$revision here isn't the commit $LAB_REPO has; the Lab runs what's pushed" >&2
+    log "warning: $revision here isn't the commit $LAB_REPO has; the Lab runs what's pushed"
   fi
   echo "$commit"
 }

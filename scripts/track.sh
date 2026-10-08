@@ -26,12 +26,12 @@ REVISION=$revision yq -n -o json '
   .spec.source.helm.valuesObject.revision = strenv(REVISION)' |
   kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
 
-# Waits until apps_behind prints nothing for the Applications that `kc get` selects,
+# Waits until applications_behind prints nothing for the Applications that `kc get` selects,
 # logging what's still behind whenever that changes. Gives up after 15 minutes.
 wait_caught_up() {
   local behind last='' deadline=$((SECONDS + 900))
   while :; do
-    behind=$(kc -n argocd get applications "$@" -o json | apps_behind "$LAB_REPO" "$commit")
+    behind=$(kc -n argocd get applications "$@" -o json | applications_behind "$LAB_REPO" "$commit")
     [[ -n $behind ]] || return 0
     if [[ $behind != "$last" ]]; then
       log "Still behind: $(cut -d: -f1 <<<"$behind" | paste -sd' ')"
@@ -42,10 +42,23 @@ wait_caught_up() {
   done
 }
 
+# True once the ApplicationSet controller has taken every refresh asked of it: it removes
+# the annotation when it has.
+applicationsets_refreshed() {
+  [[ -z $(kc -n argocd get applicationsets \
+    -o jsonpath='{.items[*].metadata.annotations.argocd\.argoproj\.io/application-set-refresh}') ]]
+}
+
 log "Waiting for the root Application to sync $revision"
 wait_caught_up --field-selector metadata.name=root
-# Every Application whose spec the root's sync changed is compared again on its own; one
-# whose spec it didn't, when only the branch's commit changed, waits for a refresh.
+# The ApplicationSets read the branch's components again, as up.sh waits for them to:
+# when only its commit changed, their own spec didn't, so they'd wait for their next
+# poll to generate a new component's Application.
+log "Waiting for the ApplicationSets to generate the Applications"
+kc -n argocd annotate applicationsets --all argocd.argoproj.io/application-set-refresh=true --overwrite >/dev/null
+retry 300 applicationsets_refreshed || die "the ApplicationSets haven't refreshed after 5 minutes"
+kc -n argocd wait applicationsets --all --for=condition=ResourcesUpToDate --timeout=5m >/dev/null
+# Likewise, an Application whose spec the root's sync didn't change waits for a refresh.
 kc -n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overwrite >/dev/null
 log "Waiting for every Application to sync $revision"
 wait_caught_up
