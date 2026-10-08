@@ -24,6 +24,16 @@ while (($#)) && [[ $1 != -* ]]; do
   shift
 done
 
+# warn_if_short_on_memory <consequence>: WARNs, with the numbers, while the Host is short
+# on memory, since k3s then stalls and may die on its own datastore.
+warn_if_short_on_memory() {
+  local short
+  if short=$(host_memory_short </proc/meminfo); then warn "$short; $1"; fi
+}
+
+# Before the Lab's own checks, since memory may be why it doesn't answer.
+warn_if_short_on_memory "checks may fail while k3s stalls on its datastore"
+
 # Without a Lab, every check would fail for the same reason.
 lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
 kc get --raw /readyz --request-timeout=10s >/dev/null || die "the Lab doesn't answer"
@@ -47,12 +57,11 @@ fi
 if [[ -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then
   warn "$why: the GPU Node's route to the Lab is stale; run 'just host wizard', then 'just gpu join'"
 fi
-# A Host deep in swap can stall k3s until it dies on its own datastore, and every check
-# that runs meanwhile fails.
-if short=$(host_memory_short </proc/meminfo); then
-  warn "$short; checks may fail while k3s stalls on its datastore"
-fi
 # Go's test runner announces every check as it starts, pauses and resumes it, even with
 # --quiet. The PASS or FAIL for each check says all of that. With pipefail, the
 # pipeline fails if Chainsaw does.
-chainsaw test "${args[@]}" "$@" | grep --line-buffered -Ev '^=== (RUN|PAUSE|CONT) '
+if ! chainsaw test "${args[@]}" "$@" | grep --line-buffered -Ev '^=== (RUN|PAUSE|CONT) '; then
+  # The Host may have run short during the run, though it wasn't at the start.
+  warn_if_short_on_memory "that may be why checks failed"
+  exit 1
+fi

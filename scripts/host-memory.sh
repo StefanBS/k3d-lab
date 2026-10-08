@@ -2,12 +2,13 @@
 # by scripts/tests/, so it sets no shell options and runs nothing when sourced.
 # shellcheck shell=bash
 
-# A sync or a verify run makes the k3d Nodes grow for a while, within their caps
-# (k3d/cluster.yaml); below this much available memory, that growth goes to swap.
+# Short on memory, k3s stalls and may die on its own datastore. With the Lab settled and
+# a desktop open, the Host keeps about 3 GiB available and 4.5 GiB in swap, and every
+# check passes. Below 1 GiB available, the kernel is close to swapping out what the
+# k3d Nodes touch next.
 HOST_MEM_AVAILABLE_MIN_GIB=1
-# With the Lab settled and a desktop open, the Host keeps about 4.5 GiB in swap and the
-# Lab works. At about 8 GiB, the Server's k3s died on its own datastore, its commits
-# stalled behind swapped-out pages (#73).
+# At about 8 GiB in swap, the Server's k3s died on its own datastore, after SQL writes
+# that took several seconds (#73).
 HOST_SWAP_USED_MAX_GIB=6
 
 # host_memory_short < /proc/meminfo: prints the available memory and the swap in use,

@@ -50,8 +50,6 @@ else
   fi
 fi
 
-# The k3d Nodes take up to 8 GiB between them (k3d/cluster.yaml); a Host deep in swap
-# can stall k3s until it dies on its own datastore.
 if short=$(host_memory_short </proc/meminfo); then
   warn "$short; close what you can before 'just up' or 'just verify'"
 fi
