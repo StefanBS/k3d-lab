@@ -23,6 +23,12 @@
 #                       its first line, agent: running or agent: stopped, is for
 #                       scripts/gpu.sh; the rest is for you to read.
 #                       Env: LAB_SUBNET GPU_NODE_IP, and LAB_CA_HASH while a Lab exists
+#   run <image> <command>...
+#                       Runs the command in the image, from the agent's image store,
+#                       pulling it first if it isn't there. It gets this machine's
+#                       network and DNS, and the rest of stdin, after this script. Only
+#                       while the agent runs: its containerd runs it. For tools such as
+#                       `just comfyui lock`, which need a GPU Workload's image.
 # shellcheck disable=SC2329  # main calls the cmd_* functions by name, and they the rest
 set -euo pipefail
 
@@ -37,6 +43,8 @@ K3S_RUN=/run/k3s
 # containerd's image store: its blobs, their unpacked snapshots and the metadata that
 # links them, which only work together.
 K3S_IMAGES=/var/lib/rancher/k3s/agent/containerd
+# The containerd namespace the kubelet keeps its images in.
+K3S_IMAGE_NAMESPACE=k8s.io
 # Where a Stale install's image store waits while the uninstaller runs. The uninstaller
 # removes /var/lib/rancher/k3s but not /var/lib/rancher, which status lists and purge
 # removes, so a join that dies here leaves nothing behind that they miss. It must stay
@@ -517,16 +525,33 @@ cmd_status() {
   install_leftovers | sed 's/^/installed: /'
 }
 
+cmd_run() {
+  local image=${1:-}
+  [[ -n $image && $# -gt 1 ]] || die "usage: gpu-node.sh run <image> <command>..."
+  shift
+  systemctl -q is-active "$K3S_SERVICE" || die "the agent isn't running here: run 'just gpu join' first"
+  local ctr=("$K3S_BIN" ctr -n "$K3S_IMAGE_NAMESPACE")
+  if ! "${ctr[@]}" images ls -q | grep -qxF "$image"; then
+    log "Pulling $image"
+    # Its progress goes to stderr, and stdin stays for the command, as stdout.
+    "${ctr[@]}" images pull "$image" </dev/null >&2
+  fi
+  # ctr gives the container the host's network, but not its resolv.conf.
+  "${ctr[@]}" run --rm -i --net-host \
+    --mount type=bind,src=/etc/resolv.conf,dst=/etc/resolv.conf,options=rbind:ro \
+    "$image" "k3d-lab-run-$$" "$@"
+}
+
 main() {
   ((EUID == 0)) || die "run as root"
   local cmd=${1:-}
   shift || true
   case $cmd in
-    setup | join | leave | purge | status) "cmd_$cmd" "$@" ;;
-    *) die "usage: gpu-node.sh setup <public key>|join|leave|purge|status" ;;
+    setup | join | leave | purge | status | run) "cmd_$cmd" "$@" ;;
+    *) die "usage: gpu-node.sh setup <public key>|join|leave|purge|status|run <image> <command>..." ;;
   esac
 }
 
 # On one line, so that bash, reading this script from stdin, never reads past it: what
-# follows on stdin is join's token, not commands.
+# follows on stdin is join's token, or run's input, not commands.
 main "$@"; exit

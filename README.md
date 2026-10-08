@@ -54,7 +54,7 @@ sudo scripts/host-setup.sh
 | `just secret-store bao <args>` | Runs the `bao` CLI against the Secret Store, as its root. |
 | `just secret-store backup <path>` | Archives the Secret Store, to a new file in `<path>` if it's a directory. See Secrets. |
 
-The recipes for one part of the Lab are grouped under its name, as `just host …`, `just secret-store …` and `just gpu …`; `just` on its own lists them all.
+The recipes for one part of the Lab are grouped under its name, as `just host …`, `just secret-store …`, `just gpu …` and `just comfyui …`; `just` on its own lists them all.
 
 The Lab's kube context is `k3d-lab`. `just up` adds it to your kubeconfig without switching to it.
 
@@ -270,7 +270,7 @@ There's one GPU, advertised as one `amd.com/gpu`, so only one GPU Workload runs 
 ComfyUI (`workloads/comfyui/`) generates and edits images with [Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1) on the GPU through ROCm, at https://comfyui.lab.localhost, and holds the GPU while the GPU Node is Joined. It runs text to image, editing with up to 10 reference images, and Alibaba PAI's Fun ControlNet Union, all measured at 1024×1024; ControlNet was tried with line art only. Start from the Qwen-Image-2.1 templates in its workflow browser; its API takes the same workflows, exported in API format, at `/prompt`. [The benchmarks](docs/benchmarks/qwen-image-2.1.md) compare it with stable-diffusion.cpp, which it replaced for being about 2.7 times as fast.
 
 - **The weights** are Comfy-Org's int8 ConvRot denoiser, text encoder and ControlNet, and the BF16 VAE, 21 GB in all. Its first pod downloads them into `/var/lib/k3d-lab/models/comfyui/weights` on the GPU Node, each pinned to a commit and checked against its checksum, in a folder per model type so that each loader node lists only its own files.
-- **The install** runs on `rocm/pytorch`, pinned by digest, which brings PyTorch and ROCm. A setup container installs ComfyUI at a pinned commit and the exact packages in `config/requirements.txt` into `/var/lib/k3d-lab/models/comfyui/runtime`, once: a later start with the same commit and lock reuses it.
+- **The install** runs on `rocm/pytorch`, pinned by digest, which brings PyTorch and ROCm. A setup container installs ComfyUI at a pinned commit and the exact packages in `config/requirements.txt` into `/var/lib/k3d-lab/models/comfyui/runtime`, once: a later start with the same commit and lock reuses it. Renovate proposes new commits but never touches the lock: `just comfyui lock` regenerates it for the commit in `config/setup.sh`, in ComfyUI's image on the Joined GPU Node, and fails unless `pip check` passes.
 - **What it saves**, your workflows and settings (`user/`) and its images (`output/`), stays in `/var/lib/k3d-lab/models/comfyui` too. Uploaded images last only as long as the pod.
 - **`--reserve-vram 3`** keeps 3 GB of VRAM free. Without it, a 1024×1024 ControlNet job corrupts the VAE in ComfyUI's dynamic VRAM, and every later job comes out NaN until a restart. A NaN guard (`config/nan_guard.py`) fails any job whose denoiser or VAE produces NaN, rather than saving a black or noise image.
 - **Memory:** it keeps the models it has loaded in RAM, up to 21.4 GiB, and its limit is 24 GiB, so an overrun stops ComfyUI rather than one of the GPU Node's own processes.

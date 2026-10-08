@@ -15,6 +15,9 @@ mod secret-store 'just/secret-store.just'
 # The GPU Node: lending it to the Lab and taking it back (ADRs 0002 and 0005)
 mod gpu 'just/gpu.just'
 
+# ComfyUI: regenerating its lock (ADR 0007)
+mod comfyui 'just/comfyui.just'
+
 # List the recipes
 default:
     @just --list --list-submodules

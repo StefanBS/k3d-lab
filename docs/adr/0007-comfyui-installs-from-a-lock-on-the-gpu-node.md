@@ -10,6 +10,7 @@ ComfyUI replaced stable-diffusion.cpp's sd-server for Qwen-Image-2.1: it sampled
 
 ## Consequences
 
-- What runs is still all in Git: the image digest, the ComfyUI commit and every package version. Renovate updates them together, once a week, and a new ComfyUI commit needs the lock regenerated before merging.
+- What runs is still all in Git: the image digest, the ComfyUI commit and every package version. Renovate updates the digest and the commit together, once a week, but never the lock's packages: bumped one by one, their pins broke each other, and only the setup container's `pip check` caught it, on the GPU Node, after merging.
+- A new ComfyUI commit needs the lock regenerated before merging, with `just comfyui lock` on the Joined GPU Node. It installs the current lock with `--no-deps` in ComfyUI's image, then ComfyUI's `requirements.txt` at that commit over it, runs `pip check` and writes the venv's `pip freeze`. So a package moves only when ComfyUI needs it to, and one that ComfyUI stops needing stays until it's removed by hand. The image runs in the agent's containerd, outside the Lab, so its downloads aren't bound by ComfyUI's network policy.
 - The install lives in `/var/lib/k3d-lab/models/comfyui/runtime`, beside the weights, so it survives every leave, purge and rebuild of the Lab, as they do. A change to the commit or the lock reinstalls it, from GitHub and PyPI.
 - The GPU Node's disk holds the image, about 20 GB compressed, and 21 GB of weights. The image survives leaves and the cleanup of a Stale install, so a rebuilt Lab doesn't pull it again. Only `just gpu leave purge`, or a join that takes k3s back a version, removes it, and the next join pulls it again.
