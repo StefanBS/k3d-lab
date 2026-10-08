@@ -36,13 +36,7 @@ secret_store_unsealed || die "the Secret Store isn't running and unsealed; run '
 taken=$(lab_host_ports_taken)
 [[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
 $taken"
-remote_commit=$(git ls-remote "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" | awk 'NR == 1 { print $1 }')
-[[ -n $remote_commit ]] || die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
-# ArgoCD reads what's pushed, while verify runs the checks as they are here.
-if [[ $revision == "$(git -C "$LAB_ROOT" branch --show-current)" &&
-  $remote_commit != "$(git -C "$LAB_ROOT" rev-parse HEAD)" ]]; then
-  warn "$revision here isn't the commit $LAB_REPO has; the Lab is built from what's pushed"
-fi
+pushed_commit "$revision" >/dev/null
 
 # Makes / rshared inside the k3d Nodes, which Cilium's bpffs mount needs.
 export K3D_FIX_MOUNTS=1

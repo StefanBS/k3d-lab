@@ -30,6 +30,10 @@ doctor:
 up *args:
     @scripts/up.sh {{ args }}
 
+# Point the running Lab at the pushed branch checked out here, or at <branch>, then verify it
+track *branch:
+    @scripts/track.sh {{ branch }}
+
 # Destroy the Lab, taking a Joined GPU Node back first (the Host's Secret Store, Lab CA and Docker CE are kept)
 down:
     @scripts/down.sh

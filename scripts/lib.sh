@@ -88,6 +88,20 @@ kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
 
+# pushed_commit <branch or tag>: prints the commit LAB_REPO has for it, the one ArgoCD
+# reads, and fails if LAB_REPO doesn't have it. verify runs the checks as they are here,
+# so it warns when the branch checked out here isn't that commit.
+pushed_commit() {
+  local revision=$1 commit
+  commit=$(git ls-remote "$LAB_REPO" "refs/heads/$revision" "refs/tags/$revision" | awk 'NR == 1 { print $1 }')
+  [[ -n $commit ]] || die "'$revision' isn't a branch or tag of $LAB_REPO; push it first"
+  if [[ $revision == "$(git -C "$LAB_ROOT" branch --show-current)" &&
+    $commit != "$(git -C "$LAB_ROOT" rev-parse HEAD)" ]]; then
+    warn "$revision here isn't the commit $LAB_REPO has; the Lab runs what's pushed" >&2
+  fi
+  echo "$commit"
+}
+
 # The Server's container, and its address on the Lab network.
 LAB_SERVER=k3d-$LAB_NAME-server-0
 lab_server_ip() {
