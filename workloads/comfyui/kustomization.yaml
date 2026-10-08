@@ -18,7 +18,7 @@ configMapGenerator:
 images:
   # PyTorch 2.12 on ROCm 7.14, which ComfyUI was measured on. Renovate updates only the
   # digest: a new tag changes PyTorch or ROCm, which needs measuring again, and a new
-  # build of the fixed rocprofiler-sdk in config/setup.sh (ADR 0011).
+  # build of the fixed rocprofiler-sdk and ROCr in config/setup.sh (ADRs 0011 and 0012).
   - name: docker.io/rocm/pytorch
     newTag: rocm7.14.1_ubuntu24.04_py3.12_pytorch_release_2.12.0
     digest: sha256:cc9b00f90b85c97b015b040fa55c8d1b404b7cacc6ad57d74ee3451c97508da1

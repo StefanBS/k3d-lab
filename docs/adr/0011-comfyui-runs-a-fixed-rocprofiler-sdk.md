@@ -15,4 +15,4 @@ Every process that uses the GPU through the image's PyTorch keeps one CPU core a
 ## Consequences
 
 - **The library is tied to ROCm 7.14.1.** A `rocm/pytorch` tag with another ROCm needs a new build from that ROCm's commit, or this mount removed if that ROCm has the fix.
-- **One trigger remains:** after ComfyUI's first job, the core spins again while dynamic VRAM and async offload are both on. Turning off either one stops it; neither is turned off yet.
+- **It doesn't stop a second spin**, which starts after ComfyUI's first job while dynamic VRAM and async offload are both on. That one is in ROCr, which ADR 0012 replaces the same way.

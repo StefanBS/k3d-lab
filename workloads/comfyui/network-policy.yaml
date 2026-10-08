@@ -11,8 +11,8 @@ spec:
     matchLabels: {app: comfyui}
   # What the weights and setup steps download, only when the GPU Node doesn't have it
   # yet (ADR 0007): the weights from Hugging Face, which redirects to its CDN, ComfyUI
-  # from GitHub, which redirects to codeload, the fixed rocprofiler-sdk from a GitHub
-  # release, which redirects to release-assets (ADR 0011), and its packages from PyPI.
+  # from GitHub, which redirects to codeload, the fixed rocprofiler-sdk and ROCr from GitHub
+  # releases, which redirect to release-assets (ADRs 0011, 0012), and its packages from PyPI.
   # ComfyUI itself reaches nothing.
   egress:
     - toFQDNs:
