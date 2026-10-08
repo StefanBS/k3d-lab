@@ -15,3 +15,7 @@ bats = "1.14.0"
 kubeconform = "0.8.0"
 # Runs `just verify`'s checks (ADR 0004). Not in mise's registry, so named by its aqua package.
 "aqua:kyverno/chainsaw" = "0.2.15"
+# Tests the admission policies (platform/kyverno-policies/) without a Lab, at the
+# version platform/kyverno/ installs. Named by its aqua package, like chainsaw, so
+# Renovate can look its releases up.
+"aqua:kyverno/kyverno" = "1.19.1"

@@ -102,10 +102,11 @@
     },
     {
       // The policies (platform/kyverno-policies/) are ValidatingPolicies in Kyverno's CEL.
+      // The chart and the CLI that lint tests them with (mise.toml) move together.
       groupName: 'Admission policy',
-      matchDepNames: ['kyverno'],
+      matchDepNames: ['kyverno', 'aqua:kyverno/kyverno'],
       prBodyNotes: [
-        "**Before merging:** check Kyverno's release notes for changes to `ValidatingPolicy` and to its webhooks' `failurePolicy`, then run `just verify kyverno-healthy policies-enforced` on a Lab built from this branch.",
+        "**Before merging:** check Kyverno's release notes for changes to `ValidatingPolicy` and to its webhooks' `failurePolicy`, then run `just verify kyverno-healthy policies-enforced` on a Lab built from this branch. The CLI in `mise.toml` should be at the chart's `appVersion`: if this PR moves only one of them, wait for the other's release.",
       ],
     },
     {

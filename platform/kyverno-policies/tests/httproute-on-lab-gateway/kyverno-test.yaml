@@ -1,0 +1,29 @@
+# Good and bad objects for httproute-on-lab-gateway: `just lint` checks that each gets
+# the result below.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: httproute-on-lab-gateway
+policies:
+  - ../../httproute-on-lab-gateway.yaml
+resources:
+  - resources.yaml
+  # Also applied to the Lab by verify/policies-enforced/.
+  - route-on-http-listener.yaml
+results:
+  - policy: httproute-on-lab-gateway
+    kind: HTTPRoute
+    resources: [demo/web, gateway/gateway-ui]
+    result: pass
+  - policy: httproute-on-lab-gateway
+    kind: HTTPRoute
+    resources:
+      - route-on-http-listener
+      - demo/no-section-name
+      - demo/parent-in-own-namespace
+      - demo/other-gateway
+      - demo/no-hostnames
+      - demo/outside-lab-localhost
+      - gateway/gateway-outside-lab-localhost
+      - gateway/redirect-and-https
+    result: fail

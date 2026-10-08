@@ -1,0 +1,53 @@
+# Good and bad objects for gpu-workload-shape: `just lint` checks that each gets the
+# result below.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: gpu-workload-shape
+policies:
+  - ../../gpu-workload-shape.yaml
+resources:
+  - resources.yaml
+  # Also applied to the Lab by verify/policies-enforced/.
+  - gpu-deployment.yaml
+results:
+  - policy: gpu-workload-shape
+    kind: DaemonSet
+    resources: [gpu-workload, keyless-toleration, toleration-without-value]
+    result: pass
+  - policy: gpu-workload-shape
+    kind: DaemonSet
+    resources: [toleration-wrong-value, toleration-wrong-effect, no-node-selector]
+    result: fail
+  - policy: gpu-workload-shape
+    kind: Pod
+    resources: [gpu-workload-pod]
+    result: pass
+  - policy: gpu-workload-shape
+    kind: Pod
+    resources: [gpu-pod]
+    result: fail
+  - policy: gpu-workload-shape
+    kind: Deployment
+    resources: [cpu-deployment]
+    result: pass
+  - policy: gpu-workload-shape
+    kind: Deployment
+    resources: [gpu-deployment]
+    result: fail
+  - policy: gpu-workload-shape
+    kind: Job
+    resources: [gpu-init-container]
+    result: fail
+  - policy: gpu-workload-shape
+    kind: CronJob
+    resources: [gpu-cronjob]
+    result: fail
+  - policy: gpu-workload-shape
+    kind: Rollout
+    resources: [workload-ref]
+    result: pass
+  - policy: gpu-workload-shape
+    kind: Rollout
+    resources: [gpu-rollout]
+    result: fail

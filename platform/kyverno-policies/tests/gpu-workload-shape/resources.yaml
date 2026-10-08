@@ -1,0 +1,258 @@
+# A GPU Workload: a DaemonSet that selects the GPU Node and tolerates its taint.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gpu-workload
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: gpu-workload}
+  template:
+    metadata:
+      labels: {app: gpu-workload}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      containers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            limits: {amd.com/gpu: 1}
+---
+# A toleration without a key, operator Exists, tolerates every taint.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: keyless-toleration
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: keyless-toleration}
+  template:
+    metadata:
+      labels: {app: keyless-toleration}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            limits: {amd.com/gpu: 1}
+---
+# The taint has no value, so operator Equal (the default) without one tolerates it.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: toleration-without-value
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: toleration-without-value}
+  template:
+    metadata:
+      labels: {app: toleration-without-value}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, effect: NoSchedule}
+      containers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            requests: {amd.com/gpu: 1}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: toleration-wrong-value
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: toleration-wrong-value}
+  template:
+    metadata:
+      labels: {app: toleration-wrong-value}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Equal, value: "true", effect: NoSchedule}
+      containers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            limits: {amd.com/gpu: 1}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: toleration-wrong-effect
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: toleration-wrong-effect}
+  template:
+    metadata:
+      labels: {app: toleration-wrong-effect}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoExecute}
+      containers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            limits: {amd.com/gpu: 1}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: no-node-selector
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: no-node-selector}
+  template:
+    metadata:
+      labels: {app: no-node-selector}
+    spec:
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      containers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            limits: {amd.com/gpu: 1}
+---
+# A GPU Workload's pod, as its DaemonSet creates it.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-workload-pod
+  namespace: demo
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: gpu-workload
+      uid: 00000000-0000-0000-0000-000000000000
+spec:
+  nodeSelector: {k3d-lab/gpu: amd}
+  tolerations:
+    - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+  containers:
+    - name: gpu
+      image: busybox:1.38
+      resources:
+        limits: {amd.com/gpu: 1}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-pod
+  namespace: demo
+spec:
+  nodeSelector: {k3d-lab/gpu: amd}
+  tolerations:
+    - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+  containers:
+    - name: gpu
+      image: busybox:1.38
+      resources:
+        limits: {amd.com/gpu: 1}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-deployment
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: cpu-deployment}
+  template:
+    metadata:
+      labels: {app: cpu-deployment}
+    spec:
+      containers:
+        - name: cpu
+          image: busybox:1.38
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-init-container
+  namespace: demo
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      initContainers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            limits: {amd.com/gpu: 1}
+      containers:
+        - name: cpu
+          image: busybox:1.38
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gpu-cronjob
+  namespace: demo
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector: {k3d-lab/gpu: amd}
+          tolerations:
+            - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+          containers:
+            - name: gpu
+              image: busybox:1.38
+              resources:
+                limits: {amd.com/gpu: 1}
+---
+# A Rollout that points at a Deployment has no template: the Deployment's is checked.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: workload-ref
+  namespace: demo
+spec:
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cpu-deployment
+  strategy:
+    canary: {}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: gpu-rollout
+  namespace: demo
+spec:
+  selector:
+    matchLabels: {app: gpu-rollout}
+  template:
+    metadata:
+      labels: {app: gpu-rollout}
+    spec:
+      nodeSelector: {k3d-lab/gpu: amd}
+      tolerations:
+        - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
+      containers:
+        - name: gpu
+          image: busybox:1.38
+          resources:
+            limits: {amd.com/gpu: 1}
+  strategy:
+    canary: {}

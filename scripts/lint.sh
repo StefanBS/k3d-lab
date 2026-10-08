@@ -14,7 +14,12 @@ manifests=$(mktemp --suffix=.yaml)
 # A chart with a template per group: a component's Application, as its ApplicationSet
 # generates it (render_application).
 application_chart=$(mktemp -d)
-trap 'rm -rf "$manifests" "$application_chart"' EXIT
+# The enforced admission policies, which reject an object rather than only report it,
+# so a component that breaks one fails its sync (read_policies).
+enforced_policies=$(mktemp --suffix=.yaml)
+# Every component's render, as Kyverno admits it (add_admitted).
+admitted=$(mktemp --suffix=.yaml)
+trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies" "$admitted"' EXIT
 
 # The ApplicationSets template these fields into each component's Application.
 lint_component_folder() {
@@ -188,6 +193,75 @@ lint_rendering() {
   fi
 }
 
+# The admission policies, and their fixtures: good and bad objects, each with the result
+# it should get, in a folder per policy.
+policies=platform/kyverno-policies
+policy_tests=$policies/tests
+
+# Reads the admission policies as ArgoCD applies them: their names into $policy_names,
+# and the enforced ones into $enforced_policies.
+read_policies() {
+  render_component "$policies"
+  policy_names=$(yq -N 'select(.kind == "ValidatingPolicy") | .metadata.name' "$manifests")
+  yq 'select(.spec.validationActions | contains(["Deny"]))' "$manifests" >"$enforced_policies"
+  # Without one, lint_admission would pass every component.
+  [[ -s $enforced_policies ]] || fail "no admission policy is enforced (validationActions: [Deny])"
+}
+
+# Each policy's fixtures get the results its kyverno-test.yaml expects.
+lint_policy_fixtures() {
+  local name test fixtures fixture listed found status=0 out results wrong
+  for name in $policy_names; do
+    test=$policy_tests/$name/kyverno-test.yaml
+    if [[ ! -f $test ]]; then
+      fail "the policy $name has no fixtures in $policy_tests/$name/"
+      continue
+    fi
+    mapfile -t fixtures < <(yq ".resources[] | \"${test%/*}/\" + ." "$test")
+    for fixture in "${fixtures[@]}"; do
+      if [[ ! -f $fixture ]]; then
+        fail "$test names $(realpath -m --relative-to=. "$fixture"), which doesn't exist"
+        continue 2
+      fi
+    done
+    # kyverno test ignores a fixture without an expected result. Each folder tests one
+    # policy, so each fixture is listed once.
+    listed=$(yq '[.results[].resources[]] | length' "$test")
+    found=$(yq ea '[select(.kind != null)] | length' "${fixtures[@]}")
+    [[ $listed == "$found" ]] || fail "$test gives $listed of its $found fixtures an expected result"
+  done
+  out=$(kyverno test "$policy_tests" --require-tests --detailed-results -o json 2>&1) || status=$?
+  # A result per fixture: Pass and Ok when it gets the one expected. kyverno test also
+  # passes a fixture its policy doesn't match, whatever result it expects: Excluded.
+  results=$(sed -n '/^\[/,/^\]/p' <<<"$out" | yq -p json -o tsv '.[] | [.RESULT, .REASON, .RESOURCE]') || status=$?
+  wrong=$(grep -Pv '^Pass\tOk\t' <<<"$results" || true)
+  if [[ -n $wrong ]]; then
+    fail "fixtures that don't get their expected result, or that their policy doesn't match:"$'\n'"$wrong"
+  elif ((status != 0)) || [[ -z $results ]]; then
+    fail "kyverno test failed:"$'\n'"$out"
+  else
+    ok "the admission policies' fixtures get their expected results ($(wc -l <<<"$results"))"
+  fi
+}
+
+# Adds the component rendered in $manifests to $admitted, as admitted: each object
+# without a namespace gets its component's, as ArgoCD installs it there.
+add_admitted() {
+  echo --- >>"$admitted"
+  NS=$(component_namespace "$1") yq 'select(.kind != null) | .metadata.namespace = (.metadata.namespace // strenv(NS)) | ... comments = ""' "$manifests" >>"$admitted"
+}
+
+# Every component passes the enforced policies, in one kyverno apply: a process per
+# component costs half a second each.
+lint_admission() {
+  local out
+  if out=$(kyverno apply "$enforced_policies" --resource "$admitted" --remove-color 2>&1); then
+    ok "every component passes the enforced policies (${#components[@]})"
+  else
+    fail "a component breaks an enforced policy:"$'\n'"$out"
+  fi
+}
+
 log "Shell scripts"
 if git ls-files -z --cached --others --exclude-standard '*.sh' | xargs -0 shellcheck --external-sources; then
   ok "shellcheck finds nothing"
@@ -213,6 +287,10 @@ for file in Justfile just/*.just; do
   fi
 done
 
+log "Admission policies"
+read_policies
+lint_policy_fixtures
+
 log "Components"
 mapfile -t components < <(component_dirs)
 ((${#components[@]})) || fail "no component folders found"
@@ -228,8 +306,11 @@ for dir in "${components[@]}"; do
   if [[ $dir == platform/* ]]; then
     platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
   fi
+  # A render that failed left $manifests empty.
+  add_admitted "$dir"
   lint_rendering "$dir's Application" render_application "$dir"
 done
+lint_admission
 lint_platform_namespaces
 lint_rendering "the same-namespace allow" render_same_namespace_allow
 lint_same_namespace_source workloads/rollouts-demo

@@ -1,0 +1,19 @@
+# Good and bad objects for images-pinned: `just lint` checks that each gets the result
+# below.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: images-pinned
+policies:
+  - ../../images-pinned.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: images-pinned
+    kind: Pod
+    resources: [tagged, digest, latest-with-digest, registry-port-tagged]
+    result: pass
+  - policy: images-pinned
+    kind: Pod
+    resources: [untagged, latest, init-container-latest, registry-port-untagged]
+    result: fail

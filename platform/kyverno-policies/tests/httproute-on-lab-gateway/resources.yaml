@@ -1,0 +1,120 @@
+# A UI on the Lab's Gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: web
+  namespace: demo
+spec:
+  parentRefs:
+    - {name: lab, namespace: gateway, sectionName: https}
+  hostnames: [web.lab.localhost]
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
+---
+# A UI in the Gateway's own namespace: the same rules as any other.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gateway-ui
+  namespace: gateway
+spec:
+  parentRefs:
+    - {name: lab, sectionName: https}
+  hostnames: [gateway.lab.localhost]
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
+---
+# Every listener of the Gateway, plain HTTP included.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: no-section-name
+  namespace: demo
+spec:
+  parentRefs:
+    - {name: lab, namespace: gateway}
+  hostnames: [web.lab.localhost]
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
+---
+# Without a namespace, the parent is a Gateway lab in the route's own namespace.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: parent-in-own-namespace
+  namespace: demo
+spec:
+  parentRefs:
+    - {name: lab, sectionName: https}
+  hostnames: [web.lab.localhost]
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: other-gateway
+  namespace: demo
+spec:
+  parentRefs:
+    - {name: other, namespace: gateway, sectionName: https}
+  hostnames: [web.lab.localhost]
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: no-hostnames
+  namespace: demo
+spec:
+  parentRefs:
+    - {name: lab, namespace: gateway, sectionName: https}
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: outside-lab-localhost
+  namespace: demo
+spec:
+  parentRefs:
+    - {name: lab, namespace: gateway, sectionName: https}
+  hostnames: [web.lab.localhost, web.example.com]
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
+---
+# The redirect's exception is for the http listener only.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gateway-outside-lab-localhost
+  namespace: gateway
+spec:
+  parentRefs:
+    - {name: lab, sectionName: https}
+  hostnames: [gateway.example.com]
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: redirect-and-https
+  namespace: gateway
+spec:
+  parentRefs:
+    - {name: lab, sectionName: http}
+    - {name: lab, sectionName: https}
+  rules:
+    - backendRefs:
+        - {name: web, port: 80}
