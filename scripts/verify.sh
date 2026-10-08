@@ -9,6 +9,8 @@
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
+# shellcheck source=host-memory.sh
+source "$(dirname "$0")/host-memory.sh"
 
 # The checks that call the Lab from the Host trust only the Lab CA.
 export LAB_CA_CERT
@@ -44,6 +46,11 @@ fi
 # The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
 if [[ -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then
   warn "$why: the GPU Node's route to the Lab is stale; run 'just host wizard', then 'just gpu join'"
+fi
+# A Host deep in swap can stall k3s until it dies on its own datastore, and every check
+# that runs meanwhile fails.
+if short=$(host_memory_short </proc/meminfo); then
+  warn "$short; checks may fail while k3s stalls on its datastore"
 fi
 # Go's test runner announces every check as it starts, pauses and resumes it, even with
 # --quiet. The PASS or FAIL for each check says all of that. With pipefail, the

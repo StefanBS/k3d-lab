@@ -7,6 +7,8 @@ source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/host.sh"
 # shellcheck source=secret-store.sh
 source "$(dirname "$0")/secret-store.sh"
+# shellcheck source=host-memory.sh
+source "$(dirname "$0")/host-memory.sh"
 
 # The variable names a .env-style file assigns, sorted.
 env_keys() {
@@ -46,6 +48,12 @@ else
   else
     ok "Docker's data directory $data_root has ${avail} GiB free (${free_pct}%)"
   fi
+fi
+
+# The k3d Nodes take up to 8 GiB between them (k3d/cluster.yaml); a Host deep in swap
+# can stall k3s until it dies on its own datastore.
+if short=$(host_memory_short </proc/meminfo); then
+  warn "$short; close what you can before 'just up' or 'just verify'"
 fi
 
 # The Lab's Gateway is published on these (k3d/cluster.yaml); a running Lab holds them itself.
