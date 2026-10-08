@@ -125,9 +125,11 @@ hubble_denied() {
 # Says OK if the pod's request to the URL, with busybox's wget, fails and Hubble records
 # a flow from the pod matching the filters as dropped by policy. Otherwise says FAIL,
 # and why, and fails. The drop is what proves the policy denied it: a request that
-# fails for any other reason, such as a pod that isn't up, leaves none.
+# fails for any other reason, such as a pod that isn't up, leaves none. Without one, it
+# also prints the pod's recent flows, found by name and by IP: Hubble Relay only holds
+# the last minute or two, so they're gone by the time anyone looks.
 expect_denied() {
-  local what=$1 ns=$2 pod=$3 url=$4
+  local what=$1 ns=$2 pod=$3 url=$4 ip
   shift 4
   if kubectl -n "$ns" exec "$pod" -- wget -qO /dev/null -T 3 "$url" 2>/dev/null; then
     echo "FAIL  $what: allowed"
@@ -135,6 +137,11 @@ expect_denied() {
   fi
   if ! hubble_denied --from-pod "$ns/$pod" "$@"; then
     echo "FAIL  $what: failed, but Hubble has no drop by policy"
+    ip=$(kubectl -n "$ns" get pod "$pod" -o jsonpath='{.status.podIP}')
+    echo "      Hubble's last flows from $ns/$pod:"
+    hubble_observe --since 5m --last 20 -o compact --from-pod "$ns/$pod" 2>&1 | sed 's/^/        /'
+    echo "      Hubble's last flows from its IP, $ip:"
+    hubble_observe --since 5m --last 20 -o compact --from-ip "$ip" 2>&1 | sed 's/^/        /'
     return 1
   fi
   echo "OK    $what: dropped by policy"
