@@ -1,6 +1,7 @@
 # Every Python package ComfyUI needs beyond the image's ROCm PyTorch, at the exact
-# versions the Lab measured, installed with --no-deps so nothing else is pulled in. A
-# ComfyUI update (setup.sh) needs this regenerated from its requirements.txt.
+# versions the Lab measured, installed with --no-deps so nothing else is pulled in.
+# Written by `just comfyui lock`, never by hand or by Renovate: a new ComfyUI commit
+# (setup.sh) needs it run before merging.
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.3
 aiosignal==1.4.0

@@ -113,15 +113,22 @@
       matchDepNames: ['amd-gpu', 'docker.io/rocm/k8s-device-plugin'],
     },
     {
-      // ComfyUI follows its master branch, and its Python packages are locked to what it
-      // was measured with, so they come together once a week. Its ROCm PyTorch image only
+      // ComfyUI follows its master branch, once a week. Its ROCm PyTorch image only
       // takes new digests of the same tag: a new tag changes PyTorch or ROCm.
       groupName: 'ComfyUI',
       matchFileNames: ['workloads/comfyui/**'],
       schedule: ['* 0-5 * * 1'],
       prBodyNotes: [
-        "**Before merging:** a new ComfyUI commit can change its `requirements.txt`. Install it over the locked packages, run `pip check`, and update `workloads/comfyui/config/requirements.txt` with the result (`pip freeze`).",
+        "**Before merging:** a new ComfyUI commit can change its `requirements.txt`. With the GPU Node Joined, run `just comfyui lock` on this branch and commit `workloads/comfyui/config/requirements.txt` if it changed.",
       ],
+    },
+    {
+      // ComfyUI's lock (ADR 0007) is one set of packages that pip check passes together,
+      // which `just comfyui lock` regenerates from ComfyUI's own requirements.txt. Bumped
+      // one by one, its pins break each other.
+      matchManagers: ['pip_requirements'],
+      matchFileNames: ['workloads/comfyui/config/requirements.txt'],
+      enabled: false,
     },
     {
       matchDepNames: ['docker.io/rocm/pytorch'],
