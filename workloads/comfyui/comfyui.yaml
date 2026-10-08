@@ -99,6 +99,12 @@ spec:
             - {name: models, mountPath: /models}
             - {name: config, mountPath: /config, readOnly: true}
             - {name: work, mountPath: /work}
+            # The image's rocprofiler-sdk keeps a CPU core at 100% while the GPU is idle;
+            # setup downloads this fixed build of it (ADR 0011).
+            - name: models
+              mountPath: /opt/venv/lib/python3.12/site-packages/_rocm_sdk_core/lib/librocprofiler-sdk.so.1
+              subPath: comfyui/rocm/librocprofiler-sdk.so.1
+              readOnly: true
       volumes:
         # The GPU Node's model directory, MODEL_DIR in scripts/gpu-node.sh: weights,
         # install, saved workflows and output, in comfyui/.

@@ -7,6 +7,20 @@ set -euo pipefail
 # renovate: datasource=git-refs depName=https://github.com/Comfy-Org/ComfyUI branch=master
 COMFYUI_COMMIT=5c460d8172fe30761ff67c0df3d5643bb74e0d70
 
+# rocprofiler-sdk with the HSA signal pool fix (ADR 0011), which the DaemonSet mounts over
+# the image's copy. It's built for the image's ROCm 7.14.1 and no other.
+ROCPROFILER_SDK_URL=https://github.com/StefanBS/rocm-systems/releases/download/lab-rocprofiler-sdk-7.14.1-1/librocprofiler-sdk.so.1
+ROCPROFILER_SDK_SHA256=95306a759732e075d7dd57f2bc1fd75e5d1d9d4866370240cdea72227e360ba4
+
+sdk=/models/comfyui/rocm/librocprofiler-sdk.so.1
+if ! echo "$ROCPROFILER_SDK_SHA256  $sdk" | sha256sum -c --status 2>/dev/null; then
+  echo "Downloading rocprofiler-sdk"
+  mkdir -p "${sdk%/*}"
+  curl -fsSL --retry 5 -o "$sdk.part" "$ROCPROFILER_SDK_URL"
+  echo "$ROCPROFILER_SDK_SHA256  $sdk.part" | sha256sum -c -
+  mv "$sdk.part" "$sdk"
+fi
+
 runtime=/models/comfyui/runtime
 stamp=$(cat /config/requirements.txt - <<<"$COMFYUI_COMMIT" | sha256sum | cut -d' ' -f1)
 if [[ $(cat "$runtime/stamp" 2>/dev/null) == "$stamp" ]]; then
