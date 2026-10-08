@@ -536,8 +536,9 @@ cmd_run() {
     # Its progress goes to stderr, and stdin stays for the command, as stdout.
     "${ctr[@]}" images pull "$image" </dev/null >&2
   fi
-  # ctr gives the container the host's network, but not its resolv.conf.
-  "${ctr[@]}" run --rm -i --net-host \
+  # ctr passes stdin on unless there's a TTY, and gives the container the host's network,
+  # but not its resolv.conf.
+  "${ctr[@]}" run --rm --net-host \
     --mount type=bind,src=/etc/resolv.conf,dst=/etc/resolv.conf,options=rbind:ro \
     "$image" "k3d-lab-run-$$" "$@"
 }
