@@ -32,8 +32,8 @@ options:
     disableLoadbalancer: true
   # Caps each k3d Node's memory, with room above what it uses settled, so a Lab that
   # grows evicts its own pods rather than pushing the Host's desktop into swap. k3d
-  # shows each k3d Node its cap as its total memory, so the kubelet evicts before
-  # the kernel's OOM killer steps in.
+  # shows each k3d Node its cap as its total memory, and the kubelet evicts below the
+  # memory.available threshold set below.
   runtime:
     serversMemory: 5g
     agentsMemory: 3g
@@ -49,6 +49,12 @@ options:
         nodeFilters: [server:*]
       - arg: --disable=servicelb
         nodeFilters: [server:*]
+      # k3s sets only the disk thresholds, kept here, so without memory.available the
+      # kubelet never evicts and a capped k3d Node is left to the OOM killer, which may
+      # pick k3s itself. k3d states the cap in kB, which the kubelet reads as KiB, so it
+      # sees 2.4% more memory than there is: 120MiB on the Server, within the 500Mi.
+      - arg: --kubelet-arg=eviction-hard=imagefs.available<5%,nodefs.available<5%,memory.available<500Mi
+        nodeFilters: [server:*, agent:*]
   kubeconfig:
     updateDefaultKubeconfig: true
     switchCurrentContext: false
