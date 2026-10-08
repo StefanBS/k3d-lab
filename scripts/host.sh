@@ -32,13 +32,13 @@ DOCKER_DAEMON_JSON=/etc/docker/daemon.json
 # trusts the Lab CA only once it exists. secret-store.sh adds the Secret Store's steps
 # after these, since its certificate is from the Lab CA.
 HOST_STEPS=(
-  lab_ca_exists owner "the Lab CA exists ($LAB_CA_DIR)"
+  lab_ca_exists owner "Lab CA exists ($LAB_CA_DIR)"
   docker_ce_installed root "Docker CE is installed"
   docker_data_root_labelled root "SELinux labels $DOCKER_DATA_ROOT like /var/lib/docker"
   docker_data_root_set root "Docker CE keeps its data in $DOCKER_DATA_ROOT"
   docker_ce_running root "Docker CE is running and starts at boot"
   owner_in_docker_group root "$LAB_OWNER is in the docker group"
-  lab_ca_trusted root "the Host trusts the Lab CA"
+  lab_ca_trusted root "Host trusts the Lab CA"
 )
 
 # What each side runs to fix its steps.
