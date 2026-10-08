@@ -119,7 +119,7 @@
       matchFileNames: ['workloads/comfyui/**'],
       schedule: ['* 0-5 * * 1'],
       prBodyNotes: [
-        "**Before merging:** a new ComfyUI commit can change its `requirements.txt`. With the GPU Node Joined, run `just comfyui lock` on this branch and commit `workloads/comfyui/config/requirements.txt` if it changed.",
+        "**Before merging:** with the GPU Node Joined (no Lab? `just up` on this branch, then `just gpu join`), run `just comfyui lock` on this branch and push `workloads/comfyui/config/requirements.txt` if it changed. A new image digest can change the lock too. If `pip check` fails, don't merge. Afterwards, `just verify comfyui` checks ComfyUI on the new commit, and `just gpu leave` gives the GPU back.",
       ],
     },
     {
