@@ -37,6 +37,20 @@ alloy:
         tls_config {
           ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
         }
+        forward_to = [prometheus.relabel.kubelet.receiver]
+      }
+
+      // k3s runs the whole control plane in one process, so the Server's kubelet
+      // endpoint also serves the API server's, etcd's and the scheduler's metrics: about
+      // 100k series, mostly histograms, that nothing in the Lab reads. Only the kubelet's
+      // own metrics are kept, with the process's memory and Go runtime, and the scrape's
+      // own up and scrape_* series.
+      prometheus.relabel "kubelet" {
+        rule {
+          action        = "keep"
+          source_labels = ["__name__"]
+          regex         = "up|scrape_.+|kubelet_.+|volume_manager_.+|storage_operation_.+|process_.+|go_.+"
+        }
         forward_to = [prometheus.remote_write.prometheus.receiver]
       }
 
