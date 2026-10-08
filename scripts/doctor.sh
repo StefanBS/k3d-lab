@@ -50,8 +50,10 @@ else
   fi
 fi
 
-if short=$(host_memory_short </proc/meminfo); then
-  warn "$short; close what you can before 'just up' or 'just verify'"
+if memory=$(host_memory_short </proc/meminfo); then
+  warn "the Host is short on memory: $memory; close what you can before 'just up' or 'just verify'"
+else
+  ok "the Host has memory to spare: $memory"
 fi
 
 # The Lab's Gateway is published on these (k3d/cluster.yaml); a running Lab holds them itself.

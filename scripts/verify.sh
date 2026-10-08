@@ -27,8 +27,8 @@ done
 # warn_if_short_on_memory <consequence>: WARNs, with the numbers, while the Host is short
 # on memory, since k3s then stalls and may die on its own datastore.
 warn_if_short_on_memory() {
-  local short
-  if short=$(host_memory_short </proc/meminfo); then warn "$short; $1"; fi
+  local memory
+  if memory=$(host_memory_short </proc/meminfo); then warn "the Host is short on memory: $memory; $1"; fi
 }
 
 # Before the Lab's own checks, since memory may be why it doesn't answer.

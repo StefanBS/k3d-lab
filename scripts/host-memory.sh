@@ -12,7 +12,7 @@ HOST_MEM_AVAILABLE_MIN_GIB=1
 HOST_SWAP_USED_MAX_GIB=6
 
 # host_memory_short < /proc/meminfo: prints the available memory and the swap in use,
-# and succeeds, when either is past its threshold. Otherwise prints nothing and fails.
+# each with its threshold, and succeeds when either is past it.
 host_memory_short() {
   awk -v min="$HOST_MEM_AVAILABLE_MIN_GIB" -v max="$HOST_SWAP_USED_MAX_GIB" '
     { kb[$1] = $2 }
@@ -20,7 +20,7 @@ host_memory_short() {
       gib = 1024 * 1024
       avail = kb["MemAvailable:"] / gib
       swap = (kb["SwapTotal:"] - kb["SwapFree:"]) / gib
+      printf "%.1f GiB available (warns below %s GiB), %.1f GiB in swap (warns above %s GiB)\n", avail, min, swap, max
       if (avail >= min && swap <= max) exit 1
-      printf "the Host is short on memory: %.1f GiB available (warns below %s GiB), %.1f GiB in swap (warns above %s GiB)\n", avail, min, swap, max
     }'
 }
