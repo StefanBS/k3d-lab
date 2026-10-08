@@ -12,14 +12,14 @@ spec:
     None of it reaches a node.
   steps:
     - try:
-        # Both objects are fixtures of lint's tests of their policy too.
+        # Fixtures of lint's tests of their policy, the one place they're written.
         - apply:
-            file: gpu-deployment.yaml
+            file: ../../platform/kyverno-policies/tests/gpu-workload-shape/gpu-deployment.yaml
             expect:
               - check:
                   (contains($error || '', 'gpu-workload-shape')): true
         - apply:
-            file: other-listener.yaml
+            file: ../../platform/kyverno-policies/tests/httproute-on-lab-gateway/route-on-http-listener.yaml
             expect:
               - check:
                   (contains($error || '', 'httproute-on-lab-gateway')): true

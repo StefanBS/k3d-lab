@@ -8,8 +8,8 @@ policies:
   - ../../httproute-on-lab-gateway.yaml
 resources:
   - resources.yaml
-  # The bad HTTPRoute verify/policies-enforced/ applies to the Lab.
-  - ../../../../verify/policies-enforced/other-listener.yaml
+  # Also applied to the Lab by verify/policies-enforced/.
+  - route-on-http-listener.yaml
 results:
   - policy: httproute-on-lab-gateway
     kind: HTTPRoute
@@ -18,7 +18,7 @@ results:
   - policy: httproute-on-lab-gateway
     kind: HTTPRoute
     resources:
-      - other-listener
+      - route-on-http-listener
       - demo/no-section-name
       - demo/parent-in-own-namespace
       - demo/other-gateway

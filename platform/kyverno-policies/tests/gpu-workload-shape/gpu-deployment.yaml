@@ -1,5 +1,5 @@
-# The bad Deployment this check applies, and that lint tests gpu-workload-shape on
-# (platform/kyverno-policies/tests/). A GPU Workload is a DaemonSet (ADR 0006).
+# A bad Deployment, which verify/policies-enforced/ also applies to the Lab. A GPU
+# Workload is a DaemonSet (ADR 0006).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

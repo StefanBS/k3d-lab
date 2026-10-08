@@ -218,7 +218,6 @@ lint_policy_fixtures() {
       continue
     fi
     mapfile -t fixtures < <(yq ".resources[] | \"${test%/*}/\" + ." "$test")
-    # Some are verify's own bad objects, which a move in verify/ can break.
     for fixture in "${fixtures[@]}"; do
       if [[ ! -f $fixture ]]; then
         fail "$test names $(realpath -m --relative-to=. "$fixture"), which doesn't exist"
