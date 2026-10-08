@@ -286,6 +286,18 @@ for file in Justfile just/*.just; do
     fail "$file isn't formatted; run 'just --fmt --justfile $file'"
   fi
 done
+# `just <module>` runs the module's first recipe, so each module starts with a private
+# one that only lists the others: `just gpu` mustn't start the GPU wizard.
+if ! modules=$(just --dump --dump-format json | jq -re '.modules | to_entries[] | [.key, .value.first // "nothing", .value.source] | @tsv'); then
+  fail "can't read the modules' first recipes from 'just --dump'"
+fi
+while IFS=$'\t' read -r module first source; do
+  if [[ $first == _default ]]; then
+    ok "just $module lists its recipes"
+  else
+    fail "just $module runs '$first'; start $(realpath --relative-to=. "$source") with the _default recipe"
+  fi
+done <<<"$modules"
 
 log "Admission policies"
 read_policies
