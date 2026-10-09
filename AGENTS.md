@@ -14,6 +14,10 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### Measuring the Lab
+
+Measuring the Lab's datastore writes, memory, swap or pressure, or querying its Prometheus: read `docs/agents/measuring-the-lab.md` first.
+
 ### Shell gotchas
 
-Writing yq beyond a path lookup, parsing kubectl JSON, or reading tab-separated fields: read `docs/agents/shell.md` first.
+Writing an awk, yq or jq program, parsing kubectl JSON, or reading tab-separated fields: read `docs/agents/shell.md` first.

@@ -60,6 +60,17 @@ while read -r application; do
   warn "$application is paused, so ArgoCD leaves it as it is and its checks may fail; 'just resume $application' puts Git back"
 done < <(kc -n argocd get appprojects -o json | paused_applications)
 
+# Chainsaw deletes each check's namespace, chainsaw-<random>, and those the check derives
+# from it, when the check ends. One still Active is a crashed run's, such as when k3s on
+# the Server died mid-run, and its pods still run on a Host short on memory. No run reuses
+# the name, so the run doesn't wait for it to go. verify runs one at a time.
+mapfile -t leftovers < <(kc get namespaces \
+  -o jsonpath='{range .items[?(@.status.phase=="Active")]}{.metadata.name}{"\n"}{end}' | grep '^chainsaw-')
+if ((${#leftovers[@]})); then
+  warn "deleting the ${#leftovers[@]} namespaces a crashed run left behind"
+  kc delete namespace "${leftovers[@]}" --wait=false >/dev/null
+fi
+
 args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" --kube-context "$LAB_CONTEXT")
 # Only failures, their errors and the summary: a passing step says nothing.
 [[ -n ${VERBOSE:-} ]] || args+=(--quiet)
