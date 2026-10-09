@@ -13,6 +13,8 @@ source "$(dirname "$0")/host.sh"
 source "$(dirname "$0")/host-memory.sh"
 # shellcheck source=pause-state.sh
 source "$(dirname "$0")/pause-state.sh"
+# shellcheck source=server-restarts.sh
+source "$(dirname "$0")/server-restarts.sh"
 
 # The checks that call the Lab from the Host trust only the Lab CA.
 export LAB_CA_CERT
@@ -33,12 +35,25 @@ warn_if_short_on_memory() {
   if memory=$(host_memory_short </proc/meminfo); then warn "Host is short on memory: $memory; $1"; fi
 }
 
+# warn_if_server_restarted <since> <consequence>: WARNs when k3s on the Server restarted
+# since then, given as Docker's --since takes it, since checks then fail for that reason
+# rather than the change's.
+warn_if_server_restarted() {
+  local restarts
+  if restarts=$(docker logs --since "$1" "$LAB_SERVER" 2>&1 | server_restarts); then warn "$restarts; $2"; fi
+}
+
 # Before the Lab's own checks, since memory may be why it doesn't answer.
 warn_if_short_on_memory "checks may fail while k3s stalls on its datastore"
 
 # Without a Lab, every check would fail for the same reason.
 lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
-kc get --raw /readyz --request-timeout=10s >/dev/null || die "the Lab doesn't answer"
+run_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+if ! kc get --raw /readyz --request-timeout=10s >/dev/null; then
+  # A Lab that doesn't answer may be k3s restarting.
+  warn_if_server_restarted 10m "that may be why"
+  die "the Lab doesn't answer"
+fi
 
 # A paused Application drifts from Git on purpose, so its checks may fail.
 while read -r application; do
@@ -70,5 +85,8 @@ fi
 if ! chainsaw test "${args[@]}" "$@" | grep --line-buffered -Ev '^=== (RUN|PAUSE|CONT) '; then
   # The Host may have run short during the run, though it wasn't at the start.
   warn_if_short_on_memory "that may be why checks failed"
+  warn_if_server_restarted "$run_start" "that may be why checks failed"
   exit 1
 fi
+# Passing checks may still have waited out a restart, which is worth knowing.
+warn_if_server_restarted "$run_start" "checks passed anyway"
