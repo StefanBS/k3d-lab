@@ -2,7 +2,7 @@
 # The Host's half of the GPU Node's lifecycle (ADRs 0002 and 0005): what needs the Lab,
 # such as its version, its token, draining and deleting the Node object. The GPU
 # Node's half, gpu-node.sh, runs there over SSH.
-# Usage: gpu.sh join [eviction=<size>] | leave [purge] | status
+# Usage: gpu.sh join [eviction=<size>] | leave [purge] | status | ssh [<command>...]
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=gpu-node-state.sh
@@ -161,5 +161,6 @@ cmd=${1:-}
 shift || true
 case $cmd in
   join | leave | status) "cmd_$cmd" "$@" ;;
-  *) die "usage: gpu.sh join [eviction=<size>] | leave [purge] | status" ;;
+  ssh) gpu_ssh "$@" ;;
+  *) die "usage: gpu.sh join [eviction=<size>] | leave [purge] | status | ssh [<command>...]" ;;
 esac
