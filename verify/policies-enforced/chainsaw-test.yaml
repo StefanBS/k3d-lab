@@ -35,7 +35,12 @@ spec:
                 containers:
                   - name: unpinned
                     image: busybox
+        # Only the reports controller's background scan reports on the pod. It waits 30s
+        # before it picks up a new object, then its 2 workers get to it behind everything
+        # else queued. On a new Lab, that's still the first scan of every object the
+        # policies match, which can outlast the 2m of verify/.chainsaw.yaml (#102).
         - assert:
+            timeout: 5m
             resource:
               apiVersion: wgpolicyk8s.io/v1alpha2
               kind: PolicyReport
@@ -44,5 +49,7 @@ spec:
                 name: unpinned
               (length(results[?policy == 'images-pinned' && result == 'fail']) > `0`): true
       catch:
+        # An EphemeralReport without a PolicyReport means the scan reached the pod, but
+        # the reports controller hasn't folded it into a PolicyReport yet.
         - script:
-            content: kubectl -n "$NAMESPACE" get policyreports -o yaml
+            content: kubectl -n "$NAMESPACE" get ephemeralreports,policyreports -o yaml
