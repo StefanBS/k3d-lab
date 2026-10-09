@@ -14,6 +14,14 @@ spec:
     check can't tell.
   steps:
     - try:
+        # A run that died before Chainsaw's cleanup leaves the pod behind, and a pod's
+        # spec can't be changed, so applying it again fails. Chainsaw waits for it to go.
+        - delete:
+            ref:
+              apiVersion: v1
+              kind: Pod
+              namespace: comfyui
+              name: gpu-dns-probe
         # In comfyui, so the Workload baseline, whose DNS rule goes through the proxy,
         # applies. Chainsaw deletes it afterwards.
         - apply:

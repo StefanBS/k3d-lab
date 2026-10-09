@@ -14,6 +14,16 @@ spec:
       value: (x_k8s_get($client, 'argoproj.io/v1alpha1', 'Application', 'argocd', 'root'))
   steps:
     - try:
+        # A run that died before Chainsaw's cleanup leaves its Applications in argocd,
+        # outside the check's namespace, and they keep root Degraded. Chainsaw waits
+        # for them to go.
+        - delete:
+            ref:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Application
+              namespace: argocd
+              labels:
+                k3d-lab/verify: argocd-projects-enforced
         - apply:
             file: application.yaml
             template: true

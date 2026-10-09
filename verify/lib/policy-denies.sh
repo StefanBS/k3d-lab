@@ -42,6 +42,10 @@ delete_probes() {
 }
 trap delete_probes EXIT
 for ns in "${workload_namespaces[@]}"; do
+  # A run that died before its trap leaves a probe behind. One from an older
+  # workload-probes.yaml can't be changed, and one still being deleted would take the
+  # applied one with it, so this waits for it to go.
+  kubectl -n "$ns" delete -f "$probes" --ignore-not-found --timeout=1m >/dev/null
   kubectl -n "$ns" apply -f "$probes" >/dev/null
 done
 
