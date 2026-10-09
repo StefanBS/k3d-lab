@@ -64,6 +64,10 @@ _Avoid_: application, app (clashes with ArgoCD's `Application`)
 A Workload that requests the GPU Node's GPU (`amd.com/gpu`) and tolerates its taint, so it runs only on the GPU Node, and only while it's Joined.
 _Avoid_: GPU job, GPU app
 
+**Paused**:
+A Workload's or Platform component's state while ArgoCD neither syncs nor self-heals its Application (`just pause`), so changes made by hand to it stay until `just resume` puts Git back.
+_Avoid_: frozen, suspended, detached
+
 ### Network policy
 
 **Guardrails**:

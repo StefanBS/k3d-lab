@@ -136,6 +136,14 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+  # The sync windows that 'just pause' adds to a project stay, until 'just resume'.
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: AppProject
+      jsonPointers:
+        - /spec/syncWindows
 EOF
 
 # The root Application can be Healthy before it has even created the ApplicationSets,
