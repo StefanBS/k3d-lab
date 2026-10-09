@@ -17,6 +17,27 @@ What each number really counts, learned the hard way on #113. Check a measuremen
 
 - **The Host-wide `/proc/pressure/io` is inflated.** It counts a task waiting on io_uring as waiting on I/O, so a terminal that reads through io_uring, such as Ghostty, holds it near 100% with every disk idle. Read a cgroup's own `io.pressure`, `cpu.pressure` and `memory.pressure` instead. The Server's is `/sys/fs/cgroup/system.slice/docker-<container id>.scope/`.
 - To find which cgroup carries pressure, compare the `some avg10` of each `io.pressure` under `/sys/fs/cgroup`, from the top down.
+- **A k3d Node's `init` cgroup is containerd.** Inside each Node's scope, `k3s` holds k3s, `init` holds `containerd`, its shims and the entrypoint, and `kubepods` holds the pods. Image pulls and unpacking show as `init`'s writes: 11.5 GB of the 12.9 GB written in a fresh `up`.
+
+## Replaying a run
+
+While `up` or `verify` runs, below records every cgroup's pressure, memory, major faults and disk I/O, and the Host's disks and swap, every 2s, into `~/.local/state/k3d-lab/below/` (`scripts/below.sh`). It keeps a week. Read it with that store's config, which the run writes:
+
+```bash
+below --config ~/.local/state/k3d-lab/below/below.conf replay -t '2026-10-09 10:20:00'
+TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf dump cgroup \
+  -b 2026-10-09T10:20:00Z -e 2026-10-09T10:21:00Z -s full_path -F 'docker-.*\.scope/(k3s|init)$' \
+  -f datetime full_path pressure.io_some_pct mem.pgmajfault io.wbytes_per_sec -O csv
+```
+
+- **below prints local time; k3s logs UTC.** Run it with `TZ=UTC`. `-b` and `-e` also take epoch seconds and `2026-10-09T10:20:00Z`.
+- **Pod cgroups are named by UID**, as `kubepods/<QoS class>/pod<UID>`. Match them to pods with `kubectl --context k3d-lab get pods -A -o custom-columns=UID:.metadata.uid,NAME:.metadata.name`.
+- **`dump disk` and `dump system`** give the Host's disks and swap. The disk under the k3d Nodes' datastores is the one under Docker's data root (`docker info -f '{{.DockerRootDir}}'`).
+
+## k3s's logs
+
+- **Save them before `just down`.** It deletes the Server with its logs, and runs 1 and 2 of #113 lost their slow-SQL record this way: `docker logs k3d-lab-server-0 > <file>` first.
+- **Compare slow-SQL durations as numbers.** k3s logs them as `duration=1.47s` or `duration=850ms`. Compared as strings, `9.9s` sorts above `30.1s`, which gave run 2 of #113 a wrong maximum.
 
 ## Prometheus
 

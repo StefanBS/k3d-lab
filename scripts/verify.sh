@@ -15,6 +15,8 @@ source "$(dirname "$0")/host-memory.sh"
 source "$(dirname "$0")/pause-state.sh"
 # shellcheck source=server-restarts.sh
 source "$(dirname "$0")/server-restarts.sh"
+# shellcheck source=below.sh
+source "$(dirname "$0")/below.sh"
 
 # The checks that call the Lab from the Host trust only the Lab CA.
 export LAB_CA_CERT
@@ -28,6 +30,9 @@ while (($#)) && [[ $1 != -* ]]; do
   shift
 done
 
+# What the pressure on the Server was, in case k3s stalls on its datastore during the run.
+sample_pressure
+
 # warn_if_short_on_memory <consequence>: WARNs, with the numbers, while the Host is short
 # on memory, since k3s then stalls and may die on its own datastore.
 warn_if_short_on_memory() {
@@ -35,12 +40,51 @@ warn_if_short_on_memory() {
   if memory=$(host_memory_short </proc/meminfo); then warn "Host is short on memory: $memory; $1"; fi
 }
 
-# warn_if_server_restarted <since> <consequence>: WARNs when k3s on the Server restarted
+# warn_if_server_stalled <since> <consequence>: WARNs when k3s on the Server restarted
 # since then, given as Docker's --since takes it, since checks then fail for that reason
-# rather than the change's.
-warn_if_server_restarted() {
-  local restarts
-  if restarts=$(docker logs --since "$1" "$LAB_SERVER" 2>&1 | server_restarts); then warn "$restarts; $2"; fi
+# rather than the change's. When it stalled on its datastore, also shows the pressure
+# before, which says what stalled it.
+warn_if_server_stalled() {
+  local logs restarts stall
+  logs=$(docker logs --since "$1" "$LAB_SERVER" 2>&1) || true
+  if restarts=$(server_restarts <<<"$logs"); then warn "$restarts; $2"; fi
+  if stall=$(server_stall <<<"$logs"); then show_pressure_before "$stall"; fi
+}
+
+# docker_disk: the disk under Docker's data root, as diskstats names it, such as sda: the
+# k3d Nodes' datastores are there. The disk itself, not the volume or partition on it,
+# since swap and the Host's other volumes may share it.
+docker_disk() {
+  local volume
+  volume=$(df --output=source "$(docker info -f '{{.DockerRootDir}}')" | tail -1)
+  lsblk -snro NAME,TYPE "$volume" | awk '$2 == "disk" { print $1; found = 1; exit } END { exit !found }'
+}
+
+# show_pressure_before <stall>: WARNs with the pressure on the Server's cgroups and the
+# Host's disk in the minute before k3s stalled, given as server_stall prints it, from
+# what below recorded.
+show_pressure_before() {
+  local end at id disk args table lines
+  end=$(date -ud "${1%% *}" +%s)
+  at="k3s on the Server ${1#* } at $(date -ud "@$end" +%T) UTC"
+  # below prints its times in the local time zone; k3s logs them in UTC.
+  table=$(
+    if id=$(docker inspect -f '{{.Id}}' "$LAB_SERVER" 2>/dev/null); then
+      mapfile -t args < <(below_server_dump_args "$id" "$end")
+      TZ=UTC below --config "$LAB_BELOW_CONFIG" "${args[@]}" 2>/dev/null || true
+    fi
+    if disk=$(docker_disk 2>/dev/null); then
+      mapfile -t args < <(below_disk_dump_args "$disk" "$end")
+      TZ=UTC below --config "$LAB_BELOW_CONFIG" "${args[@]}" 2>/dev/null || true
+    fi
+  ) || true
+  if table=$(below_table <<<"$table"); then
+    warn "$at; the pressure in the minute before, from below's store ('below --config $LAB_BELOW_CONFIG replay -t $((end - 60))' replays it):"
+    mapfile -t lines <<<"$table"
+    printf '      %s\n' "${lines[@]}"
+  else
+    warn "$at; below recorded nothing from the minute before in $LAB_BELOW_DIR"
+  fi
 }
 
 # Before the Lab's own checks, since memory may be why it doesn't answer.
@@ -51,7 +95,7 @@ lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
 run_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if ! kc get --raw /readyz --request-timeout=10s >/dev/null; then
   # A Lab that doesn't answer may be k3s restarting.
-  warn_if_server_restarted 10m "that may be why"
+  warn_if_server_stalled 10m "that may be why"
   die "the Lab doesn't answer"
 fi
 
@@ -96,8 +140,8 @@ fi
 if ! chainsaw test "${args[@]}" "$@" | grep --line-buffered -Ev '^=== (RUN|PAUSE|CONT) '; then
   # The Host may have run short during the run, though it wasn't at the start.
   warn_if_short_on_memory "that may be why checks failed"
-  warn_if_server_restarted "$run_start" "that may be why checks failed"
+  warn_if_server_stalled "$run_start" "that may be why checks failed"
   exit 1
 fi
 # Passing checks may still have waited out a restart, which is worth knowing.
-warn_if_server_restarted "$run_start" "checks passed anyway"
+warn_if_server_stalled "$run_start" "checks passed anyway"

@@ -50,3 +50,30 @@ SLOW='time="2026-10-09T10:21:00Z" level=warning msg="Slow SQL: DELETE FROM kine 
   [[ $status -eq 1 ]]
   [[ -z $output ]]
 }
+
+# server_stall < logs: the stall that matters most, when it was, and what k3s did: the
+# first death, else the first restart, else the first slow SQL.
+
+@test "stall: slow SQL, then a fatal error: the fatal error, which killed k3s" {
+  run server_stall < <(printf '%s\n' "$ADDON" "$SLOW" "$FATAL" "$START_1")
+  [[ $status -eq 0 ]]
+  [[ $output == "2026-10-09T10:21:01Z died" ]]
+}
+
+@test "stall: slow SQL, then a restart without a fatal error, as after the OOM killer: the restart" {
+  run server_stall < <(printf '%s\n' "$SLOW" "$ADDON" "$START_2")
+  [[ $status -eq 0 ]]
+  [[ $output == "2026-10-09T10:26:06Z restarted" ]]
+}
+
+@test "stall: only slow SQL: its first time" {
+  run server_stall < <(printf '%s\n' "$ADDON" "$SLOW" "${SLOW/10:21:00/10:22:00}")
+  [[ $status -eq 0 ]]
+  [[ $output == "2026-10-09T10:21:00Z logged slow SQL" ]]
+}
+
+@test "stall: only the Addon controller starting: no stall" {
+  run server_stall < <(printf '%s\n' "$ADDON")
+  [[ $status -eq 1 ]]
+  [[ -z $output ]]
+}

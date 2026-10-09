@@ -20,6 +20,10 @@ for arg; do
 done
 [[ -n $revision ]] || die "no branch is checked out; check one out, or pass REVISION=<branch or tag>"
 
+# What the pressure on the Server was, in case k3s stalls on its datastore during the
+# build or the checks (verify.sh).
+sample_pressure
+
 # Installs a Platform component that ArgoCD can't install itself: the same chart,
 # version and values that ArgoCD then manages it with.
 install_component() {

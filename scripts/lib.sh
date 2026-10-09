@@ -83,6 +83,31 @@ retry() {
   done
 }
 
+# Where up and verify record the pressure with below (below.sh): its config, its store
+# and its log, outside the repo.
+LAB_BELOW_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/k3d-lab/below
+LAB_BELOW_CONFIG=$LAB_BELOW_DIR/below.conf
+
+# sample_pressure: records the pressure on the Host and on each cgroup in it with below
+# until this script exits, failed or not. verify run by up keeps up's recorder.
+sample_pressure() {
+  [[ -z ${LAB_BELOW_RECORDING:-} ]] || return 0
+  if ! command -v below >/dev/null; then
+    log "warning: below isn't installed, so this run records no pressure; see 'just doctor'"
+    return 0
+  fi
+  # Two recorders would write to the same store, as when verify runs beside up.
+  if pgrep -u "$(id -u)" -f "^below --config $LAB_BELOW_CONFIG record" >/dev/null; then
+    log "warning: another run is recording the pressure, so the record of this one ends with it"
+    return 0
+  fi
+  export LAB_BELOW_RECORDING=1
+  # The recorder stops once this script's PID is gone, which exec keeps, so a failed run
+  # stops it too. It writes nowhere else: a pipe the script writes to, such as tee's,
+  # would otherwise stay open until it stops.
+  "$LAB_ROOT/scripts/below-recorder.sh" "$$" >/dev/null 2>&1 &
+}
+
 # kubectl, always against the Lab, whatever the current context is.
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
