@@ -35,8 +35,8 @@ options:
   # shows each k3d Node its cap as its total memory, and the kubelet evicts below the
   # memory.available threshold set below.
   runtime:
-    serversMemory: 5g
-    agentsMemory: 3g
+    serversMemory: 6g
+    agentsMemory: 2560m
   k3s:
     extraArgs:
       - arg: --flannel-backend=none
