@@ -52,6 +52,7 @@ sudo scripts/host-setup.sh
 | `just verify` | Checks how the running Lab behaves, with one Chainsaw test per check in `verify/`: a PASS or FAIL for each, and a non-zero exit on any FAIL. `just verify <check>...` runs only those checks, named by their folders; any Chainsaw flags go after them. `VERBOSE=1 just verify <check>` also shows what each passing step did, such as each OK line of the check's script, which is how to see what a new check really tests. |
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. A Joined GPU Node leaves first, if it's reachable. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
+| `just gpu ssh [<command>]` | Runs the command on the GPU Node, as the user the Host logs in as, or opens a shell there when given none. Standard input passes through, so `just gpu ssh 'cat > <path>' < <file>` copies a file; quote a command that has a redirect, or it applies on the Host. |
 | `just secret-store bao <args>` | Runs the `bao` CLI against the Secret Store, as its root. |
 | `just secret-store backup <path>` | Archives the Secret Store, to a new file in `<path>` if it's a directory. See Secrets. |
 

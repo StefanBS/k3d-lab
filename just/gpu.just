@@ -20,3 +20,8 @@ leave *args:
 # Show the GPU Node's state, in the Lab and on the machine
 status:
     @{{ justfile_directory() }}/scripts/gpu.sh status
+
+# Run a command on the GPU Node, or open a shell there; quote one with a redirect, e.g. `just gpu ssh 'cat > <path>' < <file>`
+[positional-arguments]
+ssh *args:
+    @{{ justfile_directory() }}/scripts/gpu.sh ssh "$@"
