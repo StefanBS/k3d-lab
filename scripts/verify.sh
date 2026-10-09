@@ -5,6 +5,8 @@
 # Leading plain words name the checks to run, the folders in verify/; without any, every
 # check runs. The rest go to `chainsaw test`, such as --pause-on-failure. VERBOSE=1 also
 # shows what each passing step did, such as the OK lines of a check's script.
+# LAB_UP_SINCE, which up sets, also reports k3s restarts on the Server from that time on,
+# before the run.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
@@ -40,13 +42,13 @@ warn_if_short_on_memory() {
   if memory=$(host_memory_short </proc/meminfo); then warn "Host is short on memory: $memory; $1"; fi
 }
 
-# warn_if_server_stalled <since> <consequence>: WARNs when k3s on the Server restarted
-# since then, given as Docker's --since takes it, since checks then fail for that reason
-# rather than the change's. When it stalled on its datastore, also shows the pressure
-# before, which says what stalled it.
+# warn_if_server_stalled <since> <consequence> [<until>]: WARNs when k3s on the Server
+# restarted since then, and before <until>, given as Docker's --since and --until take
+# them, since checks then fail for that reason rather than the change's. When it stalled
+# on its datastore, also shows the pressure before, which says what stalled it.
 warn_if_server_stalled() {
   local logs restarts stall
-  logs=$(docker logs --since "$1" "$LAB_SERVER" 2>&1) || true
+  logs=$(docker logs --since "$1" ${3:+--until "$3"} "$LAB_SERVER" 2>&1) || true
   if restarts=$(server_restarts <<<"$logs"); then warn "$restarts; $2"; fi
   if stall=$(server_stall <<<"$logs"); then show_pressure_before "$stall"; fi
 }
@@ -97,6 +99,11 @@ if ! kc get --raw /readyz --request-timeout=10s >/dev/null; then
   # A Lab that doesn't answer may be k3s restarting.
   warn_if_server_stalled 10m "that may be why"
   die "the Lab doesn't answer"
+fi
+# A restart during up leaves a Lab that may pass every check, though it was built under
+# a k3s that died (#135).
+if [[ -n ${LAB_UP_SINCE:-} ]]; then
+  warn_if_server_stalled "$LAB_UP_SINCE" "during 'just up', before verify" "$run_start"
 fi
 
 # A paused Application drifts from Git on purpose, so its checks may fail.

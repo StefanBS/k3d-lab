@@ -86,6 +86,10 @@ while read -r node cidr; do
   docker network connect --ip "${cidr%/*}" "$LAB_NETWORK" "$node"
 done <<<"$nodes"
 quietly k3d cluster start "$LAB_NAME"
+# Those were up's own restarts of the Server. verify reports any after this (#135), such
+# as k3s dying on its datastore while ArgoCD syncs, which would otherwise go unseen.
+export LAB_UP_SINCE
+LAB_UP_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Cilium only runs its Gateway controller if the Gateway API CRDs exist when it starts.
 log "Installing the Gateway API CRDs"
