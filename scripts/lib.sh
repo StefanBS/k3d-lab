@@ -83,14 +83,14 @@ retry() {
   done
 }
 
-# Where up and verify record the pressure with below (below.sh): its config, its store
-# and its log, outside the repo.
+# up and verify record the pressure with below (below.sh) outside the repo, with its
+# config, store and log in this directory.
 LAB_BELOW_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/k3d-lab/below
 LAB_BELOW_CONFIG=$LAB_BELOW_DIR/below.conf
 
-# sample_pressure: records the pressure on the Host and on each cgroup in it with below
+# record_pressure: records the pressure on the Host and on each cgroup in it with below
 # until this script exits, failed or not. verify run by up keeps up's recorder.
-sample_pressure() {
+record_pressure() {
   [[ -z ${LAB_BELOW_RECORDING:-} ]] || return 0
   if ! command -v below >/dev/null; then
     log "warning: below isn't installed, so this run records no pressure; see 'just doctor'"

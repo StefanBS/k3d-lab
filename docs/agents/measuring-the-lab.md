@@ -24,7 +24,7 @@ What each number really counts, learned the hard way on #113. Check a measuremen
 While `up` or `verify` runs, below records every cgroup's pressure, memory, major faults and disk I/O, and the Host's disks and swap, every 2s, into `~/.local/state/k3d-lab/below/` (`scripts/below.sh`). It keeps a week. Read it with that store's config, which the run writes:
 
 ```bash
-below --config ~/.local/state/k3d-lab/below/below.conf replay -t '2026-10-09 10:20:00'
+TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf replay -t '2026-10-09 10:20:00'
 TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf dump cgroup \
   -b 2026-10-09T10:20:00Z -e 2026-10-09T10:21:00Z -s full_path -F 'docker-.*\.scope/(k3s|init)$' \
   -f datetime full_path pressure.io_some_pct mem.pgmajfault io.wbytes_per_sec -O csv

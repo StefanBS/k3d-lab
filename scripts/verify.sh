@@ -30,8 +30,8 @@ while (($#)) && [[ $1 != -* ]]; do
   shift
 done
 
-# What the pressure on the Server was, in case k3s stalls on its datastore during the run.
-sample_pressure
+# k3s may stall on its datastore during the run, and the pressure then says why.
+record_pressure
 
 # warn_if_short_on_memory <consequence>: WARNs, with the numbers, while the Host is short
 # on memory, since k3s then stalls and may die on its own datastore.

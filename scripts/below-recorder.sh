@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Records with below into the Lab's store (scripts/below.sh) until the script that
-# started it exits. lib.sh's sample_pressure starts it.
+# started it exits. lib.sh's record_pressure starts it.
 # Usage: below-recorder.sh <PID>
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
