@@ -7,9 +7,11 @@ spec:
   # Chainsaw's defaults (5s for exec) are too short for waiting on pods and probes.
   # on-ready-nodes.sh gives each node up to 1m, one after another. Right after `just
   # up`, with every check starting at once, the API server can take more than apply's
-  # 5s to create a plain Service.
+  # 5s to create a plain Service. Deleting a crashed run's leftovers can take longer than
+  # delete's 15s on a pod with a grace period.
   timeouts:
     apply: 30s
+    delete: 1m
     assert: 2m
     error: 2m
     exec: 5m

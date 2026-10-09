@@ -34,6 +34,9 @@ delete_namespaces() {
   kubectl delete namespace "$exposed" "$strict" "$guardrail" --ignore-not-found --wait=false >/dev/null
 }
 trap delete_namespaces EXIT
+# A run that died before its trap leaves its namespaces behind, each with an HTTPRoute
+# on the Gateway. Their names never repeat, so this doesn't wait for them to go.
+kubectl delete namespace -l k3d-lab/verify=workload-network-baseline --wait=false >/dev/null
 
 # Usage: create_namespace <name> [<label>=<value>...]
 create_namespace() {
