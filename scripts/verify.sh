@@ -41,8 +41,8 @@ lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
 kc get --raw /readyz --request-timeout=10s >/dev/null || die "the Lab doesn't answer"
 
 # A paused Application drifts from Git on purpose, so its checks may fail.
-while read -r app; do
-  warn "$app is paused, so ArgoCD leaves it as it is and its checks may fail; 'just resume $app' puts Git back"
+while read -r application; do
+  warn "$application is paused, so ArgoCD leaves it as it is and its checks may fail; 'just resume $application' puts Git back"
 done < <(kc -n argocd get appprojects -o json | paused_applications)
 
 args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" --kube-context "$LAB_CONTEXT")

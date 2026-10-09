@@ -138,7 +138,8 @@ spec:
       selfHeal: true
     syncOptions:
       - RespectIgnoreDifferences=true
-  # The sync windows that 'just pause' adds to a project stay, until 'just resume'.
+  # The sync windows that 'just pause' adds to a project stay, until 'just resume'. Git
+  # sets none, so the whole list is left to the Lab: a window added in Git would not apply.
   ignoreDifferences:
     - group: argoproj.io
       kind: AppProject
