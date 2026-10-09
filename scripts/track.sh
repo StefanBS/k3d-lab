@@ -7,6 +7,8 @@
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=track-state.sh
 source "$(dirname "$0")/track-state.sh"
+# shellcheck source=pause-state.sh
+source "$(dirname "$0")/pause-state.sh"
 
 (($# <= 1)) || die "usage: just track [<branch or tag>]"
 revision=${1:-$(git -C "$LAB_ROOT" branch --show-current)}
@@ -15,6 +17,9 @@ revision=${1:-$(git -C "$LAB_ROOT" branch --show-current)}
 lab_exists || die "there's no Lab; run 'just up'"
 kc -n argocd get application/root >/dev/null 2>&1 || die "the Lab has no root Application; run 'just down', then 'just up'"
 commit=$(pushed_commit "$revision")
+# A paused Application never syncs the new commit, so the wait below would only time out.
+paused=$(kc -n argocd get appprojects -o json | paused_applications | paste -sd' ')
+[[ -z $paused ]] || die "paused, so they'd never sync $revision: $paused; 'just resume <name>' each first"
 
 # The same two fields up.sh sets: the root Application's own revision, and the one its
 # chart gives every Application it generates. A hard refresh makes ArgoCD read the

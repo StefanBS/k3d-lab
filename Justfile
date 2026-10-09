@@ -34,6 +34,14 @@ up *args:
 track *branch:
     @scripts/track.sh {{ branch }}
 
+# Stop ArgoCD syncing one Workload or Platform component, so changes made by hand to it stay
+pause name:
+    @scripts/pause.sh pause {{ name }}
+
+# Let ArgoCD sync a paused Workload or Platform component again, putting Git back
+resume name:
+    @scripts/pause.sh resume {{ name }}
+
 # Destroy the Lab, taking a Joined GPU Node back first (the Host's Secret Store, Lab CA and Docker CE are kept)
 down:
     @scripts/down.sh

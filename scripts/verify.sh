@@ -11,6 +11,8 @@ source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/host.sh"
 # shellcheck source=host-memory.sh
 source "$(dirname "$0")/host-memory.sh"
+# shellcheck source=pause-state.sh
+source "$(dirname "$0")/pause-state.sh"
 
 # The checks that call the Lab from the Host trust only the Lab CA.
 export LAB_CA_CERT
@@ -37,6 +39,11 @@ warn_if_short_on_memory "checks may fail while k3s stalls on its datastore"
 # Without a Lab, every check would fail for the same reason.
 lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
 kc get --raw /readyz --request-timeout=10s >/dev/null || die "the Lab doesn't answer"
+
+# A paused Application drifts from Git on purpose, so its checks may fail.
+while read -r application; do
+  warn "$application is paused, so ArgoCD leaves it as it is and its checks may fail; 'just resume $application' puts Git back"
+done < <(kc -n argocd get appprojects -o json | paused_applications)
 
 args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" --kube-context "$LAB_CONTEXT")
 # Only failures, their errors and the summary: a passing step says nothing.
