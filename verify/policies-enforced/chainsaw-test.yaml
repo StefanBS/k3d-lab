@@ -35,6 +35,9 @@ spec:
                 containers:
                   - name: unpinned
                     image: busybox
+        # Only the reports controller's background scan reports on the pod. It picks up a
+        # new object 30s after it sees it (Kyverno's enqueueDelay), so the report comes
+        # about 45s after the pod, or after the controller's last start if it restarts.
         - assert:
             resource:
               apiVersion: wgpolicyk8s.io/v1alpha2
@@ -44,5 +47,16 @@ spec:
                 name: unpinned
               (length(results[?policy == 'images-pinned' && result == 'fail']) > `0`): true
       catch:
+        # An EphemeralReport without a PolicyReport means the scan reached the pod, but
+        # the reports controller hasn't folded it into a PolicyReport yet.
         - script:
-            content: kubectl -n "$NAMESPACE" get policyreports -o yaml
+            content: kubectl -n "$NAMESPACE" get ephemeralreports,policyreports -o yaml
+        # A reports controller that restarted while the check waited, such as when it
+        # lost its leader lease to a slow API server, starts its scan over.
+        - script:
+            content: |
+              kubectl -n kyverno get pods -l app.kubernetes.io/component=reports-controller \
+                -o custom-columns='NAME:.metadata.name,RESTARTS:.status.containerStatuses[0].restartCount,STARTED:.status.containerStatuses[0].state.running.startedAt,LAST EXIT:.status.containerStatuses[0].lastState.terminated.finishedAt'
+              lease=$(kubectl -n kyverno logs deploy/kyverno-reports-controller --previous 2>/dev/null |
+                sed 's/\x1b\[[0-9;]*m//g' | grep -E 'lease|Lease' | tail -5)
+              echo "${lease:-no lease errors in its previous container's log}"
