@@ -35,10 +35,11 @@ spec:
                 containers:
                   - name: unpinned
                     image: busybox
-        # Only the reports controller's background scan reports on the pod. It waits 30s
-        # before it picks up a new object, then its 2 workers get to it behind everything
-        # else queued. On a new Lab, that's still the first scan of every object the
-        # policies match, which can outlast the 2m of verify/.chainsaw.yaml (#102).
+        # Only the reports controller's background scan reports on the pod: it picks up a
+        # new object 30s later (Kyverno's enqueueDelay), then its scan workers
+        # (backgroundScanWorkers) get to it behind whatever is already queued. That took
+        # 45s on a new Lab, but once over 2m, likely while the scan's first pass over
+        # everything the policies match was still queued. 5m leaves room for that.
         - assert:
             timeout: 5m
             resource:
