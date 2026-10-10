@@ -84,3 +84,18 @@ It writes a burst of buffered data, 8 GiB unless told otherwise, to the filesyst
 - **Changing a Host setting needs root,** which an agent doesn't have: write the loop as one script, and ask the Lab's owner to run it.
 - **The verdict is k3s's `Slow SQL` lines, not API latency.** A write's latency also includes webhooks, whose pods run on the starved Agent, and the client's own stalls on the Host. The ledger records it, as `api_max_s`, only as information.
 - **k3s dies only when a compaction is caught in the stall.** The API server compacts every 5 minutes, so most bursts miss one. For a tighter loop, put `kube-apiserver-arg: [etcd-compaction-interval=30s]` in the Server's `/etc/rancher/k3s/config.yaml` and `docker restart` it; a fresh `up` undoes it.
+
+## Freezing the API server on purpose
+
+A disk burst stalls the datastore only sometimes; under `balanced` most stall nothing. To stop the API server and the datastore for an exact time, stop the k3s process in the Server and resume it:
+
+```bash
+pid=$(docker exec k3d-lab-server-0 cat /sys/fs/cgroup/k3s/cgroup.procs)
+docker exec k3d-lab-server-0 kill -STOP "$pid"; sleep 15; docker exec k3d-lab-server-0 kill -CONT "$pid"
+```
+
+- **It stands in for a stall; it isn't one.** The API server, the datastore and the Server's kubelet stop, and every pod runs on. Nothing waits on the disk, though k3s logs slow SQL as it resumes, and `verify` warns of it. Say which one a number came from.
+- **Resume k3s whatever ends the script,** with the `kill -CONT` in an `EXIT` trap. A Server left stopped looks like a Lab that doesn't answer.
+- **A freeze of 15s restarts every controller with a 12s Lease:** Kyverno's reports and admission controllers, Argo Rollouts and the Cilium operator. 9s restarted none. The Server container doesn't restart, even after 55s, and the nodes stayed Ready after 30s (#102).
+- **Their restart backoff carries over to the next run.** After a few freezes those pods sit in CrashLoopBackOff for minutes. Delete them before each run, so each starts with a new pod, and wait for the rollout.
+- **`/bin/k3s server` isn't the whole command line.** k3s pads it with NUL bytes, so an exact match on `/proc/<pid>/cmdline` finds nothing, and the Server has no `pgrep`. The `k3s` cgroup holds only that process.

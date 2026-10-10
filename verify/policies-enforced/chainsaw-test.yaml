@@ -37,8 +37,12 @@ spec:
                     image: busybox
         # Only the reports controller's background scan reports on the pod. It picks up a
         # new object 30s after it sees it (Kyverno's enqueueDelay), so the report comes
-        # about 45s after the pod, or after the controller's last start if it restarts.
+        # about 45s after the pod. If the API server stalls for some 10s while the check
+        # waits, the controller loses its 12s leader lease and restarts, and the report
+        # comes about 45s after the API answers again. So the wait outlasts the longest
+        # stall seen, 108s (docs/agents/measuring-the-lab.md), which verify's 2m doesn't.
         - assert:
+            timeout: 4m
             resource:
               apiVersion: wgpolicyk8s.io/v1alpha2
               kind: PolicyReport
