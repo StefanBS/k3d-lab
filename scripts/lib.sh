@@ -200,7 +200,7 @@ component_dirs() {
 }
 
 # The Demos, the Workloads with `role: demo` in their component.yaml, as component_dirs
-# prints them. A Lab has them only when asked for: `just up --demos`, `just track --demos`.
+# prints them. A Lab has them only when asked for: `just up --demos`, `just demos on`.
 demo_dirs() {
   local dir
   while read -r dir; do

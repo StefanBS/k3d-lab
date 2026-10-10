@@ -30,9 +30,13 @@ doctor:
 up *args:
     @scripts/up.sh {{ args }}
 
-# Point the running Lab at the pushed branch checked out here, or at <branch>; --demos adds the Demos, --no-demos removes them, --debug also records and verifies
+# Point the running Lab at the pushed branch checked out here, or at <branch>; --debug also records and verifies
 track *args:
     @scripts/track.sh {{ args }}
+
+# Add the Demos to the running Lab, or remove them: `just demos on`, `just demos off`
+demos state:
+    @scripts/demos.sh {{ state }}
 
 # Stop ArgoCD syncing one Workload or Platform component, so changes made by hand to it stay
 pause name:

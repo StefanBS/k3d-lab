@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Whether the Lab has its Demos, and which of their Applications a 'just track' still
+# Whether the Lab has its Demos, and which of their Applications 'just demos' still
 # waits for (scripts/demos-state.sh), without a Lab.
 
 setup() {
@@ -32,34 +32,48 @@ root() {
   [[ $status -ne 0 && $output != true && $output != false ]]
 }
 
-# applications <name>...: the Lab's Applications as ArgoCD lists them, with those names.
+# applications <name>[=<sync>,<health>]...: the Lab's Applications as ArgoCD lists them, each
+# Synced and Healthy unless it says otherwise. A bare "=" gives one no status yet.
 applications() {
-  jq -n '{"items": [$ARGS.positional[] | {"metadata": {"name": .}}]}' --args "$@"
+  jq -n '{"items": [$ARGS.positional[] | split("=") | {"metadata": {"name": .[0]}} +
+    (if length == 1 then {"status": {"sync": {"status": "Synced"}, "health": {"status": "Healthy"}}}
+    else (.[1] | split(",")) as $s | {"status": {"sync": {"status": $s[0]}, "health": {"status": $s[1]}}} end)]}' \
+    --args "$@"
 }
 
-@test "waiting for a Demo's Application that isn't there yet: pending" {
-  run demos_pending present rollouts-demo <<<"$(applications root comfyui)"
-  [[ $status -eq 0 && $output == rollouts-demo ]]
+@test "turning the Demos on, before the Demo's Application is generated: pending" {
+  run demos_pending ready rollouts-demo <<<"$(applications root comfyui)"
+  [[ $status -eq 0 && $output == "rollouts-demo: not generated yet" ]]
 }
 
-@test "waiting for a Demo's Application that's there: none pending" {
-  run demos_pending present rollouts-demo <<<"$(applications root comfyui rollouts-demo)"
+@test "turning the Demos on, while the Demo's Application syncs: pending, with its state" {
+  run demos_pending ready rollouts-demo <<<"$(applications root rollouts-demo=Synced,Progressing)"
+  [[ $status -eq 0 && $output == "rollouts-demo: Synced, Progressing" ]]
+}
+
+@test "turning the Demos on, when the Demo's Application has no status yet: pending" {
+  run demos_pending ready rollouts-demo <<<"$(applications root rollouts-demo=)"
+  [[ $status -eq 0 && $output == "rollouts-demo: Unknown, Unknown" ]]
+}
+
+@test "turning the Demos on, once the Demo's Application is Synced and Healthy: none pending" {
+  run demos_pending ready rollouts-demo <<<"$(applications root comfyui rollouts-demo)"
   [[ $status -eq 0 && -z $output ]]
 }
 
-@test "waiting for a Demo's Application to go while it's still there: pending" {
+@test "turning the Demos off, while the Demo's Application is still there: pending" {
   run demos_pending gone rollouts-demo <<<"$(applications root comfyui rollouts-demo)"
   [[ $status -eq 0 && $output == rollouts-demo ]]
 }
 
-@test "waiting for a Demo's Application to go once it has: none pending" {
+@test "turning the Demos off, once the Demo's Application has gone: none pending" {
   run demos_pending gone rollouts-demo <<<"$(applications root comfyui)"
   [[ $status -eq 0 && -z $output ]]
 }
 
 @test "several Demos: only those still pending" {
-  run demos_pending present rollouts-demo other-demo third-demo <<<"$(applications root other-demo)"
-  [[ $status -eq 0 && $output == $'rollouts-demo\nthird-demo' ]]
+  run demos_pending ready rollouts-demo other-demo third-demo <<<"$(applications root other-demo)"
+  [[ $status -eq 0 && $output == $'rollouts-demo: not generated yet\nthird-demo: not generated yet' ]]
 }
 
 @test "no Applications to read, as when the request failed: fails" {
