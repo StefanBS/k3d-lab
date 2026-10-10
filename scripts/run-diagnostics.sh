@@ -41,7 +41,7 @@ RUN_SINCE=''
 report_run() {
   local status=$?
   if ((status == 0)); then
-    [[ -z $RUN_SINCE ]] || warn_if_server_restarted "$RUN_SINCE" "the Lab came up anyway, and 'just verify' checks it"
+    [[ -z $RUN_SINCE ]] || warn_if_server_restarted "$RUN_SINCE" "the run succeeded anyway, and 'just verify' checks the Lab"
     return 0
   fi
   # Stopped by a signal, such as Ctrl-C: nothing went wrong to diagnose.
