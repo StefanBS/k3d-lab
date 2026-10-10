@@ -8,10 +8,10 @@ spec:
     give a Workload what it needs without a policy of its own, and no more. In
     throwaway namespaces labelled as a Workload's: podinfo answers through the
     Gateway, Alloy scrapes it, pods in its namespace reach each other, none reaches
-    another namespace, and a pod in another namespace can't reach it directly. In one
-    that's `isolation: strict`, its pods can't reach each other. And one whose Workload
-    policy allows the kube-apiserver still can't reach it: the guardrail's deny rule
-    drops it. Hubble records each denial as DROPPED by policy.
+    another namespace, and a pod in another namespace can't reach podinfo directly. In
+    one that's `isolation: strict`, its pods can't reach each other. And one whose
+    Workload policy allows the kube-apiserver still can't reach it: the guardrail's
+    deny rule drops it. Hubble records each denial as DROPPED by policy.
   steps:
     # The web probe and the client are the other namespace's pods.
     - use:

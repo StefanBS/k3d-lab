@@ -7,8 +7,8 @@
 # the namespaces of the Workloads' Applications.
 # Each attempt must fail, and Hubble must record it as DROPPED by policy, so a request
 # that fails for any other reason, such as a pod that isn't up, doesn't count.
-# Inbound, a Lab may have no Workload with a pod to aim at, so workload-network-baseline
-# checks that against a namespace of its own.
+# A Lab may have no Workload with a pod to aim an inbound request at, so
+# workload-network-baseline checks the inbound denial, against a namespace of its own.
 # Run by network-policy-enforced, whose script steps point kubectl at the Lab through a
 # context named chainsaw.
 set -euo pipefail
