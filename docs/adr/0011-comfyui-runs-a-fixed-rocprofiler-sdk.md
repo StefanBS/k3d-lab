@@ -9,10 +9,10 @@ Every process that uses the GPU through the image's PyTorch keeps one CPU core a
 ## Considered Options
 
 - **An image of the Lab's with the library swapped in**: what ADR 0007 rules out, for the same reason; the image is 19.6 GB.
-- **`LD_PRELOAD` of the fixed library**: maps the image's copy as well, and that alone hides the spin, so it can't be told apart from the fix working.
+- **`LD_PRELOAD` of the fixed library**: maps the image's copy as well, and that alone hides the spin, so it can't be told apart from the fix working. [The A/B how-to](../agents/rocm-library-ab.md) swaps one library without it.
 - **Building the library on the GPU Node** in the setup step: about 10 minutes per build, and it needs packages the non-root setup container can't install.
 
 ## Consequences
 
-- **The library is tied to ROCm 7.14.1.** A `rocm/pytorch` tag with another ROCm needs a new build from that ROCm's commit, or this mount removed if that ROCm has the fix.
+- **The library is tied to ROCm 7.14.1.** A `rocm/pytorch` tag with another ROCm needs a new build from that ROCm's commit, or this mount removed if that ROCm has the fix. [The how-to](../agents/rocm-library-ab.md) measures whether it still spins.
 - **It doesn't stop a second spin**, which starts after ComfyUI's first job while dynamic VRAM and async offload are both on. That one is in ROCr, which ADR 0012 replaces the same way.
