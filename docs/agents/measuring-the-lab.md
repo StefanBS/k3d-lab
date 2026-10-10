@@ -17,6 +17,7 @@ What each number really counts, learned the hard way on #113. Check a measuremen
 
 - **The Host-wide `/proc/pressure/io` is inflated.** It counts a task waiting on io_uring as waiting on I/O, so a terminal that reads through io_uring, such as Ghostty, holds it near 100% with every disk idle. Read a cgroup's own `io.pressure`, `cpu.pressure` and `memory.pressure` instead. The Server's is `/sys/fs/cgroup/system.slice/docker-<container id>.scope/`.
 - To find which cgroup carries pressure, compare the `some avg10` of each `io.pressure` under `/sys/fs/cgroup`, from the top down.
+- **Name a Node's scope before reading it.** Get its ID with `docker inspect -f '{{.Id}}' k3d-lab-server-0` (or `k3d-lab-agent-0`); the busiest `docker-*.scope` may be either. `memory.max` tells them apart: the Server's cap is larger.
 - **A k3d Node's `init` cgroup is containerd.** Inside each Node's scope, `k3s` holds k3s, `init` holds `containerd`, its shims and the entrypoint, and `kubepods` holds the pods. Image pulls and unpacking show as `init`'s writes: 11.5 GB of the 12.9 GB written in a fresh `up`.
 
 ## Replaying a run
@@ -33,6 +34,14 @@ TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf dump cgroup \
 - **below prints local time; k3s logs UTC.** Run it with `TZ=UTC`. `-b` and `-e` also take epoch seconds and `2026-10-09T10:20:00Z`.
 - **Pod cgroups are named by UID**, as `kubepods/<QoS class>/pod<UID>`. Match them to pods with `kubectl --context k3d-lab get pods -A -o custom-columns=UID:.metadata.uid,NAME:.metadata.name`.
 - **`dump disk` and `dump system`** give the Host's disks and swap. The disk under the k3d Nodes' datastores is the one under Docker's data root (`docker info -f '{{.DockerRootDir}}'`).
+
+## Changing the Server for an experiment
+
+A fresh `up` undoes all of these, so end an experiment with one.
+
+- **k3s flags:** write them to `/etc/rancher/k3s/config.yaml` in the Server, e.g. `kube-apiserver-arg: [etcd-compaction-interval=30s]`, then `docker restart k3d-lab-server-0`. The file lives in the container and survives restarts.
+- **k3s's environment** is fixed when the container is created, and k3d's entrypoint hooks (`/bin/k3d-entrypoint-*.sh`) run as child processes, so they can't export to k3s. To set a variable such as `KINE_COMPACT_TIMEOUT` without `up`: move `/bin/k3s` to `/bin/k3s-real`, repoint the `/bin` symlinks that name `k3s` (kubectl, crictl, ctr...) at `k3s-real`, and put a script that exports the variable and `exec`s `/bin/k3s-real "$@"` at `/bin/k3s`.
+- **`/run` in a Node is a tmpfs that every restart empties.** A hook that copies the datastore there on start restores the copy on disk, which stopped at the switch: the restart rolls the Lab's state back without an error.
 
 ## k3s's logs
 
