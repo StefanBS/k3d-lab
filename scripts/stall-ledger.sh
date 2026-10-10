@@ -29,7 +29,7 @@ stall_ledger_row() {
         if (unit == "h") n *= 3600
         else if (unit == "m") n *= 60
         else if (unit == "ms") n /= 1000
-        else if (unit != "s") n = 0 # Microseconds and below.
+        else if (unit != "s") n = 0 # Microseconds and below round to nothing here.
         total += n
       }
       return total
@@ -43,7 +43,9 @@ stall_ledger_row() {
     # Not "Starting k3s.cattle.io/v1, Kind=Addon controller", which every start logs too.
     /msg="Starting k3s v/ { restarts++ }
     END {
-      red = slowest >= stall || fatals || restarts
-      print run, sprintf("%.1f", slowest), fatals + 0, restarts + 0, red ? "red" : "green"
+      # Judged as the row shows it, so no row reads 5.0 and green.
+      slowest = sprintf("%.1f", slowest)
+      red = slowest + 0 >= stall || fatals || restarts
+      print run, slowest, fatals + 0, restarts + 0, red ? "red" : "green"
     }'
 }

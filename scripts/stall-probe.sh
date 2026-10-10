@@ -63,19 +63,38 @@ burst_pid=$!
 microseconds() { printf '%s' "${EPOCHREALTIME/[.,]/}"; }
 
 # One write a second, each storing a new value, since the API server stores no update
-# that changes nothing. A write the stall fails still counts towards the latency.
-writes=0 max_us=0
-while ((EPOCHSECONDS - start < probe_seconds)) || kill -0 "$burst_pid" 2>/dev/null; do
+# that changes nothing. A write the stall fails still counts towards the latency. k3s
+# logs a slow SQL only once it ends, so the probe goes on until the burst is written and
+# a write succeeds again, or for 5 minutes more.
+writes=0 max_us=0 stored=1
+while ((EPOCHSECONDS - start < probe_seconds)) || kill -0 "$burst_pid" 2>/dev/null || ((!stored)); do
+  if ((EPOCHSECONDS - start >= probe_seconds)) && [[ -z ${overrun:-} ]]; then
+    overrun=1
+    log "Still stalled or writing the burst after ${probe_seconds}s, so the probe goes on"
+  fi
+  if ((EPOCHSECONDS - start >= probe_seconds + 300)); then
+    log "Giving up after 5 minutes more: the row may miss a slow SQL that hasn't ended"
+    break
+  fi
   before=$(microseconds)
-  if kc patch "${probe[@]}" --type merge -p "{\"data\":{\"write\":\"$before\"}}" >/dev/null 2>&1; then
+  # In the background, since bash runs a trap only once its foreground command returns,
+  # and a stalled write would hold an interrupted run, and its burst, for a minute.
+  kc patch "${probe[@]}" --type merge -p "{\"data\":{\"write\":\"$before\"}}" >/dev/null 2>&1 &
+  if wait "$!"; then
+    stored=1
     writes=$((writes + 1))
+  else
+    stored=0
   fi
   took=$(($(microseconds) - before))
   ((took <= max_us)) || max_us=$took
   sleep 1
 done
+if kill -0 "$burst_pid" 2>/dev/null; then die "the burst is still being written, so this run says nothing"; fi
 # Not a bare wait, which would also wait for the recorder (docs/agents/shell.md).
 wait "$burst_pid" || die "the burst failed, so this run says nothing"
+# Reaped, so cleanup has nothing to kill, and the PID may be another process by then.
+burst_pid=
 
 if [[ ! -s $ledger ]]; then
   mkdir -p "$LAB_STATE_DIR"
@@ -88,4 +107,4 @@ printf '%s\n' "$row" >>"$ledger"
 
 log "$ledger:"
 paste <(tr '\t' '\n' <<<"$STALL_LEDGER_COLUMNS") <(tr '\t' '\n' <<<"$row") | column -t >&2
-[[ $row == *$'\tgreen' ]] || die "red: the burst stalled the datastore"
+[[ $row == *$'\tgreen' ]] || die "red: the datastore stalled, or k3s died or restarted, during the burst"

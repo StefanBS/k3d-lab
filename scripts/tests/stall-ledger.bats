@@ -35,9 +35,9 @@ row() {
 }
 
 @test "slow SQL over a minute: minutes and seconds add up" {
-  run row < <(slow 1m5.25s)
+  run row < <(slow 1m5.3s)
   [[ $status -eq 0 ]]
-  [[ $output == $'2026-10-10T01:43:00Z\tcontrol\t8192\t57\t2.1\t65.2\t0\t0\tred' ]]
+  [[ $output == $'2026-10-10T01:43:00Z\tcontrol\t8192\t57\t2.1\t65.3\t0\t0\tred' ]]
 }
 
 @test "no slow SQL, only the Addon controller starting: green, and no restart" {
@@ -57,6 +57,11 @@ row() {
   [[ $output == $'2026-10-10T01:43:00Z\tcontrol\t8192\t57\t2.1\t5.0\t0\t0\tred' ]]
 }
 
+@test "slow SQL that rounds to 5.0s: red, as the row reads" {
+  run row < <(slow 4.96s)
+  [[ $output == $'2026-10-10T01:43:00Z\tcontrol\t8192\t57\t2.1\t5.0\t0\t0\tred' ]]
+}
+
 @test "slow SQL just under 5s: green" {
   run row < <(slow 4.94s)
   [[ $output == $'2026-10-10T01:43:00Z\tcontrol\t8192\t57\t2.1\t4.9\t0\t0\tgreen' ]]
@@ -73,6 +78,6 @@ row() {
 }
 
 @test "the columns name every field of a row" {
-  row=$(row < /dev/null)
-  [[ $(tr -cd '\t' <<<"$STALL_LEDGER_COLUMNS" | wc -c) == $(tr -cd '\t' <<<"$row" | wc -c) ]]
+  fields=$(row < /dev/null)
+  [[ $(tr -cd '\t' <<<"$STALL_LEDGER_COLUMNS" | wc -c) == $(tr -cd '\t' <<<"$fields" | wc -c) ]]
 }
