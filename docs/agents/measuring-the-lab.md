@@ -31,6 +31,8 @@ TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf dump cgroup \
   -f datetime full_path pressure.io_some_pct mem.pgmajfault io.wbytes_per_sec -O csv
 ```
 
+- **Record an experiment with `scripts/below-recorder.sh <PID> &`**, given the experiment's PID, then `wait <PID>`. It records into the same store until that PID exits, compressed and capped, and stops itself. An `up` or `verify` that is running already records.
+- **below ignores TERM.** It logs "Stop signal received" and keeps recording, so a plain `kill` leaves it running. Stop a recorder with KILL, and check that it's gone with `pgrep -af 'below .*record'`.
 - **below prints local time; k3s logs UTC.** Run it with `TZ=UTC`. `-b` and `-e` also take epoch seconds and `2026-10-09T10:20:00Z`.
 - **Pod cgroups are named by UID**, as `kubepods/<QoS class>/pod<UID>`. Match them to pods with `kubectl --context k3d-lab get pods -A -o custom-columns=UID:.metadata.uid,NAME:.metadata.name`.
 - **`dump disk` and `dump system`** give the Host's disks and swap. The disk under the k3d Nodes' datastores is the one under Docker's data root (`docker info -f '{{.DockerRootDir}}'`).
