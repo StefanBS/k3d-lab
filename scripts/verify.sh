@@ -138,7 +138,7 @@ if [[ $gpu_node != *" True" ]]; then
 fi
 # The Demos' checks, labelled DEMO_LABEL_KEY, run only while the Lab has its Demos, which
 # the root Application says. While it has them, a Demo that's missing fails its checks.
-demos=$(kc -n argocd get application/root -o json | lab_demos) || die "can't read the Lab's root Application"
+demos=$(kc -n argocd get application/root -o json | lab_has_demos) || die "can't read the Lab's root Application"
 if [[ $demos != true ]]; then
   log "The Lab has no Demos, so their checks are skipped; 'just track --demos' adds them"
   deselected+=("!$DEMO_LABEL_KEY")

@@ -115,6 +115,14 @@ wait_demos() {
   done
 }
 
+# namespace_deleted <name>: asks for the namespace to be deleted, and succeeds once it's
+# gone. A failed request is "not yet", for retry.
+namespace_deleted() {
+  local left
+  kc delete namespace "$1" --ignore-not-found --wait=false >/dev/null 2>&1 &&
+    left=$(kc get namespace "$1" --ignore-not-found -o name 2>/dev/null) && [[ -z $left ]]
+}
+
 log "Waiting for the root Application to sync $revision"
 wait_caught_up --field-selector metadata.name=root
 # The ApplicationSets read the branch's components again, as up.sh waits for them to:
@@ -124,18 +132,18 @@ log "Waiting for the ApplicationSets to generate the Applications"
 kc -n argocd annotate applicationsets --all argocd.argoproj.io/application-set-refresh=true --overwrite >/dev/null
 retry 300 applicationsets_refreshed || die "the ApplicationSets haven't refreshed after 5 minutes"
 kc -n argocd wait applicationsets --all --for=condition=ResourcesUpToDate --timeout=5m >/dev/null
-# The Demos, as this checkout has them, by their Applications' names.
-mapfile -t demo_dirs < <(demo_dirs)
+# The Demos, as this checkout has them, like the checks that verify runs.
+mapfile -t demo_components < <(demo_dirs)
 # When only `demos` changed, the root Application still said Synced at this commit until
 # ArgoCD compared it again, so the waits above may have passed before the workloads
 # ApplicationSet changed. The Demos' Applications say when it has.
-if [[ -n $demos ]] && ((${#demo_dirs[@]})); then
+if [[ -n $demos ]] && ((${#demo_components[@]})); then
   if [[ $demos == true ]]; then
     log "Waiting for the Demos' Applications"
-    wait_demos present "${demo_dirs[@]##*/}"
+    wait_demos present "${demo_components[@]##*/}"
   else
     log "Waiting for the Demos' Applications to go"
-    wait_demos gone "${demo_dirs[@]##*/}"
+    wait_demos gone "${demo_components[@]##*/}"
   fi
 fi
 # Likewise, an Application whose spec the root's sync didn't change waits for a refresh.
@@ -147,10 +155,10 @@ wait_caught_up
 # for it, which still carries the Workloads' label: network-policy-enforced would fail on
 # a Workload namespace that no Application has.
 if [[ $demos == false ]]; then
-  for dir in "${demo_dirs[@]}"; do
+  for dir in "${demo_components[@]}"; do
     namespace=$(component_namespace "$dir")
     log "Deleting the namespace $namespace"
-    kc delete namespace "$namespace" --ignore-not-found --timeout=5m >/dev/null
+    retry 300 namespace_deleted "$namespace" || die "the namespace $namespace is still there after 5 minutes"
   done
 fi
 
