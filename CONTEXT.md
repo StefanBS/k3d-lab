@@ -60,6 +60,10 @@ _Avoid_: self-signed cert, root cert
 Something deployed into the Lab as an experiment, running on top of the Platform.
 _Avoid_: application, app (clashes with ArgoCD's `Application`)
 
+**Demo**:
+A Workload that exists to show a Platform component working, not to be used. A Lab has its Demos only when asked for.
+_Avoid_: example, sample app
+
 **GPU Workload**:
 A Workload that requests the GPU Node's GPU (`amd.com/gpu`) and tolerates its taint, so it runs only on the GPU Node, and only while it's Joined.
 _Avoid_: GPU job, GPU app
