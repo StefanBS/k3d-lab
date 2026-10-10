@@ -6,6 +6,10 @@
 
 Issues are tracked in GitHub Issues on `StefanBS/k3d-lab`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
+### Coding standards
+
+Reviewing a diff: read `CODING_STANDARDS.md` first.
+
 ### Triage labels
 
 Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
