@@ -12,6 +12,7 @@ What each number really counts, learned the hard way on #113. Check a measuremen
 
 - **The Host swaps to zram first.** zram has priority 100, and the swap volume on the disk is used only when zram is full (`swapon --show`). `pswpin` and `pswpout` in `/proc/vmstat` count both, so they don't show how much swap reached the disk. That volume's own line in `/proc/diskstats` does.
 - **Major page faults are disk reads.** A cgroup's `pgmajfault` (`memory.stat`) rising with the disk busy means the Host is evicting pages and reading them back: thrashing, whatever the swap numbers say.
+- **A k3d Node at its cap isn't thrashing by that alone.** File pages count against the cap, and the kernel gives them back first. During `up` the Agent sat at its 2560 MiB with 2 GiB of file pages from image pulls and no major faults. It thrashes when `file` in `memory.stat` is near zero and `pgmajfault` climbs by thousands a second (#141); at rest it climbed by under one a second.
 
 ## Pressure (PSI)
 
@@ -32,8 +33,11 @@ TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf dump cgroup \
 ```
 
 - **Record an experiment with `scripts/below-recorder.sh <PID> &`**, given the experiment's PID, then `wait <PID>`. It records into the same store until that PID exits, compressed and capped, and stops itself. An `up` or `verify` that is running already records.
+- **Record a Lab at rest the same way, against a `sleep`:** `sleep 6h & p=$!; scripts/below-recorder.sh $p & wait $p`. Killing the `sleep` ends it early.
+- **A long recording pushes out old days.** The store holds 2 GiB at about 4 MB a minute, so some eight hours fill it, and below drops whole days, oldest first. Check `du -sh ~/.local/state/k3d-lab/below/store` before a run of hours.
 - **below ignores TERM.** It logs "Stop signal received" and keeps recording, so a plain `kill` leaves it running. Stop a recorder with KILL, and check that it's gone with `pgrep -af 'below .*record'`.
 - **below prints local time; k3s logs UTC.** Run it with `TZ=UTC`. `-b` and `-e` also take epoch seconds and `2026-10-09T10:20:00Z`.
+- **`mem.pgmajfault` and the `io.*_per_sec` fields are rates per second**, not counts per sample: over 49 minutes they came within 10% of the cgroup's own counters (#141). `io_details.8:0.rbytes_per_sec` gives a cgroup's reads from one disk, here sda, by its `MAJ:MIN` in `lsblk`.
 - **Pod cgroups are named by UID**, as `kubepods/<QoS class>/pod<UID>`. Match them to pods with `kubectl --context k3d-lab get pods -A -o custom-columns=UID:.metadata.uid,NAME:.metadata.name`.
 - **`dump disk` and `dump system`** give the Host's disks and swap. The disk under the k3d Nodes' datastores is the one under Docker's data root (`docker info -f '{{.DockerRootDir}}'`).
 
