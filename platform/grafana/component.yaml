@@ -1,5 +1,5 @@
 # Where this Platform component's chart comes from.
 chart: grafana
 repoURL: https://grafana-community.github.io/helm-charts
-version: 13.4.0
+version: 13.5.0
 namespace: monitoring
