@@ -16,5 +16,5 @@ jobs:
       # Installs every tool in mise.toml, at the versions the Host uses.
       - uses: jdx/mise-action@v5
         with:
-          version: 2026.10.6
+          version: 2026.10.7
       - run: just lint
