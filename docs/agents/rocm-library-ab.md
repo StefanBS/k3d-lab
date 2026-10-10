@@ -28,7 +28,7 @@ ticks() { { snap $1; sleep 10; snap $1; } | awk '
   /models/comfyui/runtime/venv/bin/python -c 'import time, torch; torch.zeros(1, device="cuda"); time.sleep(600)' & p=$!
   sleep 30; ticks $p; kill $p
   ```
-- **The spinning thread names itself.** Both spins were one thread near 1000, ROCr's `AsyncEventsLoop`, and every other thread near 0. An idle process totals 0 or 1.
+- **A spin is one thread near 1000** and every other thread at 0: ROCr's `AsyncEventsLoop`, which shows under the process's own name, `python`. An idle process totals 0 or 1.
 - **The Lab's own ComfyUI is PID 1** in the container: `ticks 1`.
 
 ## A/B of a library
@@ -99,22 +99,33 @@ PYTHONPATH=/work/ab/$n venv/bin/python ComfyUI/main.py --listen 127.0.0.1 --port
 From a second shell in the pod, with `ticks` defined, once the first prints that it's listening:
 
 ```bash
-pid=$(pgrep -f '[p]ort 8189')
+pid=$(pgrep -f '^venv/bin/python .*--port 8189')
 grep -o '/[^ ]*lib\(hsa-runtime64\|rocprofiler-sdk\)\.so[^ ]*' /proc/$pid/maps | sort -u
 ticks $pid                                    # idle before the job
 curl -fsS -H 'Content-Type: application/json' -d "{\"prompt\": $(cat /work/ab/job.json)}" http://127.0.0.1:8189/prompt
 until curl -fsS http://127.0.0.1:8189/queue | python -c 'import json, sys
 q = json.load(sys.stdin); sys.exit(bool(q["queue_running"] or q["queue_pending"]))'; do sleep 5; done
 ticks $pid                                    # idle after the job
-pkill -f '[p]ort 8189'
+pkill -f '^venv/bin/python .*--port 8189'
 ```
 
 - **For the GPU init alone,** run the `python -c` line above with the same `PYTHONPATH=/work/ab/$n` instead of ComfyUI.
-- **`job.json` is a workflow exported in API format** from https://comfyui.lab.localhost, copied in like the library. #106 used a Qwen-Image-2.1 text to image template at 512×512 and 20 steps.
-- **`pgrep -f` and `pkill -f` match their own `bash -c` command line** when run through `kubectl exec ... -- bash -c`. The `[p]` keeps the pattern from matching itself.
+- **`job.json` is a workflow in API format,** exported from https://comfyui.lab.localhost and copied in like the library. Every image ComfyUI saved carries its own, as the `prompt` text chunk of the PNG: `json.loads(PIL.Image.open(<png>).info["prompt"])`. Both measurements below used a Qwen-Image-2.1 text to image job at 512×512 and 20 steps, which takes 23 s.
+- **Anchor the `pgrep -f` pattern at ComfyUI's command line.** Run through `kubectl exec ... -- bash -c '<script>'`, a looser pattern such as `[p]ort 8189` also matches the `bash` that holds the script, since the script names the port. `ticks` then samples that `bash`, which reads 0 whatever the library, and `pkill` ends the script.
 - **`/work` is the pod's emptyDir,** so a restart of the pod removes every shadow.
 
-What #106 measured this way, with the fixed rocprofiler-sdk in every row:
+## What it measured
+
+Ticks over 10 s. On 2026-10-10, following this page in the Lab's pod, with the other library the Lab's fixed build in each row:
+
+| Variant | After the GPU init | Idle before the job | Idle after it |
+|---|---|---|---|
+| Control: both fixed builds | 0 | 0 | 0 |
+| The image's `librocprofiler-sdk.so.1` | 1005 | | |
+| The image's `libhsa-runtime64.so.1` | | 0 | 1016 |
+| Control again | | 0 | 0 |
+
+The spin was still at 1016 30 s after the job. For #106, with the fixed rocprofiler-sdk in every row:
 
 | `libhsa-runtime64.so.1` | Idle before the job | Idle after it |
 |---|---|---|
