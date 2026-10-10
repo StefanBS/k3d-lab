@@ -6,6 +6,10 @@
 
 Issues are tracked in GitHub Issues on `StefanBS/k3d-lab`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
+### Coding standards
+
+Reviewing a diff: read `CODING_STANDARDS.md` first.
+
 ### Triage labels
 
 Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
@@ -17,6 +21,10 @@ Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/age
 ### Measuring the Lab
 
 Measuring the Lab's datastore writes, memory, swap or pressure, reproducing a datastore stall, changing the running Server for an experiment, or querying its Prometheus: read `docs/agents/measuring-the-lab.md` first.
+
+### ROCm libraries in ComfyUI
+
+Measuring ComfyUI's idle CPU, testing another build of a ROCm library in its pod, or changing the `rocm/pytorch` tag: read `docs/agents/rocm-library-ab.md` first.
 
 ### Shell gotchas
 

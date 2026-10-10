@@ -4,7 +4,7 @@ With the fixed rocprofiler-sdk (ADR 0011), ComfyUI is idle at start, but after i
 
 - **The cause is in ROCr's `AsyncEventsLoop`.** Each AQL queue has two signals with async handlers that share one KFD event, so the loop's list of events to wait on holds duplicates. ROCm 7.14.1 drops them with `std::unique`, which compacts the events but not their ages, and resets an age to 1 whenever a slot's event changes. KFD then reports every event that has fired since as ready, the wait returns at once, and the loop spins: about 4000 waits a second, measured with ptrace.
 - **Upstream fixed it on `develop`** (`c06ea68a59` and three follow-ups, which key the ages by event), after ROCm 7.14 branched. The branch `lab/rocr-runtime-7.14.1-event-age` of `StefanBS/rocm-systems` is ROCm 7.14.1's commit (`ca887ee80abf`) plus those four commits, and builds `libhsa-runtime64.so.1` the way ADR 0011's branch builds rocprofiler-sdk. Setup downloads it, pinned by checksum, and the DaemonSet mounts it over the image's copy.
-- **Measured in the pod**, a second ComfyUI with each library and one Qwen-Image job: the image's ROCr and the same build without the fix spin after the job, this one stays at 0.
+- **Measured in the pod**, a second ComfyUI with each library and one Qwen-Image job: the image's ROCr and the same build without the fix spin after the job, this one stays at 0. [The how-to](../agents/rocm-library-ab.md) has the procedure.
 
 ## Considered Options
 

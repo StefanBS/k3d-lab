@@ -11,6 +11,10 @@ Judgement calls for review. What a tool can check lives in `just lint` instead.
 - **Recipes stay thin.** A recipe calls one script; the logic lives in `scripts/` (the `Justfile`'s header).
 - **Comments say why.** Plain full sentences, about what the code can't say itself.
 
+## Docs
+
+- **A how-to's commands were run as written,** and its numbers come from that run. A PR that couldn't run them says so, and doesn't close the issue.
+
 ## Language
 
 - Name things with `CONTEXT.md`'s terms, and none of its _Avoid_ words, in code, comments, output and docs.
