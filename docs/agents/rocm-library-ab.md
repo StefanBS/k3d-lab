@@ -14,8 +14,11 @@ A thread's CPU time is fields 14 and 15 of `/proc/<pid>/task/<tid>/stat`, in tic
 
 ```bash
 snap() { local t; for t in /proc/$1/task/*; do echo "${t##*/} $(tr ' ' _ <$t/comm) $(sed 's/.*) //' $t/stat | cut -d' ' -f12,13)"; done; }
-# <pid>: the total over 10 s, then the ticks of each thread that used any.
-ticks() { { snap $1; sleep 10; snap $1; } | awk '
+# <pid>: the command sampled, its total over 10 s, then the ticks of each thread that used any.
+ticks() {
+  [[ $# == 1 && -d /proc/$1 ]] || { echo "ticks takes one running PID, not: $*" >&2; return 1; }
+  tr '\0' ' ' </proc/$1/cmdline | cut -c1-60
+  { snap $1; sleep 10; snap $1; } | awk '
   { seen[$1]++; d[$1] = $3 + $4 - d[$1]; name[$1] = $2 }
   END { for (t in d) if (seen[t] == 2) { sum += d[t]; if (d[t]) print d[t], t, name[t] }; print sum + 0, "total" }' | sort -rn; }
 ```
@@ -29,6 +32,7 @@ ticks() { { snap $1; sleep 10; snap $1; } | awk '
   sleep 30; ticks $p; kill $p
   ```
 - **A spin is one thread near 1000** and every other thread at 0: ROCr's `AsyncEventsLoop`, which shows under the process's own name, `python`. An idle process totals 0 or 1.
+- **Read the first line: it's the command that was sampled.** A 0 from the wrong process looks like a fix.
 - **The Lab's own ComfyUI is PID 1** in the container: `ticks 1`.
 
 ## A/B of a library
