@@ -26,6 +26,10 @@ Measuring the Lab's datastore writes, memory, swap or pressure, reproducing a da
 
 Measuring ComfyUI's idle CPU, testing another build of a ROCm library in its pod, or changing the `rocm/pytorch` tag: read `docs/agents/rocm-library-ab.md` first.
 
+### Testing a change on the Lab
+
+Proving a branch works, rebuilding the Lab, or making `up` or `track` fail on purpose: read `docs/agents/testing-a-change.md` first.
+
 ### Shell gotchas
 
-Writing an awk, yq or jq program, parsing kubectl JSON, or reading tab-separated fields: read `docs/agents/shell.md` first.
+Writing an awk, yq or jq program, parsing kubectl JSON, reading tab-separated fields, matching a process with `pgrep`, or editing a script that's running: read `docs/agents/shell.md` first.
