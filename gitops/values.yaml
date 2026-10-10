@@ -2,6 +2,9 @@
 # Platform and Workloads from the same Git revision as this chart.
 repoURL: https://github.com/StefanBS/k3d-lab.git
 revision: main
+# Whether the Lab has its Demos, the Workloads with `role: demo` in their component.yaml.
+# `just up --demos` and `just track --demos` set it in the root Application.
+demos: false
 # The namespaces the Platform installs into, which no Workload may deploy into or
 # create. This chart can't read platform/*/component.yaml, so lint checks that every
 # Platform component's namespace is here, and that no Workload's is.

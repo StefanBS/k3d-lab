@@ -11,6 +11,8 @@
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
+# shellcheck source=demos-state.sh
+source "$(dirname "$0")/demos-state.sh"
 # shellcheck source=pause-state.sh
 source "$(dirname "$0")/pause-state.sh"
 # shellcheck source=run-diagnostics.sh
@@ -128,11 +130,20 @@ args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" -
 # The GPU checks, labelled GPU_NODE_LABEL_KEY, run only while the GPU Node is Joined and Ready.
 # Left is its normal state, so that says nothing. Joined but NotReady means it's powered
 # off (ADR 0002): not a failure, but worth knowing.
+deselected=()
 gpu_node=$(gpu_node_in_lab)
 if [[ $gpu_node != *" True" ]]; then
   [[ -z $gpu_node ]] || warn "the GPU Node ${gpu_node%% *} is Joined but NotReady; its checks are skipped"
-  args+=(--selector "!$GPU_NODE_LABEL_KEY")
+  deselected+=("!$GPU_NODE_LABEL_KEY")
 fi
+# The Demos' checks, labelled DEMO_LABEL_KEY, run only while the Lab has its Demos, which
+# the root Application says. While it has them, a Demo that's missing fails its checks.
+demos=$(kc -n argocd get application/root -o json | lab_has_demos) || die "can't read the Lab's root Application"
+if [[ $demos != true ]]; then
+  log "The Lab has no Demos, so their checks are skipped; 'just track --demos' adds them"
+  deselected+=("!$DEMO_LABEL_KEY")
+fi
+((${#deselected[@]} == 0)) || args+=(--selector "$(IFS=, && echo "${deselected[*]}")")
 # The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
 if [[ -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then
   warn "$why: the GPU Node's route to the Lab is stale; run 'just host wizard', then 'just gpu join'"

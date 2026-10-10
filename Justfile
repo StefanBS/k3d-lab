@@ -26,11 +26,11 @@ default:
 doctor:
     @scripts/doctor.sh
 
-# Build the Lab from the pushed branch checked out here; REVISION=<branch> picks another, --debug also records and verifies
+# Build the Lab from the pushed branch checked out here; REVISION=<branch> picks another, --demos also builds the Demos, --debug also records and verifies
 up *args:
     @scripts/up.sh {{ args }}
 
-# Point the running Lab at the pushed branch checked out here, or at <branch>; --debug also records and verifies
+# Point the running Lab at the pushed branch checked out here, or at <branch>; --demos adds the Demos, --no-demos removes them, --debug also records and verifies
 track *args:
     @scripts/track.sh {{ args }}
 
