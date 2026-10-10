@@ -1,2 +1,4 @@
 # No chart: the kustomization.yaml beside this is the component.
 namespace: rollouts-demo
+# A Demo: a Lab has it only when asked for (`just up --demos`, `just track --demos`).
+role: demo
