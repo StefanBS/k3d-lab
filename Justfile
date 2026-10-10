@@ -26,13 +26,13 @@ default:
 doctor:
     @scripts/doctor.sh
 
-# Build the Lab from the pushed branch checked out here, then verify it; REVISION=<branch> picks another
+# Build the Lab from the pushed branch checked out here; REVISION=<branch> picks another, --debug also records and verifies
 up *args:
     @scripts/up.sh {{ args }}
 
-# Point the running Lab at the pushed branch checked out here, or at <branch>, then verify it
-track *branch:
-    @scripts/track.sh {{ branch }}
+# Point the running Lab at the pushed branch checked out here, or at <branch>; --debug also records and verifies
+track *args:
+    @scripts/track.sh {{ args }}
 
 # Stop ArgoCD syncing one Workload or Platform component, so changes made by hand to it stay
 pause name:

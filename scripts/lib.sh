@@ -86,13 +86,13 @@ retry() {
 # What the scripts record about the Lab, outside the repo.
 LAB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/k3d-lab
 
-# up and verify record the pressure with below (below.sh), with its config, store and
-# log in this directory.
+# verify, and a debugging run of up or track, record the pressure with below (below.sh),
+# with its config, store and log in this directory.
 LAB_BELOW_DIR=$LAB_STATE_DIR/below
 LAB_BELOW_CONFIG=$LAB_BELOW_DIR/below.conf
 
 # record_pressure: records the pressure on the Host and on each cgroup in it with below
-# until this script exits, failed or not. verify run by up keeps up's recorder.
+# until this script exits, failed or not. verify run by up or track keeps their recorder.
 record_pressure() {
   [[ -z ${LAB_BELOW_RECORDING:-} ]] || return 0
   if ! command -v below >/dev/null; then

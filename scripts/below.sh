@@ -1,6 +1,7 @@
 # How the Lab runs below, which records the pressure on the Host and on each cgroup in
-# it while up and verify run. Sourced by lib.sh's callers, and on its own by
-# scripts/tests/, so it sets no shell options and runs nothing when sourced.
+# it while verify, or a debugging run of up or track, runs. Sourced by lib.sh's callers,
+# and on its own by scripts/tests/, so it sets no shell options and runs nothing when
+# sourced.
 # shellcheck shell=bash
 
 # k3s on the Server dies when its datastore stalls for more than about 5s, and its logs

@@ -33,12 +33,12 @@ else
   fail "Docker CE isn't reachable at $DOCKER_HOST (ADR 0001): https://docs.docker.com/engine/install/fedora/"
 fi
 
-# up and verify record the pressure with below, which shows what stalled k3s (lib.sh's
-# record_pressure). Without it they still run, recording nothing.
+# verify, and a debugging run of up or track, record the pressure with below, which shows
+# what stalled k3s (lib.sh's record_pressure). Without it they still run, recording nothing.
 if command -v below >/dev/null; then
-  ok "below is installed, to record the pressure while up and verify run"
+  ok "below is installed, to record the pressure while verify, 'up --debug' and 'track --debug' run"
 else
-  warn "below is missing, so up and verify record no pressure: sudo dnf install below"
+  warn "below is missing, so verify, 'up --debug' and 'track --debug' record no pressure: sudo dnf install below"
 fi
 
 # Below 15% free, the kubelet deletes unused images, which slows the next `just up`;

@@ -5,18 +5,16 @@
 # Leading plain words name the checks to run, the folders in verify/; without any, every
 # check runs. The rest go to `chainsaw test`, such as --pause-on-failure. VERBOSE=1 also
 # shows what each passing step did, such as the OK lines of a check's script.
-# LAB_UP_SINCE, a time that up sets, makes it also warn of k3s restarts on the Server
-# between then and the run's start.
+# LAB_RUN_SINCE, a time that a debugging run of up or track sets (run-diagnostics.sh),
+# makes it also warn of k3s restarts on the Server between then and the checks' start.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
-# shellcheck source=host-memory.sh
-source "$(dirname "$0")/host-memory.sh"
 # shellcheck source=pause-state.sh
 source "$(dirname "$0")/pause-state.sh"
-# shellcheck source=server-restarts.sh
-source "$(dirname "$0")/server-restarts.sh"
+# shellcheck source=run-diagnostics.sh
+source "$(dirname "$0")/run-diagnostics.sh"
 # shellcheck source=below.sh
 source "$(dirname "$0")/below.sh"
 
@@ -34,19 +32,6 @@ done
 
 # k3s may stall on its datastore during the run, and the pressure then says why.
 record_pressure
-
-# warn_if_short_on_memory <consequence>: WARNs, with the numbers, while the Host is short
-# on memory, since k3s then stalls and may die on its own datastore.
-warn_if_short_on_memory() {
-  local memory
-  if memory=$(host_memory_short </proc/meminfo); then warn "Host is short on memory: $memory; $1"; fi
-}
-
-# server_logs <since> [<until>]: the Server's logs between those times, given as Docker's
-# --since and --until take them.
-server_logs() {
-  docker logs --since "$1" ${2:+--until "$2"} "$LAB_SERVER" 2>&1 || true
-}
 
 # warn_if_server_stalled <since> <consequence>: WARNs when k3s on the Server restarted
 # since then, given as Docker's --since takes it, since checks then fail for that reason
@@ -106,12 +91,13 @@ if ! kc get --raw /readyz --request-timeout=10s >/dev/null; then
   warn_if_server_stalled 10m "that may be why"
   die "the Lab doesn't answer"
 fi
-# A restart during up leaves a Lab that may pass every check, though k3s died while it was
-# built (#135). Only a restart: slow SQL alone, which up waited out, says nothing here.
-if [[ -n ${LAB_UP_SINCE:-} ]]; then
-  logs=$(server_logs "$LAB_UP_SINCE" "$run_start")
+# A restart during up or track leaves a Lab that may pass every check, though k3s died
+# while it was built or synced (#135). Only a restart: slow SQL alone, which the run waited
+# out, says nothing here.
+if [[ -n ${LAB_RUN_SINCE:-} ]]; then
+  logs=$(server_logs "$LAB_RUN_SINCE" "$run_start")
   if restarts=$(server_restarts <<<"$logs"); then
-    warn "$restarts; during 'just up', before verify"
+    warn "$restarts; during the run, before verify"
     if stall=$(server_stall <<<"$logs"); then show_pressure_before "$stall"; fi
   fi
 fi

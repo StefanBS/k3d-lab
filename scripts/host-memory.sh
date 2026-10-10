@@ -1,5 +1,5 @@
-# Whether the Host is short on memory. Sourced by verify.sh and doctor.sh, and on its own
-# by scripts/tests/, so it sets no shell options and runs nothing when sourced.
+# Whether the Host is short on memory. Sourced by run-diagnostics.sh and doctor.sh, and
+# on its own by scripts/tests/, so it sets no shell options and runs nothing when sourced.
 # shellcheck shell=bash
 
 # Short on memory, k3s stalls and may die on its own datastore. With the Lab settled and
