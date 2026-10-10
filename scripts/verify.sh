@@ -5,8 +5,8 @@
 # Leading plain words name the checks to run, the folders in verify/; without any, every
 # check runs. The rest go to `chainsaw test`, such as --pause-on-failure. VERBOSE=1 also
 # shows what each passing step did, such as the OK lines of a check's script.
-# LAB_UP_SINCE, a time that a debugging run of up sets, makes it also warn of k3s restarts on the Server
-# between then and the run's start.
+# LAB_RUN_SINCE, a time that a debugging run of up or track sets (run-diagnostics.sh),
+# makes it also warn of k3s restarts on the Server between then and the checks' start.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
@@ -91,12 +91,13 @@ if ! kc get --raw /readyz --request-timeout=10s >/dev/null; then
   warn_if_server_stalled 10m "that may be why"
   die "the Lab doesn't answer"
 fi
-# A restart during up leaves a Lab that may pass every check, though k3s died while it was
-# built (#135). Only a restart: slow SQL alone, which up waited out, says nothing here.
-if [[ -n ${LAB_UP_SINCE:-} ]]; then
-  logs=$(server_logs "$LAB_UP_SINCE" "$run_start")
+# A restart during up or track leaves a Lab that may pass every check, though k3s died
+# while it was built or synced (#135). Only a restart: slow SQL alone, which the run waited
+# out, says nothing here.
+if [[ -n ${LAB_RUN_SINCE:-} ]]; then
+  logs=$(server_logs "$LAB_RUN_SINCE" "$run_start")
   if restarts=$(server_restarts <<<"$logs"); then
-    warn "$restarts; during 'just up', before verify"
+    warn "$restarts; during the run, before verify"
     if stall=$(server_stall <<<"$logs"); then show_pressure_before "$stall"; fi
   fi
 fi

@@ -95,8 +95,8 @@ quietly k3d cluster start "$LAB_NAME"
 # Stopping and starting the k3d Nodes restarted k3s on the Server on purpose. Any restart
 # after this is reported (#135), by verify in a debugging run: k3s dying on its datastore
 # while ArgoCD syncs would otherwise go unseen.
-RUN_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-export LAB_UP_SINCE=$RUN_SINCE
+export LAB_RUN_SINCE
+LAB_RUN_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Cilium only runs its Gateway controller if the Gateway API CRDs exist when it starts.
 log "Installing the Gateway API CRDs"

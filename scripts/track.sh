@@ -39,7 +39,8 @@ commit=$(pushed_commit "$revision")
 # A paused Application never syncs the new commit, so the wait below would only time out.
 paused=$(kc -n argocd get appprojects -o json | paused_applications | paste -sd' ')
 [[ -z $paused ]] || die "paused, so they'd never sync $revision: $paused; 'just resume <name>' each first"
-RUN_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export LAB_RUN_SINCE
+LAB_RUN_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 trap 'report_run track' EXIT
 
 # The same two fields up.sh sets: the root Application's own revision, and the one its

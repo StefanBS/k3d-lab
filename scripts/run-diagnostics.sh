@@ -30,9 +30,9 @@ warn_if_server_restarted() {
 # same Lab. A debugging run also records the pressure and ends with verify, which prints
 # every diagnostic; a regular run stops once every Application is Synced and Healthy.
 RUN_DEBUG=''
-# From when a restart of k3s on the Server counts against the run, as Docker's --since
-# takes it. Empty until the run has done what restarts it on purpose.
-RUN_SINCE=''
+# LAB_RUN_SINCE: from when a restart of k3s on the Server counts against the run, as
+# Docker's --since takes it. Unset until the run has done what restarts it on purpose.
+# Exported, since verify reports the restarts of a debugging run.
 
 # report_run <recipe>: the EXIT trap of up and track, set once the run starts to change the
 # Lab, so a run that refuses to start says only why. A run that failed says what may have
@@ -41,12 +41,12 @@ RUN_SINCE=''
 report_run() {
   local status=$?
   if ((status == 0)); then
-    [[ -z $RUN_SINCE ]] || warn_if_server_restarted "$RUN_SINCE" "the run succeeded anyway, and 'just verify' checks the Lab"
+    [[ -z ${LAB_RUN_SINCE:-} ]] || warn_if_server_restarted "$LAB_RUN_SINCE" "the run succeeded anyway, and 'just verify' checks the Lab"
     return 0
   fi
   # Stopped by a signal, such as Ctrl-C: nothing went wrong to diagnose.
   ((status < 128)) || return 0
   warn_if_short_on_memory "that may be why it failed"
-  [[ -z $RUN_SINCE ]] || warn_if_server_restarted "$RUN_SINCE" "that may be why it failed"
+  [[ -z ${LAB_RUN_SINCE:-} ]] || warn_if_server_restarted "$LAB_RUN_SINCE" "that may be why it failed"
   [[ -n $RUN_DEBUG ]] || log "For the next attempt, 'just $1 --debug' records the pressure and runs every check"
 }
