@@ -199,6 +199,18 @@ component_dirs() {
   done
 }
 
+# The Demos, the Workloads with `role: demo` in their component.yaml, as component_dirs
+# prints them. A Lab has them only when asked for: `just up --demos`, `just track --demos`.
+demo_dirs() {
+  local dir
+  while read -r dir; do
+    if [[ $dir == workloads/* && $(yq '.role' "$LAB_ROOT/$dir/component.yaml") == demo ]]; then echo "$dir"; fi
+  done < <(component_dirs)
+}
+# The checks of a Demo carry this label, with the Demo's name: they run only while the Lab
+# has its Demos (verify.sh).
+DEMO_LABEL_KEY=k3d-lab/demo
+
 # Whether a component folder installs a chart; otherwise its kustomization.yaml is the
 # component (the Platform and Workloads ApplicationSets decide the same way).
 component_has_chart() { [[ $(yq 'has("chart")' "$LAB_ROOT/$1/component.yaml") == true ]]; }

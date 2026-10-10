@@ -2,6 +2,9 @@ apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
   name: demo-rollout-healthy
+  # Runs only while the Lab has its Demos (scripts/verify.sh).
+  labels:
+    k3d-lab/demo: rollouts-demo
 spec:
   description: >-
     The demo Rollout (workloads/rollouts-demo/) is Healthy: fully promoted, with all of

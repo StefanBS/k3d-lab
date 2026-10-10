@@ -4,8 +4,8 @@ How to prove a branch works, and how to leave the Host afterwards. Every command
 
 ## The test is a debugging run
 
-- **`just up --debug` on a fresh Lab is the test of a change.** A bare `just up` only builds: it runs no check. Push the branch first, since ArgoCD builds from what's pushed. The build took 8 to 10 minutes.
-- **`just track --debug` tests a change on a running Lab,** without the rebuild.
+- **`just up --debug` on a fresh Lab is the test of a change.** It builds everything in Git, the Demos included. A bare `just up` only builds, without the Demos: it runs no check. Push the branch first, since ArgoCD builds from what's pushed. The build took 8 to 10 minutes.
+- **`just track --debug` tests a change on a running Lab,** without the rebuild. It tests the Lab as it is: on a Lab without its Demos, `verify` skips their checks and says so. `just track --demos --debug` adds them first.
 - **Run either in the background and read its log as it goes**, such as `just up --debug >"$log" 2>&1 &`. Edit no script while it runs (`docs/agents/shell.md`).
 
 ## Rebuilding a Lab that's in use
