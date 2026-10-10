@@ -23,7 +23,7 @@ What each number really counts, learned the hard way on #113. Check a measuremen
 
 ## Replaying a run
 
-While `up` or `verify` runs, below records every cgroup's pressure, memory, major faults and disk I/O, and the Host's disks and swap, every 2s, into `~/.local/state/k3d-lab/below/` (`scripts/below.sh`). It keeps a week. Read it with that store's config, which the run writes:
+While `verify`, `up --debug` or `track --debug` runs, below records every cgroup's pressure, memory, major faults and disk I/O, and the Host's disks and swap, every 2s, into `~/.local/state/k3d-lab/below/` (`scripts/below.sh`). It keeps a week. Read it with that store's config, which the run writes:
 
 ```bash
 TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf replay -t '2026-10-09 10:20:00'
@@ -32,7 +32,7 @@ TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf dump cgroup \
   -f datetime full_path pressure.io_some_pct mem.pgmajfault io.wbytes_per_sec -O csv
 ```
 
-- **Record an experiment with `scripts/below-recorder.sh <PID> &`**, given the experiment's PID, then `wait <PID>`. It records into the same store until that PID exits, compressed and capped, and stops itself. An `up` or `verify` that is running already records.
+- **Record an experiment with `scripts/below-recorder.sh <PID> &`**, given the experiment's PID, then `wait <PID>`. It records into the same store until that PID exits, compressed and capped, and stops itself. A `verify`, `up --debug` or `track --debug` that is running already records; a bare `up` or `track` records nothing.
 - **Record a Lab at rest the same way, against a `sleep`:** `sleep 6h & p=$!; scripts/below-recorder.sh $p & wait $p`. Killing the `sleep` ends it early.
 - **A long recording pushes out old days.** The store holds 2 GiB at about 4 MB a minute, so some eight hours fill it, and below drops whole days, oldest first. Check `du -sh ~/.local/state/k3d-lab/below/store` before a run of hours.
 - **below ignores TERM.** It logs "Stop signal received" and keeps recording, so a plain `kill` leaves it running. Stop a recorder with KILL, and check that it's gone with `pgrep -af 'below .*record'`.

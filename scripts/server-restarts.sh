@@ -1,6 +1,6 @@
-# Whether k3s on the Server restarted or stalled, from its logs. Sourced by verify.sh,
-# and on its own by scripts/tests/, so it sets no shell options and runs nothing when
-# sourced.
+# Whether k3s on the Server restarted or stalled, from its logs. Sourced by
+# run-diagnostics.sh, and on its own by scripts/tests/, so it sets no shell options and
+# runs nothing when sourced.
 # shellcheck shell=bash
 
 # Under load, k3s can die on its own datastore and Docker restarts it (#113). Checks then

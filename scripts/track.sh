@@ -1,18 +1,37 @@
 #!/usr/bin/env bash
 # Points the running Lab at another pushed branch or tag, as `just up` would have built
-# it, without rebuilding it; then runs verify.
-# Usage: track.sh [<branch or tag>]. By default, the branch checked out here, since
-# verify runs the checks from this checkout (see up.sh).
+# it, without rebuilding it, and stops once every Application has synced it.
+# Usage: track.sh [<branch or tag>] [--debug]. By default, the branch checked out here,
+# since verify runs the checks from this checkout (see up.sh).
+# --debug makes it a debugging run, which also records the pressure and ends with verify
+# (run-diagnostics.sh).
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=track-state.sh
 source "$(dirname "$0")/track-state.sh"
 # shellcheck source=pause-state.sh
 source "$(dirname "$0")/pause-state.sh"
+# shellcheck source=run-diagnostics.sh
+source "$(dirname "$0")/run-diagnostics.sh"
 
-(($# <= 1)) || die "usage: just track [<branch or tag>]"
-revision=${1:-$(git -C "$LAB_ROOT" branch --show-current)}
+usage="usage: just track [<branch or tag>] [--debug]"
+revision=''
+for arg; do
+  case $arg in
+    --debug) RUN_DEBUG=1 ;;
+    -*) die "unknown argument '$arg'; $usage" ;;
+    *)
+      [[ -z $revision ]] || die "$usage"
+      revision=$arg
+      ;;
+  esac
+done
+[[ -n $revision ]] || revision=$(git -C "$LAB_ROOT" branch --show-current)
 [[ -n $revision ]] || die "no branch is checked out; check one out, or pass <branch or tag>"
+
+# A sync can be heavy enough for k3s to stall on its datastore, and the pressure then says
+# why (verify.sh).
+[[ -z $RUN_DEBUG ]] || record_pressure
 
 lab_exists || die "there's no Lab; run 'just up'"
 kc -n argocd get application/root >/dev/null 2>&1 || die "the Lab has no root Application; run 'just down', then 'just up'"
@@ -20,6 +39,8 @@ commit=$(pushed_commit "$revision")
 # A paused Application never syncs the new commit, so the wait below would only time out.
 paused=$(kc -n argocd get appprojects -o json | paused_applications | paste -sd' ')
 [[ -z $paused ]] || die "paused, so they'd never sync $revision: $paused; 'just resume <name>' each first"
+RUN_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+trap 'report_run track' EXIT
 
 # The same two fields up.sh sets: the root Application's own revision, and the one its
 # chart gives every Application it generates. A hard refresh makes ArgoCD read the
@@ -72,4 +93,4 @@ kc -n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overw
 log "Waiting for every Application to sync $revision"
 wait_caught_up
 
-exec "$LAB_ROOT/scripts/verify.sh"
+[[ -z $RUN_DEBUG ]] || exec "$LAB_ROOT/scripts/verify.sh"

@@ -1,28 +1,33 @@
 #!/usr/bin/env bash
-# Builds the Lab from scratch, then runs verify.
-# Usage: up.sh [REVISION=<branch or tag>]. ArgoCD reads the Lab from that revision
-# of LAB_REPO. By default, that's the branch checked out here, since verify runs the
-# checks from this checkout: a Lab built from another branch would fail checks it was
+# Builds the Lab from scratch, and stops once every Application is Synced and Healthy.
+# Usage: up.sh [REVISION=<branch or tag>] [--debug]. ArgoCD reads the Lab from that
+# revision of LAB_REPO. By default, that's the branch checked out here, since verify runs
+# the checks from this checkout: a Lab built from another branch would fail checks it was
 # never meant to pass.
+# --debug makes it a debugging run, which also records the pressure and ends with verify
+# (run-diagnostics.sh). That's the test of a change.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
 source "$(dirname "$0")/host.sh"
 # shellcheck source=secret-store.sh
 source "$(dirname "$0")/secret-store.sh"
+# shellcheck source=run-diagnostics.sh
+source "$(dirname "$0")/run-diagnostics.sh"
 
 revision=$(git -C "$LAB_ROOT" branch --show-current)
 for arg; do
   case $arg in
     REVISION=?*) revision=${arg#REVISION=} ;;
-    *) die "unknown argument '$arg'; usage: just up [REVISION=<branch>]" ;;
+    --debug) RUN_DEBUG=1 ;;
+    *) die "unknown argument '$arg'; usage: just up [REVISION=<branch>] [--debug]" ;;
   esac
 done
 [[ -n $revision ]] || die "no branch is checked out; check one out, or pass REVISION=<branch or tag>"
 
 # k3s may stall on its datastore during the build or the checks, and the pressure then
 # says why (verify.sh).
-record_pressure
+[[ -z $RUN_DEBUG ]] || record_pressure
 
 # Installs a Platform component that ArgoCD can't install itself: the same chart,
 # version and values that ArgoCD then manages it with.
@@ -41,6 +46,7 @@ taken=$(lab_host_ports_taken)
 [[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
 $taken"
 pushed_commit "$revision" >/dev/null
+trap 'report_run up' EXIT
 
 # Makes / rshared inside the k3d Nodes, which Cilium's bpffs mount needs.
 export K3D_FIX_MOUNTS=1
@@ -86,11 +92,11 @@ while read -r node cidr; do
   docker network connect --ip "${cidr%/*}" "$LAB_NETWORK" "$node"
 done <<<"$nodes"
 quietly k3d cluster start "$LAB_NAME"
-# Stopping and starting the k3d Nodes restarted k3s on the Server on purpose. verify
-# reports any restart after this (#135), such as k3s dying on its datastore while ArgoCD
-# syncs, which would otherwise go unseen.
-export LAB_UP_SINCE
-LAB_UP_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# Stopping and starting the k3d Nodes restarted k3s on the Server on purpose. Any restart
+# after this is reported (#135), by verify in a debugging run: k3s dying on its datastore
+# while ArgoCD syncs would otherwise go unseen.
+RUN_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export LAB_UP_SINCE=$RUN_SINCE
 
 # Cilium only runs its Gateway controller if the Gateway API CRDs exist when it starts.
 log "Installing the Gateway API CRDs"
@@ -172,4 +178,4 @@ kc -n argocd wait application/root --for=jsonpath='{.status.health.status}'=Heal
 kc -n argocd wait applications --all --for=jsonpath='{.status.sync.status}'=Synced --timeout=15m >/dev/null
 kc -n argocd wait applications --all --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
 
-exec "$LAB_ROOT/scripts/verify.sh"
+[[ -z $RUN_DEBUG ]] || exec "$LAB_ROOT/scripts/verify.sh"
