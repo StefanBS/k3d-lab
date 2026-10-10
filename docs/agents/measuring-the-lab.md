@@ -62,8 +62,15 @@ kubectl --context k3d-lab get --raw "/api/v1/namespaces/monitoring/services/prom
 
 ## Stalling the datastore on purpose
 
-#113's stall reproduces on a running Lab in a minute, without `up`: write about 8 GB of buffered data to the disk under Docker's data root, e.g. `dd if=/dev/zero of=<file> bs=1M count=8192`, while timing writes to the API. Datastore writes stalled for 25–60s in every such run on 2026-10-10.
+#113's stall reproduces on a running Lab in two minutes, without `up`:
 
+```bash
+scripts/stall-probe.sh <label> [<burst MiB>] [<probe seconds>]
+```
+
+It writes a burst of buffered data, 8 GiB unless told otherwise, to the filesystem under Docker's data root while it writes to the API once a second, and records with below. It appends one row to `~/.local/state/k3d-lab/stall-probe.tsv`, the ledger, and fails when the verdict is red: a slow SQL of 5s or more, a fatal error, or a Server restart. The label names the variant being tested, such as `control`. Datastore writes stalled for 25–60s in every such burst on 2026-10-10.
+
+- **A table posted to an issue comes from the ledger**, not from scrollback: `column -t -s $'\t' ~/.local/state/k3d-lab/stall-probe.tsv`. Run each variant against a `control` from the same session.
 - **It's the Host's writeback, not raw disk bandwidth.** The same 8 GB written with `oflag=direct` stalled nothing, and the same burst on `/`, another filesystem on the same disk, stalled it just as badly. SQLite's `_synchronous=NORMAL` or `OFF` didn't help; a datastore on tmpfs kept slow SQL under 3s.
-- **Judge the datastore by k3s's `Slow SQL` lines, not by API latency.** A write's latency also includes webhooks, whose pods run on the starved Agent, and the client's own stalls on the Host.
+- **The verdict is k3s's `Slow SQL` lines, not API latency.** A write's latency also includes webhooks, whose pods run on the starved Agent, and the client's own stalls on the Host. The ledger records it, as `api_max_s`, only as information.
 - **k3s dies only when a compaction is caught in the stall.** The API server compacts every 5 minutes, so most bursts miss one. For a tighter loop, put `kube-apiserver-arg: [etcd-compaction-interval=30s]` in the Server's `/etc/rancher/k3s/config.yaml` and `docker restart` it; a fresh `up` undoes it.
