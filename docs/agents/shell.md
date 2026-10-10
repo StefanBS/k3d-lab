@@ -20,6 +20,8 @@ yq's expressions look like jq's, but these behave differently. For logic over JS
 ## bash
 
 - `IFS=$'\t' read -r a b c` merges consecutive tabs, so an empty column shifts every column after it. Print a placeholder for an empty field, or use a delimiter that isn't whitespace.
+- `pgrep -f <pattern>` also matches the shell that runs it, when the command line names the pattern: `pgrep -f 'chainsaw test'` in a script always finds a process. Match by name with `pgrep -x chainsaw`, or anchor the pattern at the command line, as `pgrep -f '^below --config'`.
+- bash reads a script as it runs it, so an edit to `scripts/up.sh` during a `just up` changes that run. Leave a running script alone until it exits. A file it sourced is already read in full, and safe to edit.
 - A bare `wait` waits for every background job of the shell, including a recorder such as `below record` started earlier in the same command, so it blocks until the call times out. Wait for the job you mean: `cmd & pid=$!; ...; wait "$pid"`.
 
 ## mise
