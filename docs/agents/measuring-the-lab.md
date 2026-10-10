@@ -57,3 +57,11 @@ kubectl --context k3d-lab get --raw "/api/v1/namespaces/monitoring/services/prom
 ```
 
 `/api/v1/query_range` takes `start`, `end` and `step` the same way. `kyverno_client_queries_total` breaks down Kyverno's API calls by component (`job`), `operation` and `resource_kind`.
+
+## Stalling the datastore on purpose
+
+#113's stall reproduces on a running Lab in a minute, without `up`: write about 8 GB of buffered data to the disk under Docker's data root, e.g. `dd if=/dev/zero of=<file> bs=1M count=8192`, while timing writes to the API. Datastore writes stalled for 25–60s in every such run on 2026-10-10.
+
+- **It's the Host's writeback, not raw disk bandwidth.** The same 8 GB written with `oflag=direct` stalled nothing, and the same burst on `/`, another filesystem on the same disk, stalled it just as badly. SQLite's `_synchronous=NORMAL` or `OFF` didn't help; a datastore on tmpfs kept slow SQL under 3s.
+- **Judge the datastore by k3s's `Slow SQL` lines, not by API latency.** A write's latency also includes webhooks, whose pods run on the starved Agent, and the client's own stalls on the Host.
+- **k3s dies only when a compaction is caught in the stall.** The API server compacts every 5 minutes, so most bursts miss one. For a tighter loop, put `kube-apiserver-arg: [etcd-compaction-interval=30s]` in the Server's `/etc/rancher/k3s/config.yaml` and `docker restart` it; a fresh `up` undoes it.

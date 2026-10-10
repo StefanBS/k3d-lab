@@ -22,6 +22,13 @@ kubeAPI:
 env:
   - envVar: GOMEMLIMIT=1200MiB
     nodeFilters: [server:*]
+  # kine compacts the datastore in a transaction that times out after 5s, and a commit
+  # after the timeout makes k3s exit with "Transaction commit failed" (kine#790 calls that
+  # intended). Image pulls on the Host's one disk stall compactions for up to a minute, so
+  # the Server died during syncs (#113). A slow compaction only delays writes it already
+  # holds up.
+  - envVar: KINE_COMPACT_TIMEOUT=5m
+    nodeFilters: [server:*]
 ports:
   - port: 127.0.0.1:80:80
     nodeFilters: [server:0:direct]
