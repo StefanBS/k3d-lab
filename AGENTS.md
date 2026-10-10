@@ -16,7 +16,7 @@ Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/age
 
 ### Measuring the Lab
 
-Measuring the Lab's datastore writes, memory, swap or pressure, or querying its Prometheus: read `docs/agents/measuring-the-lab.md` first.
+Measuring the Lab's datastore writes, memory, swap or pressure, reproducing a datastore stall, changing the running Server for an experiment, or querying its Prometheus: read `docs/agents/measuring-the-lab.md` first.
 
 ### Shell gotchas
 

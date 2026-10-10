@@ -20,6 +20,7 @@ yq's expressions look like jq's, but these behave differently. For logic over JS
 ## bash
 
 - `IFS=$'\t' read -r a b c` merges consecutive tabs, so an empty column shifts every column after it. Print a placeholder for an empty field, or use a delimiter that isn't whitespace.
+- A bare `wait` waits for every background job of the shell, including a recorder such as `below record` started earlier in the same command, so it blocks until the call times out. Wait for the job you mean: `cmd & pid=$!; ...; wait "$pid"`.
 
 ## mise
 
