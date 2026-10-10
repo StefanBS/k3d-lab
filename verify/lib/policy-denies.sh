@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Usage: policy-denies.sh <check namespace>
-# Checks that the Workloads' network policies deny what they don't allow, both ways:
-# - out: a probe in each Workload namespace (workload-probes.yaml) can't reach the web
-#   probe in the check's namespace. The Workload namespaces are the ones labelled
-#   k3d-lab/group=workloads, which the Platform sets: first, it checks those are
-#   exactly the namespaces of the Workloads' Applications;
-# - in: the check's client can't reach podinfo directly, at its pod's address.
+# Checks that the Workloads' network policies deny what they don't allow, outbound: a
+# probe in each Workload namespace (workload-probes.yaml) can't reach the web probe in
+# the check's namespace. The Workload namespaces are the ones labelled
+# k3d-lab/group=workloads, which the Platform sets: first, it checks those are exactly
+# the namespaces of the Workloads' Applications.
 # Each attempt must fail, and Hubble must record it as DROPPED by policy, so a request
 # that fails for any other reason, such as a pod that isn't up, doesn't count.
+# A Lab may have no Workload with a pod to aim an inbound request at, so
+# workload-network-baseline checks the inbound denial, against a namespace of its own.
 # Run by network-policy-enforced, whose script steps point kubectl at the Lab through a
 # context named chainsaw.
 set -euo pipefail
@@ -51,10 +52,6 @@ done
 
 web_pod=$(kubectl -n "$namespace" get pods -l app=web -o jsonpath='{.items[0].metadata.name}')
 web_ip=$(kubectl -n "$namespace" get pod "$web_pod" -o jsonpath='{.status.podIP}')
-client=$(kubectl -n "$namespace" get pods -l app=client -o jsonpath='{.items[0].metadata.name}')
-kubectl -n "$namespace" wait --for=condition=Ready "pod/$client" --timeout=1m >/dev/null
-podinfo=$(kubectl -n rollouts-demo get pods -l app=rollouts-demo -o jsonpath='{.items[0].metadata.name}')
-podinfo_ip=$(kubectl -n rollouts-demo get pod "$podinfo" -o jsonpath='{.status.podIP}')
 
 bad=0
 for ns in "${workload_namespaces[@]}"; do
@@ -62,6 +59,4 @@ for ns in "${workload_namespaces[@]}"; do
   expect_denied "$ns to another namespace" "$ns" network-policy-probe "http://$web_ip/" \
     --to-pod "$namespace/$web_pod" || bad=1
 done
-expect_denied "another namespace to rollouts-demo" "$namespace" "$client" "http://$podinfo_ip:9898/" \
-  --to-pod "rollouts-demo/$podinfo" || bad=1
 exit "$bad"

@@ -5,8 +5,9 @@
 # as the workloads ApplicationSet labels a Workload's, each with baseline-workload.yaml:
 # - <check namespace>-baseline, with the same-namespace allow, as a Workload gets it,
 #   and baseline-exposed.yaml: podinfo answers the Host through the Gateway, Alloy
-#   scrapes it, the client reaches it, and the client can't reach the web probe in the
-#   check's namespace;
+#   scrapes it, the client reaches it, the client can't reach the web probe in the
+#   check's namespace, and a client in the check's namespace can't reach podinfo
+#   directly, at its pod's address;
 # - <check namespace>-strict, `isolation: strict`, so without the same-namespace allow:
 #   the client can't reach podinfo;
 # - <check namespace>-guardrail, with the same-namespace allow and a policy of its own
@@ -87,8 +88,8 @@ not_scraped() {
 }
 eventually '%s: no successful scrape' "$scraped" -- not_scraped || bad=1
 
-pod=$(podinfo_pod "$exposed")
-if kubectl -n "$exposed" exec client -- wget -qO /dev/null -T 3 "http://$(pod_ip "$exposed" "$pod"):9898/"; then
+exposed_pod=$(podinfo_pod "$exposed")
+if kubectl -n "$exposed" exec client -- wget -qO /dev/null -T 3 "http://$(pod_ip "$exposed" "$exposed_pod"):9898/"; then
   echo "OK    $exposed's pods reach each other"
 else
   echo "FAIL  $exposed's pods don't reach each other"
@@ -99,9 +100,17 @@ web_pod=$(kubectl -n "$namespace" get pods -l app=web -o jsonpath='{.items[0].me
 expect_denied "$exposed to another namespace" "$exposed" client "http://$(pod_ip "$namespace" "$web_pod")/" \
   --to-pod "$namespace/$web_pod" || bad=1
 
-pod=$(podinfo_pod "$strict")
-expect_denied "$strict's pods to each other" "$strict" client "http://$(pod_ip "$strict" "$pod"):9898/" \
-  --to-pod "$strict/$pod" || bad=1
+# From a namespace with no policy of its own, so only podinfo's side can drop it. The
+# client is the one on a Ready node: a Joined GPU Node may be powered off.
+require_ready_nodes
+other_client=$(node_pod "$namespace" app=client "${nodes[0]}")
+kubectl -n "$namespace" wait --for=condition=Ready "pod/$other_client" --timeout=1m >/dev/null
+expect_denied "another namespace to $exposed" "$namespace" "$other_client" \
+  "http://$(pod_ip "$exposed" "$exposed_pod"):9898/" --to-pod "$exposed/$exposed_pod" || bad=1
+
+strict_pod=$(podinfo_pod "$strict")
+expect_denied "$strict's pods to each other" "$strict" client "http://$(pod_ip "$strict" "$strict_pod"):9898/" \
+  --to-pod "$strict/$strict_pod" || bad=1
 
 # At its ClusterIP, which Cilium translates to the Server's address before policy. Only
 # a deny rule's drop counts: the default-deny's would mean the allow never applied.

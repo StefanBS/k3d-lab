@@ -5,10 +5,10 @@ metadata:
 spec:
   description: >-
     Each Workload namespace, found by its label k3d-lab/group=workloads, denies what its
-    network policies don't allow, both ways: a probe pod in each can't reach a pod in
-    another namespace, and a pod in another namespace can't reach podinfo directly.
-    Hubble records each attempt as DROPPED by policy. What the policies allow is covered by
-    demo-rollout-healthy, gpu-node-dns-proxy and comfyui.
+    network policies don't allow, outbound: a probe pod in each can't reach a pod in
+    another namespace. Hubble records each attempt as DROPPED by policy. Inbound, the
+    denial is covered by workload-network-baseline, in a namespace of its own. What the
+    policies allow is covered by demo-rollout-healthy, gpu-node-dns-proxy and comfyui.
   steps:
     - use:
         template: ../lib/deploy-probes.yaml
