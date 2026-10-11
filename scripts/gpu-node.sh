@@ -536,11 +536,12 @@ cmd_status() {
 }
 
 # image_present <image> <ctr command>...: whether the image is in the agent's image store.
-# A store that can't be listed has none. Listed in full first, as clean_cilium_table.
+# A store whose listing fails has none, whatever it printed. Listed in full first, as
+# clean_cilium_table.
 image_present() {
   local image=$1 images
   shift
-  images=$("$@" images ls -q) || true
+  images=$("$@" images ls -q) || return 1
   grep -qxF "$image" <<<"$images"
 }
 
@@ -575,4 +576,4 @@ main() {
 # On one line, so that bash, reading this script from stdin, never reads past it: what
 # follows on stdin is join's token, or run's input, not commands. Sourced, as by
 # scripts/tests/, it runs nothing.
-[[ ${BASH_SOURCE[0]:-$0} != "$0" ]] || { main "$@"; exit; }
+(return 0 2>/dev/null) || { main "$@"; exit; }

@@ -8,23 +8,27 @@ setup() {
   # its first match closes the pipe before the next line is written, and the stub dies
   # of that write, with 141, as the real command does on a long answer.
   mkdir "$BATS_TEST_TMPDIR/bin"
-  cat >"$BATS_TEST_TMPDIR/bin/lines" <<'STUB'
+  # It answers only the arguments in $ASKED, and ends with $FAILS, if that's set.
+  cat >"$BATS_TEST_TMPDIR/bin/slow-lines" <<'STUB'
 #!/usr/bin/env bash
-[[ -f $ANSWER ]] || exit 1
+[[ -f $ANSWER && $* == "$ASKED" ]] || exit 1
 while IFS= read -r line; do
   echo "$line" 2>/dev/null || exit 141
   sleep 0.2
 done <"$ANSWER"
+exit "${FAILS:-0}"
 STUB
   cat >"$BATS_TEST_TMPDIR/bin/iptables-restore" <<'STUB'
 #!/usr/bin/env bash
+[[ $* == "-T filter" ]] || exit 1
 cat >"$RESTORED"
 STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/"*
-  ln -s lines "$BATS_TEST_TMPDIR/bin/iptables-save"
-  ln -s lines "$BATS_TEST_TMPDIR/bin/ctr"
+  ln -s slow-lines "$BATS_TEST_TMPDIR/bin/iptables-save"
+  ln -s slow-lines "$BATS_TEST_TMPDIR/bin/ctr"
   PATH=$BATS_TEST_TMPDIR/bin:$PATH
   export ANSWER=$BATS_TEST_TMPDIR/answer RESTORED=$BATS_TEST_TMPDIR/restored
+  export ASKED="-t filter"
 }
 
 # gpu_node <function> <argument>...: runs one of the script's functions.
@@ -47,30 +51,36 @@ RULES
   [[ $(<"$RESTORED") == $'*filter\n:INPUT ACCEPT [0:0]\n:DOCKER - [0:0]\n-A INPUT -j DOCKER\nCOMMIT' ]]
 }
 
-@test "a table without Cilium's rules: left as it is" {
+@test "a table without Cilium's rules: unchanged" {
   printf '%s\n' '*filter' ':INPUT ACCEPT [0:0]' '-A INPUT -j DOCKER' COMMIT >"$ANSWER"
   gpu_node clean_cilium_table iptables-save iptables-restore filter
   [[ $status -eq 0 && ! -e $RESTORED ]]
 }
 
-@test "a table that can't be saved, as one the kernel doesn't have: left as it is" {
-  gpu_node clean_cilium_table iptables-save iptables-restore raw
+@test "a table that can't be saved, as one the kernel doesn't have: unchanged" {
+  ASKED="-t raw" gpu_node clean_cilium_table iptables-save iptables-restore raw
   [[ $status -eq 0 && ! -e $RESTORED ]]
 }
 
 @test "an image in a long image store, not the last of it: present (#163)" {
   printf '%s\n' docker.io/library/a:1 docker.io/rocm/pytorch@sha256:abc docker.io/library/b:1 docker.io/library/c:1 >"$ANSWER"
-  gpu_node image_present docker.io/rocm/pytorch@sha256:abc ctr -n k8s.io
+  ASKED="-n k8s.io images ls -q" gpu_node image_present docker.io/rocm/pytorch@sha256:abc ctr -n k8s.io
   [[ $status -eq 0 ]]
 }
 
 @test "an image that's only the start of another's name: not present" {
   printf '%s\n' docker.io/rocm/pytorch@sha256:abcdef docker.io/library/b:1 >"$ANSWER"
-  gpu_node image_present docker.io/rocm/pytorch@sha256:abc ctr -n k8s.io
+  ASKED="-n k8s.io images ls -q" gpu_node image_present docker.io/rocm/pytorch@sha256:abc ctr -n k8s.io
   [[ $status -eq 1 ]]
 }
 
 @test "an image store that can't be listed: not present" {
-  gpu_node image_present docker.io/rocm/pytorch@sha256:abc ctr -n k8s.io
+  ASKED="-n k8s.io images ls -q" gpu_node image_present docker.io/rocm/pytorch@sha256:abc ctr -n k8s.io
+  [[ $status -eq 1 ]]
+}
+
+@test "an image store whose listing fails after the image: not present" {
+  printf '%s\n' docker.io/rocm/pytorch@sha256:abc docker.io/library/b:1 >"$ANSWER"
+  ASKED="-n k8s.io images ls -q" FAILS=1 gpu_node image_present docker.io/rocm/pytorch@sha256:abc ctr -n k8s.io
   [[ $status -eq 1 ]]
 }
