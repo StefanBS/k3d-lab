@@ -1,0 +1,22 @@
+# PROTOTYPE (#74). Point 3: pods resolve the issuer's name to the Gateway, so they and
+# the browser use the same issuer URL. k3s's Corefile imports
+# /etc/coredns/custom/*.override into its one server block.
+#
+# The answer is the Server's address (LAB_SERVER_IP), where the Gateway's Envoy listens
+# on the host network. The first try was
+#   rewrite name sso.lab.localhost cilium-gateway-lab.gateway.svc.cluster.local
+# which only works from pods on the Server: the Service's ClusterIP reaches no Envoy
+# from any other node.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  sso.override: |
+    template IN A sso.lab.localhost {
+      answer "{{ .Name }} 60 IN A 172.28.0.2"
+    }
+    template IN AAAA sso.lab.localhost {
+      rcode NOERROR
+    }

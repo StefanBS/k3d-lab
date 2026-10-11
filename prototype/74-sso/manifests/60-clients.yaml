@@ -1,0 +1,36 @@
+# PROTOTYPE (#74). Point 4: each OIDC client's secret, from the Secret Store into the
+# client's own namespace. The same value Dex got, which ESO's Password generator
+# couldn't give two namespaces.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: argocd-sso
+  namespace: argocd
+spec:
+  refreshInterval: "0"
+  secretStoreRef: {kind: ClusterSecretStore, name: secret-store-platform}
+  target:
+    name: argocd-sso
+    template:
+      metadata:
+        # ArgoCD only reads $<secret>:<key> from Secrets with this label.
+        labels: {app.kubernetes.io/part-of: argocd}
+      data:
+        clientSecret: '{{ .secret }}'
+  data:
+    - secretKey: secret
+      remoteRef: {key: platform/sso/clients/argocd, property: secret}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-sso
+  namespace: monitoring
+spec:
+  refreshInterval: "0"
+  secretStoreRef: {kind: ClusterSecretStore, name: secret-store-platform}
+  target:
+    name: grafana-sso
+  data:
+    - secretKey: client-secret
+      remoteRef: {key: platform/sso/clients/grafana, property: secret}

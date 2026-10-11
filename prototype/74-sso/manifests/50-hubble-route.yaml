@@ -1,0 +1,21 @@
+# PROTOTYPE (#74). Point 1: platform/hubble's HTTPRoute, with the auth check added. It
+# still points at the real Service.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: hubble-ui
+  namespace: kube-system
+spec:
+  parentRefs:
+    - {name: lab, namespace: gateway, sectionName: https}
+  hostnames: [hubble.lab.localhost]
+  rules:
+    - filters:
+        - type: ExternalAuth
+          externalAuth:
+            protocol: HTTP
+            backendRef: {name: oauth2-proxy, namespace: sso, port: 80}
+            http:
+              allowedHeaders: [cookie, x-forwarded-proto]
+      backendRefs:
+        - {name: hubble-ui, port: 80}

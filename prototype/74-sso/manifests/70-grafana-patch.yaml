@@ -1,0 +1,27 @@
+# PROTOTYPE (#74). A patch, not a manifest: what platform/grafana/values.yaml would say
+# under grafana.ini's auth.generic_oauth, extraConfigmapMounts and envValueFrom.
+spec:
+  template:
+    spec:
+      volumes:
+        - name: lab-ca
+          configMap: {name: lab-ca}
+      containers:
+        - name: grafana
+          volumeMounts:
+            - {name: lab-ca, mountPath: /etc/lab-ca}
+          env:
+            - {name: GF_AUTH_GENERIC_OAUTH_ENABLED, value: "true"}
+            - {name: GF_AUTH_GENERIC_OAUTH_NAME, value: Lab}
+            - {name: GF_AUTH_GENERIC_OAUTH_CLIENT_ID, value: grafana}
+            - name: GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: grafana-sso, key: client-secret}}
+            - {name: GF_AUTH_GENERIC_OAUTH_SCOPES, value: openid email profile}
+            - {name: GF_AUTH_GENERIC_OAUTH_AUTH_URL, value: https://sso.lab.localhost/auth}
+            - {name: GF_AUTH_GENERIC_OAUTH_TOKEN_URL, value: https://sso.lab.localhost/token}
+            - {name: GF_AUTH_GENERIC_OAUTH_API_URL, value: https://sso.lab.localhost/userinfo}
+            - {name: GF_AUTH_GENERIC_OAUTH_TLS_CLIENT_CA, value: /etc/lab-ca/ca.crt}
+            # Dex gives a static user no groups, so the role is mapped by email. Single
+            # quotes: JMESPath reads backticks as JSON, which an email isn't.
+            - name: GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH
+              value: email == 'lab@lab.localhost' && 'Admin' || 'Viewer'

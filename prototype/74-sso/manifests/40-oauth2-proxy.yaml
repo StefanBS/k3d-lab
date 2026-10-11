@@ -1,0 +1,73 @@
+# PROTOTYPE (#74). One oauth2-proxy that only answers the Gateway's auth checks: it
+# proxies nothing (its upstream is a static 200).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: sso
+spec:
+  selector:
+    matchLabels: {app: oauth2-proxy}
+  template:
+    metadata:
+      labels: {app: oauth2-proxy}
+    spec:
+      containers:
+        - name: oauth2-proxy
+          image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+          args:
+            - --http-address=0.0.0.0:4180
+            - --provider=oidc
+            - --oidc-issuer-url=https://sso.lab.localhost
+            - --provider-ca-file=/etc/lab-ca/ca.crt
+            - --client-id=oauth2-proxy
+            - --email-domain=*
+            # Envoy takes 200 as allowed, and sends anything else back to the browser.
+            - --upstream=static://200
+            # No "Sign in with" page: straight to Dex.
+            - --skip-provider-button=true
+            # The default, force, makes Dex show its approval page despite its
+            # skipApprovalScreen.
+            - --approval-prompt=auto
+            # The scheme of the callback comes from X-Forwarded-Proto.
+            - --reverse-proxy=true
+            # One sign-in for every UI.
+            - --cookie-domain=.lab.localhost
+            - --whitelist-domain=.lab.localhost
+            - --cookie-secure=true
+          env:
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: oauth2-proxy, key: client-secret}}
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom: {secretKeyRef: {name: oauth2-proxy, key: cookie-secret}}
+          ports:
+            - {name: http, containerPort: 4180}
+          readinessProbe:
+            httpGet: {path: /ping, port: http}
+          volumeMounts:
+            - {name: lab-ca, mountPath: /etc/lab-ca}
+      volumes:
+        - name: lab-ca
+          configMap: {name: lab-ca}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+  namespace: sso
+spec:
+  selector: {app: oauth2-proxy}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+# Lets an HTTPRoute in kube-system send its auth checks here.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: external-auth
+  namespace: sso
+spec:
+  from:
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, namespace: kube-system}
+  to:
+    - {group: "", kind: Service, name: oauth2-proxy}

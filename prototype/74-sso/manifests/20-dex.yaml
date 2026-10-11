@@ -1,0 +1,92 @@
+# PROTOTYPE (#74). Standalone Dex: in-memory storage, one static user, every secret
+# from the environment.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex
+  namespace: sso
+data:
+  config.yaml: |
+    issuer: https://sso.lab.localhost
+    storage: {type: memory}
+    web: {http: 0.0.0.0:5556}
+    oauth2:
+      skipApprovalScreen: true
+      # The password grant, for Verify's sso-login.
+      passwordConnector: local
+    enablePasswordDB: true
+    staticPasswords:
+      - email: lab@lab.localhost
+        username: lab
+        userID: 7f1c2c0e-74aa-4c1d-9d0b-000000000074
+        hashFromEnv: LAB_LOGIN_HASH
+    staticClients:
+      - id: oauth2-proxy
+        name: Lab UIs
+        secretEnv: OAUTH2_PROXY_CLIENT_SECRET
+        redirectURIs:
+          - https://hubble.lab.localhost/oauth2/callback
+          - https://rollouts.lab.localhost/oauth2/callback
+      - id: argocd
+        name: ArgoCD
+        secretEnv: ARGOCD_CLIENT_SECRET
+        redirectURIs: [https://argocd.lab.localhost/auth/callback]
+      - id: grafana
+        name: Grafana
+        secretEnv: GRAFANA_CLIENT_SECRET
+        redirectURIs: [https://grafana.lab.localhost/login/generic_oauth]
+      # Verify only: no secret, no redirect, so only the password grant works.
+      - id: verify
+        name: Verify
+        public: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+  namespace: sso
+spec:
+  selector:
+    matchLabels: {app: dex}
+  template:
+    metadata:
+      labels: {app: dex}
+    spec:
+      containers:
+        - name: dex
+          image: ghcr.io/dexidp/dex:v2.46.0
+          args: [dex, serve, /etc/dex/config.yaml]
+          envFrom:
+            - secretRef: {name: dex}
+          ports:
+            - {name: http, containerPort: 5556}
+          readinessProbe:
+            httpGet: {path: /.well-known/openid-configuration, port: http}
+          volumeMounts:
+            - {name: config, mountPath: /etc/dex}
+      volumes:
+        - name: config
+          configMap: {name: dex}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+  namespace: sso
+spec:
+  selector: {app: dex}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dex
+  namespace: sso
+spec:
+  parentRefs:
+    - {name: lab, namespace: gateway, sectionName: https}
+  hostnames: [sso.lab.localhost]
+  rules:
+    - backendRefs:
+        - {name: dex, port: 80}
