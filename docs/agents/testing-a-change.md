@@ -26,3 +26,10 @@ For a change to what `up` or `track` print when k3s restarts or a wait times out
 - **A run that times out:** as above, then `docker stop -t 1 k3d-lab-server-0` once it logs "Waiting for the ApplicationSets". It fails after 5 minutes. `docker start k3d-lab-server-0` afterwards; the Server keeps its address.
 - **Whether a run recorded or ran checks:** sample `pgrep -x -l 'below|chainsaw'` while it runs. A regular run shows neither.
 - **Wait for the Lab between runs:** `until kubectl --context k3d-lab get --raw /readyz --request-timeout=5s >/dev/null 2>&1; do sleep 2; done`.
+
+## Making lint fail on purpose
+
+For a new lint rule: prove it fails on what it forbids.
+
+- **Commit first.** `git restore <file>` discards every uncommitted edit to the file, not only the one made to break it.
+- **Break one thing, run lint, restore:** `sed -i 's/^role: demo/role: other/' workloads/rollouts-demo/component.yaml; just lint; git restore workloads/rollouts-demo/component.yaml`. It prints `FAIL  workloads/rollouts-demo/component.yaml: 'role' can only be 'demo'` and fails.
