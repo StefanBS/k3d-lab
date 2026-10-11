@@ -28,7 +28,7 @@ Measuring ComfyUI's idle CPU, testing another build of a ROCm library in its pod
 
 ### Testing a change on the Lab
 
-Proving a branch works, rebuilding the Lab, or making `up`, `track` or lint fail on purpose: read `docs/agents/testing-a-change.md` first.
+Proving a branch works, rebuilding the Lab, making `up`, `track`, lint or a fetch from GitHub fail on purpose, or a check that failed on such a fetch: read `docs/agents/testing-a-change.md` first.
 
 ### Shell gotchas
 
