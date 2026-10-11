@@ -296,6 +296,17 @@ stop_agent() {
   if [[ $(k3s_mounts) != *"$K3S_RUN"* ]]; then rm -rf "$K3S_RUN"; fi
 }
 
+# clean_cilium_table <save> <restore> <table>: rewrites one xtables table without the
+# CILIUM chains and the jumps to them. A table that can't be saved, as one the kernel
+# doesn't have, has none. The table is saved in full before it's read: under pipefail,
+# a grep -q that stops at its first match fails the pipeline it reads from (#163).
+clean_cilium_table() {
+  local save=$1 restore=$2 table=$3 rules
+  rules=$("$save" -t "$table" 2>/dev/null) || return 0
+  grep -q CILIUM <<<"$rules" || return 0
+  grep -v CILIUM <<<"$rules" | "$restore" -T "$table" || true
+}
+
 clean_cilium() {
   local link table save restore
   # Deleting cilium_host also deletes its veth peer, cilium_net.
@@ -310,8 +321,7 @@ clean_cilium() {
   # A table that fails to restore shows up in status, which leave checks.
   while read -r save restore; do
     for table in filter nat mangle raw; do
-      "$save" -t "$table" 2>/dev/null | grep -q CILIUM || continue
-      "$save" -t "$table" | grep -v CILIUM | "$restore" -T "$table" || true
+      clean_cilium_table "$save" "$restore" "$table"
     done
   done < <(xtables_tools)
 }
@@ -525,13 +535,22 @@ cmd_status() {
   install_leftovers | sed 's/^/installed: /'
 }
 
+# image_present <image> <ctr command>...: whether the image is in the agent's image store.
+# A store that can't be listed has none. Listed in full first, as clean_cilium_table.
+image_present() {
+  local image=$1 images
+  shift
+  images=$("$@" images ls -q) || true
+  grep -qxF "$image" <<<"$images"
+}
+
 cmd_run() {
   local image=${1:-}
   [[ -n $image && $# -gt 1 ]] || die "usage: gpu-node.sh run <image> <command>..."
   shift
   systemctl -q is-active "$K3S_SERVICE" || die "the agent isn't running here: run 'just gpu join' first"
   local ctr=("$K3S_BIN" ctr -n "$K3S_IMAGE_NAMESPACE")
-  if ! "${ctr[@]}" images ls -q | grep -qxF "$image"; then
+  if ! image_present "$image" "${ctr[@]}"; then
     log "Pulling $image"
     # Its progress goes to stderr, and stdin stays for the command, as stdout.
     "${ctr[@]}" images pull "$image" </dev/null >&2
@@ -554,5 +573,6 @@ main() {
 }
 
 # On one line, so that bash, reading this script from stdin, never reads past it: what
-# follows on stdin is join's token, or run's input, not commands.
-main "$@"; exit
+# follows on stdin is join's token, or run's input, not commands. Sourced, as by
+# scripts/tests/, it runs nothing.
+[[ ${BASH_SOURCE[0]:-$0} != "$0" ]] || { main "$@"; exit; }
