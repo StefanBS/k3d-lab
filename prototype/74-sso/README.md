@@ -20,7 +20,7 @@ Run on 2026-10-11 against a Lab on `main` at 45a53c4: k3s v1.37.1, Cilium 1.20.2
 | 4 | ArgoCD, Grafana and oauth2-proxy resolve `sso.lab.localhost` through DNS | Yes, but **not with the rewrite to the Gateway's Service** |
 | 5 | ESO renders the bcrypt hash | Yes: `{{ .password \| bcrypt }}` |
 
-No fallback from the handoff was needed. Two parts of the design must change: what the CoreDNS entry answers (point 4), and how the experimental CRDs get installed (point 1).
+No fallback from the handoff was needed. Two parts of the design must change: what the CoreDNS entry answers (point 4), and who installs the Gateway API CRDs (point 1).
 
 ## 1. The filter
 
@@ -51,11 +51,17 @@ rules:
 
 > Installing experimental CRDs on top of standard channel CRDs is prohibited by default. Uninstall ValidatingAdmissionPolicy safe-upgrades.gateway.networking.k8s.io to install experimental CRDs on top of standard channel CRDs.
 
-So switching `platform/gateway-api` to `experimental-install.yaml` isn't enough: `just up` and ArgoCD's sync would both be refused. The prototype deleted the policy and its binding, then applied the bundle, which brings the policy back; it then allows updates to experimental CRDs. For the spec to decide:
+So switching `platform/gateway-api` to `experimental-install.yaml` isn't enough: `just up` and ArgoCD's sync would both be refused. On the running Lab, the prototype deleted the policy and its binding, then applied the bundle, which brings the policy back; it then allows updates to experimental CRDs.
 
-- `just up` deletes the policy before it applies the CRDs, or
-- k3s is kept from installing the addon. `gateway-api-crd` isn't among the values `k3s server --disable` lists. Untested.
-- The addon's chart has `experimental.enabled`, but that only adds the `x-k8s.io` CRDs. Its HTTPRoute has no `ExternalAuth`.
+**Decided and proven: k3s doesn't install the addon.** `--disable=gateway-api-crd` in `k3d/cluster.yaml`, beside traefik and servicelb, though `k3s server --help` doesn't list it as a value. On a fresh Lab built from this branch with `just up --debug`:
+
+- k3s made no HelmChart and wrote no `gateway-api-crd.yaml` manifest, so `platform/gateway-api` is the CRDs' only owner.
+- `just up` installed the experimental bundle with nothing refused.
+- All 18 Verify checks passed on the experimental channel.
+
+The other way, `just up` deleting the policy, was dropped: k3s would still own a standard-channel copy, and the policy allows going from experimental back to standard, so a k3s update that re-applies its chart could remove the `ExternalAuth` field and with it the login. That is a reading of the policy, not something seen. The addon's chart has `experimental.enabled`, but that only adds the `x-k8s.io` CRDs; its HTTPRoute has no `ExternalAuth`.
+
+Going back needs care: pointing that Lab at `main` put the standard channel back, but left the three `x-k8s.io` CRDs, which were deleted by hand.
 
 **Surprise: the filter is one per listener.** Cilium adds one `ext_authz` filter to the whole https listener and disables it per route on every other route. Consequences seen or reported:
 
