@@ -4,8 +4,8 @@ How to prove a branch works, and how to leave the Host afterwards. Every command
 
 ## The test is a debugging run
 
-- **`just up --debug` on a fresh Lab is the test of a change.** A bare `just up` only builds: it runs no check. Push the branch first, since ArgoCD builds from what's pushed. The build took 8 to 10 minutes.
-- **`just track --debug` tests a change on a running Lab,** without the rebuild.
+- **`just up --debug` on a fresh Lab is the test of a change.** It builds everything in Git, the Demos included. A bare `just up` only builds, without the Demos: it runs no check. Push the branch first, since ArgoCD builds from what's pushed. The build took 8 to 10 minutes.
+- **`just track --debug` tests a change on a running Lab,** without the rebuild. It tests the Lab as it is: on a Lab without its Demos, `verify` skips their checks and says so. `just demos on` adds them first.
 - **Run either in the background and read its log as it goes**, such as `just up --debug >"$log" 2>&1 &`. Edit no script while it runs (`docs/agents/shell.md`).
 
 ## Rebuilding a Lab that's in use
@@ -26,3 +26,10 @@ For a change to what `up` or `track` print when k3s restarts or a wait times out
 - **A run that times out:** as above, then `docker stop -t 1 k3d-lab-server-0` once it logs "Waiting for the ApplicationSets". It fails after 5 minutes. `docker start k3d-lab-server-0` afterwards; the Server keeps its address.
 - **Whether a run recorded or ran checks:** sample `pgrep -x -l 'below|chainsaw'` while it runs. A regular run shows neither.
 - **Wait for the Lab between runs:** `until kubectl --context k3d-lab get --raw /readyz --request-timeout=5s >/dev/null 2>&1; do sleep 2; done`.
+
+## Making lint fail on purpose
+
+For a new lint rule: prove it fails on what it forbids.
+
+- **Commit first.** `git restore <file>` discards every uncommitted edit to the file, not only the one made to break it.
+- **Break one thing, run lint, restore:** `sed -i 's/^role: demo/role: other/' workloads/rollouts-demo/component.yaml; just lint; git restore workloads/rollouts-demo/component.yaml`. It prints `FAIL  workloads/rollouts-demo/component.yaml: 'role' can only be 'demo'` and fails.

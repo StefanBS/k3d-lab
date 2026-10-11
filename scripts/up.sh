@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Builds the Lab from scratch, and stops once every Application is Synced and Healthy.
-# Usage: up.sh [REVISION=<branch or tag>] [--debug]. ArgoCD reads the Lab from that
+# Usage: up.sh [REVISION=<branch or tag>] [--demos] [--debug]. ArgoCD reads the Lab from that
 # revision of LAB_REPO. By default, that's the branch checked out here, since verify runs
 # the checks from this checkout: a Lab built from another branch would fail checks it was
 # never meant to pass.
+# --demos also builds the Demos, which a Lab that's only used doesn't need.
 # --debug makes it a debugging run, which also records the pressure and ends with verify
-# (run-diagnostics.sh). That's the test of a change.
+# (run-diagnostics.sh). That's the test of a change, so it builds the Demos too: it must
+# cover all of Git.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
@@ -16,11 +18,16 @@ source "$(dirname "$0")/secret-store.sh"
 source "$(dirname "$0")/run-diagnostics.sh"
 
 revision=$(git -C "$LAB_ROOT" branch --show-current)
+demos=false
 for arg; do
   case $arg in
     REVISION=?*) revision=${arg#REVISION=} ;;
-    --debug) RUN_DEBUG=1 ;;
-    *) die "unknown argument '$arg'; usage: just up [REVISION=<branch>] [--debug]" ;;
+    --demos) demos=true ;;
+    --debug)
+      RUN_DEBUG=1
+      demos=true
+      ;;
+    *) die "unknown argument '$arg'; usage: just up [REVISION=<branch>] [--demos] [--debug]" ;;
   esac
 done
 [[ -n $revision ]] || die "no branch is checked out; check one out, or pass REVISION=<branch or tag>"
@@ -144,6 +151,7 @@ spec:
       valuesObject:
         repoURL: $LAB_REPO
         revision: "$revision"
+        demos: $demos
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

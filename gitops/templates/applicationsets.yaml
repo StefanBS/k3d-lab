@@ -21,6 +21,15 @@ spec:
         revision: {{ $.Values.revision }}
         files:
           - path: {{ $group }}/*/component.yaml
+      {{- if and (eq $group "workloads") (not $.Values.demos) }}
+      # A Demo is left out of a Lab that wasn't asked for its Demos. A Workload that sets
+      # no `role` matches: NotIn also selects a missing key.
+      selector:
+        matchExpressions:
+          - key: role
+            operator: NotIn
+            values: [demo]
+      {{- end }}
   template:
     metadata:
       name: '{{`{{.path.basename}}`}}'

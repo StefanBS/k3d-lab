@@ -41,6 +41,15 @@ lint_component_folder() {
       fail "$dir/component.yaml: 'isolation' can only be 'strict'"
     fi
   fi
+  # Optional, and only a Workload's: the workloads ApplicationSet leaves a Demo out of a
+  # Lab that wasn't asked for its Demos.
+  if [[ $(yq 'has("role")' "$dir/component.yaml") == true ]]; then
+    if [[ $dir != workloads/* ]]; then
+      fail "$dir/component.yaml: only a Workload sets 'role'"
+    elif [[ $(yq '.role' "$dir/component.yaml") != demo ]]; then
+      fail "$dir/component.yaml: 'role' can only be 'demo'"
+    fi
+  fi
 }
 
 # The gitops chart can't read component.yaml, so it lists the Platform's namespaces
@@ -142,9 +151,44 @@ write_application_chart() {
   done
 }
 
-# Renders what the root Application syncs into $manifests.
+# Renders what the root Application syncs into $manifests, given any values to set.
 render_gitops() {
-  helm template gitops gitops --kube-version "$k8s_version" >"$manifests"
+  helm template gitops gitops --kube-version "$k8s_version" "$@" >"$manifests"
+}
+
+# The workloads ApplicationSet leaves the Demos out, with a selector on its generator,
+# unless the Lab has its Demos. The platform one never selects.
+lint_demos_selector() {
+  local selectors='[select(.kind == "ApplicationSet") | select(.spec.generators[0] | has("selector")) | .metadata.name] | join(" ")'
+  render_gitops
+  if [[ $(yq ea "$selectors" "$manifests") != workloads ]]; then
+    fail "the workloads ApplicationSet, and only it, should leave the Demos out by default"
+    return
+  fi
+  render_gitops --set demos=true
+  if [[ -n $(yq ea "$selectors" "$manifests") ]]; then
+    fail "an ApplicationSet leaves the Demos out even with demos: true"
+    return
+  fi
+  ok "the workloads ApplicationSet leaves the Demos out, unless the Lab has its Demos"
+}
+
+# A check that names a Demo's namespace, itself or in a script it runs from verify/lib/,
+# fails on a Lab without its Demos, unless it carries the Demo label, which verify
+# deselects there.
+lint_demo_checks() {
+  local dir namespace test files unlabelled=0
+  for dir in $(demo_dirs); do
+    namespace=$(component_namespace "$dir")
+    for test in verify/*/chainsaw-test.yaml; do
+      mapfile -t files < <(grep -o '\.\./lib/[A-Za-z0-9._-]*' "$test" | sort -u | sed "s|^\.\./|verify/|")
+      grep -qw -- "$namespace" "$test" "${files[@]}" || continue
+      [[ $(KEY=$DEMO_LABEL_KEY yq '.metadata.labels | has(strenv(KEY))' "$test") == true ]] && continue
+      fail "$test names the Demo's namespace $namespace, but isn't labelled $DEMO_LABEL_KEY"
+      unlabelled=$((unlabelled + 1))
+    done
+  done
+  ((unlabelled > 0)) || ok "every check that names a Demo's namespace is labelled $DEMO_LABEL_KEY"
 }
 
 # The probes that verify's checks deploy are plain manifests: nothing to render.
@@ -327,6 +371,8 @@ lint_platform_namespaces
 lint_rendering "the same-namespace allow" render_same_namespace_allow
 lint_same_namespace_source workloads/rollouts-demo
 lint_rendering gitops render_gitops
+lint_rendering "gitops with the Demos" render_gitops --set demos=true
+lint_demos_selector
 
 # Every fact the scripts read from the Platform's values, so a renamed value fails
 # here rather than in the middle of `just up`.
@@ -364,6 +410,7 @@ for file in verify/*/chainsaw-test.yaml; do
   lint_chainsaw test "$file"
 done
 lint_rendering "verify's probes" render_probes
+lint_demo_checks
 
 ((fails == 0)) || die "lint found $fails problem(s)"
 log "Lint passed"
