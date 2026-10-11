@@ -17,5 +17,9 @@ spec:
             backendRef: {name: oauth2-proxy, namespace: sso, port: 80}
             http:
               allowedHeaders: [cookie, x-forwarded-proto]
+              # Must be set. Without it Cilium 1.20.2 copies every header of the
+              # auth answer onto the request, its Content-Length included, so the
+              # UI gets a POST cut to 13 bytes (fixed on main by cilium/cilium#48770).
+              allowedResponseHeaders: [x-auth-request-email]
       backendRefs:
         - {name: hubble-ui, port: 80}

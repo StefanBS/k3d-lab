@@ -35,10 +35,12 @@ rules:
           backendRef: {name: oauth2-proxy, namespace: sso, port: 80}
           http:
             allowedHeaders: [cookie, x-forwarded-proto]
+            allowedResponseHeaders: [x-auth-request-email]
     backendRefs:
       - {name: hubble-ui, port: 80}
 ```
 
+- **`allowedResponseHeaders` must be set.** Without it, Cilium 1.20.2 copies every header of the auth answer onto the request it forwards, `Content-Length: 13` included, so every POST reaches the UI cut short. Hubble UI's page loaded and then spun forever: its `POST /api/control-stream` calls got 400, and nginx logged the rest of each body as a second, garbage request. GETs were fine, which is why curl didn't show it. Fixed on Cilium's main by cilium/cilium#48770, not in 1.20.2. Any list works; the header named here is one oauth2-proxy doesn't even send.
 - Cilium picked the filter up as soon as the CRDs were experimental. No restart of the operator, the agents or Envoy.
 - A `ReferenceGrant` in `sso` is needed for a route in another namespace (`manifests/40-oauth2-proxy.yaml`).
 - The auth check works when oauth2-proxy runs on a different node from Envoy (cilium/cilium#46768 didn't show).
@@ -74,7 +76,7 @@ So switching `platform/gateway-api` to `experimental-install.yaml` isn't enough:
 
 `./login.sh 'https://hubble.lab.localhost/?probe=1'` ended on that same URL, query string included, with Hubble UI's page. Without a cookie, every path answers 302, POSTs included.
 
-Not tested: a real browser. Hubble UI's gRPC-web stream passed the auth check, but nobody watched flows arrive.
+In Firefox, the login worked and Hubble UI's `POST /api/control-stream` calls answered 200 once `allowedResponseHeaders` was set (point 1).
 
 ## 3. `coredns-custom`
 
