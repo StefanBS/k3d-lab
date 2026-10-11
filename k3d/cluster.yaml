@@ -56,6 +56,11 @@ options:
         nodeFilters: [server:*]
       - arg: --disable=servicelb
         nodeFilters: [server:*]
+      # PROTOTYPE (#74): k3s otherwise installs the standard-channel Gateway API CRDs
+      # itself, with a policy that refuses the experimental channel on top of them.
+      # platform/gateway-api is then their only owner.
+      - arg: --disable=gateway-api-crd
+        nodeFilters: [server:*]
       # k3s sets only the disk thresholds, kept here, so without memory.available the
       # kubelet never evicts and a capped k3d Node is left to the OOM killer, which may
       # pick k3s itself. k3d states the cap in kB, which the kubelet reads as KiB, so it
