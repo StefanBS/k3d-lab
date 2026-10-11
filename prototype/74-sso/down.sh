@@ -10,6 +10,12 @@ here=$LAB_ROOT/prototype/74-sso/manifests
 for application in hubble grafana argocd; do
   "$LAB_ROOT/scripts/pause.sh" resume "$application"
 done
+# ArgoCD only puts back the fields Git has. What up.sh added beside them stays, though
+# the Applications say Synced: Grafana's env and volume, argocd-server's volume, and
+# oidc.config. Revision 1 is each Deployment before up.sh, on a Lab nothing else patched.
+kc -n monitoring rollout undo deployment grafana --to-revision=1
+kc -n argocd rollout undo deployment argocd-server --to-revision=1
+kc -n argocd patch configmap argocd-cm --type json -p '[{"op": "remove", "path": "/data/oidc.config"}]'
 kc delete --ignore-not-found -f "$here/60-clients.yaml" -f "$here/30-coredns-custom.yaml"
 kc -n argocd delete configmap lab-ca --ignore-not-found
 kc -n monitoring delete configmap lab-ca --ignore-not-found
