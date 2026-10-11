@@ -112,10 +112,13 @@ hubble_observe() {
 # policy: for want of an allow (POLICY_DENIED) or by a deny rule (POLICY_DENY), or only
 # the one DENIED_BY names. The agent that dropped it reports it within a few seconds.
 hubble_denied() {
-  local attempt reason=${DENIED_BY:-POLICY_DEN(IED|Y)}
+  local attempt flows reason=${DENIED_BY:-POLICY_DEN(IED|Y)}
   for attempt in {1..10}; do
-    hubble_observe --verdict DROPPED --since 5m -o jsonpb "$@" 2>/dev/null |
-      grep -Eq "\"drop_reason_desc\":\"$reason\"" && return 0
+    # Read to the end before grep sees any: piped, `grep -q` stops at its first match,
+    # kubectl dies writing the next flow, and pipefail makes a drop that was found read
+    # as missing (#107). A query that fails is "not yet".
+    flows=$(hubble_observe --verdict DROPPED --since 5m -o jsonpb "$@" 2>/dev/null) || true
+    grep -Eq "\"drop_reason_desc\":\"$reason\"" <<<"$flows" && return 0
     ((attempt == 10)) || sleep 3
   done
   return 1
