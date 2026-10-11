@@ -31,6 +31,13 @@ controller:
 repoServer:
   resources:
     requests: {cpu: 25m, memory: 128Mi}
+  env:
+    # A request to GitHub gives up after 15s, and by default the first failure is final,
+    # so a Host whose Wi-Fi drops for seconds fails a refresh, and the error stays on the
+    # Application for minutes (#159). Three attempts ride out 30s. A fourth can't help:
+    # the controller stops waiting for the repo server after 60s.
+    - name: ARGOCD_GIT_ATTEMPTS_COUNT
+      value: "3"
 applicationSet:
   resources:
     requests: {cpu: 10m, memory: 64Mi}
