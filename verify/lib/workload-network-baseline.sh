@@ -46,6 +46,9 @@ create_namespace() {
   kubectl create namespace "$ns" >/dev/null
   kubectl label namespace "$ns" k3d-lab/group=workloads k3d-lab/verify=workload-network-baseline \
     "$@" >/dev/null
+  # The API server refuses a pod until its namespace has the default ServiceAccount,
+  # which a controller creates after the namespace: seconds after, when it's busy (#158).
+  kubectl -n "$ns" wait --for=create serviceaccount/default --timeout=1m >/dev/null
   kubectl -n "$ns" apply -f "$lib/baseline-workload.yaml" >/dev/null
 }
 create_namespace "$exposed"
