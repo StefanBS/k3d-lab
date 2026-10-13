@@ -16,7 +16,9 @@ spec:
       remoteRef: {key: platform/sso/clients/oauth2-proxy, property: cookie}
 ---
 # One replica: the Gateway's check fails closed, so while this pod restarts, the UIs
-# behind it answer 403 for about 10 seconds, which ADR 0013 accepts.
+# behind it answer 403 for 5 to 10 seconds, which ADR 0013 accepts. It reads Dex's
+# configuration as it starts, and exits if Dex doesn't answer: in a new Lab it restarts
+# a couple of times, until Dex is up and CoreDNS knows its name.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

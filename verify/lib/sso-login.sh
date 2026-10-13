@@ -41,6 +41,7 @@ lab_curl() {
 }
 
 # Usage: secret_value <namespace> <secret> <key>
+# Prints the value, and a newline after it.
 secret_value() {
   kubectl -n "$1" get secret "$2" -o json | KEY=$3 yq -p json '.data[strenv(KEY)] | @base64d'
 }
@@ -119,8 +120,9 @@ if [[ $landed == "200 $hubble/" ]]; then
 else
   fail "The Lab login doesn't open Hubble UI: it ends on '${landed%%\?*}'"
 fi
-# With the cookie of that sign-in, and no redirect followed.
-status=$(lab_curl -b "$tmp/proxied.jar" -o /dev/null -w '%{http_code}' "$rollouts/")
+# With the cookie of that sign-in, and no redirect followed. The dashboard's own page:
+# it answers / with a redirect there, whoever asks.
+status=$(lab_curl -b "$tmp/proxied.jar" -o /dev/null -w '%{http_code}' "$rollouts/rollouts/")
 if [[ $status == 200 ]]; then
   ok "The sign-in to Hubble UI opens the Rollouts dashboard too"
 else
@@ -140,7 +142,7 @@ fi
 
 # The Break-glass logins, which need neither Dex nor oauth2-proxy.
 status=$(secret_value argocd argocd-initial-admin-secret password |
-  jq -Rs '{"username": "admin", "password": .}' |
+  jq -Rs '{"username": "admin", "password": rtrimstr("\n")}' |
   lab_curl -o "$tmp/session" -w '%{http_code}' -H 'Content-Type: application/json' -d @- "$argocd/api/v1/session")
 if [[ $status == 200 ]] && jq -e 'has("token")' "$tmp/session" >/dev/null 2>&1; then
   ok "ArgoCD's Break-glass login works"
