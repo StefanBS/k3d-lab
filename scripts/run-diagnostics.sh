@@ -33,6 +33,10 @@ RUN_DEBUG=''
 # LAB_RUN_SINCE: from when a restart of k3s on the Server counts against the run, as
 # Docker's --since takes it. Unset until the run has done what restarts it on purpose.
 # Exported, since verify reports the restarts of a debugging run.
+start_run_clock() {
+  LAB_RUN_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  export LAB_RUN_SINCE
+}
 
 # report_run <recipe>: the EXIT trap of up and track, set once the run starts to change the
 # Lab, so a run that refuses to start says only why. A run that failed says what may have

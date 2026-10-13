@@ -23,7 +23,7 @@ trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies" "$admitted"'
 
 # The ApplicationSets template these fields into each component's Application.
 lint_component_folder() {
-  local dir=$1 key keys=(namespace) file=kustomization.yaml
+  local dir=$1 key only keys=(namespace) file=kustomization.yaml
   if component_has_chart "$dir"; then
     keys+=(repoURL version)
     file=values.yaml
@@ -33,23 +33,17 @@ lint_component_folder() {
     yq -e ".$key" "$dir/component.yaml" >/dev/null 2>&1 || fail "$dir/component.yaml: '$key' is missing"
   done
   [[ -f $dir/$file ]] || fail "$dir/$file is missing"
-  # Optional, and only a Workload's: the workloads ApplicationSet labels its namespace.
-  if [[ $(yq 'has("isolation")' "$dir/component.yaml") == true ]]; then
+  # Optional, and only a Workload's: the workloads ApplicationSet labels its namespace by
+  # `isolation`, and leaves a `role: demo` out of a Lab that wasn't asked for its Demos.
+  for only in isolation=strict role=demo; do
+    key=${only%=*}
+    [[ $(yq "has(\"$key\")" "$dir/component.yaml") == true ]] || continue
     if [[ $dir != workloads/* ]]; then
-      fail "$dir/component.yaml: only a Workload sets 'isolation'"
-    elif [[ $(yq '.isolation' "$dir/component.yaml") != strict ]]; then
-      fail "$dir/component.yaml: 'isolation' can only be 'strict'"
+      fail "$dir/component.yaml: only a Workload sets '$key'"
+    elif [[ $(yq ".$key" "$dir/component.yaml") != "${only#*=}" ]]; then
+      fail "$dir/component.yaml: '$key' can only be '${only#*=}'"
     fi
-  fi
-  # Optional, and only a Workload's: the workloads ApplicationSet leaves a Demo out of a
-  # Lab that wasn't asked for its Demos.
-  if [[ $(yq 'has("role")' "$dir/component.yaml") == true ]]; then
-    if [[ $dir != workloads/* ]]; then
-      fail "$dir/component.yaml: only a Workload sets 'role'"
-    elif [[ $(yq '.role' "$dir/component.yaml") != demo ]]; then
-      fail "$dir/component.yaml: 'role' can only be 'demo'"
-    fi
-  fi
+  done
 }
 
 # The gitops chart can't read component.yaml, so it lists the Platform's namespaces
@@ -191,14 +185,9 @@ lint_demo_checks() {
   ((unlabelled > 0)) || ok "every check that names a Demo's namespace is labelled $DEMO_LABEL_KEY"
 }
 
-# The probes that verify's checks deploy are plain manifests: nothing to render.
-render_probes() {
-  local file
-  for file in verify/lib/{probes,gpu-probes,workload-probes,baseline-workload,baseline-exposed,baseline-apiserver-allow}.yaml; do
-    cat "$file"
-    echo ---
-  done >"$manifests"
-}
+# The probes that verify's checks deploy are plain manifests: nothing to render. The
+# other YAML in verify/lib/ is Chainsaw's own, which `chainsaw lint` checks.
+render_probes() { yq 'select(.kind != "StepTemplate")' verify/lib/*.yaml >"$manifests"; }
 
 # The baseline's same-namespace allow, which the workloads ApplicationSet adds to each
 # Workload's Application as a plain folder: nothing to render either.
@@ -307,7 +296,7 @@ lint_admission() {
 }
 
 log "Shell scripts"
-if git ls-files -z --cached --others --exclude-standard '*.sh' | xargs -0 shellcheck --external-sources; then
+if git ls-files -z --cached --others --exclude-standard '*.sh' | xargs -0 -n 1 -P "$(nproc)" shellcheck --external-sources; then
   ok "shellcheck finds nothing"
 else
   fail "shellcheck found problems (above)"

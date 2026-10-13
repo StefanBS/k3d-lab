@@ -51,9 +51,8 @@ K3S_IMAGE_NAMESPACE=k8s.io
 # directly in /var/lib/rancher, the JOIN_PATHS entry that remove_install empties around
 # it.
 KEPT_IMAGES=/var/lib/rancher/kept-containerd
-# What join creates beyond k3s's own install, and its uninstaller leaves (the prototype's
-# FINDINGS.md, on branch prototype/gpu-node-join: each was checked to be the join's,
-# with no rpm owner).
+# What join creates beyond k3s's own install, and its uninstaller leaves: each was checked
+# to be the join's, with no rpm owner.
 JOIN_PATHS=(/etc/rancher /var/lib/rancher /var/lib/kubelet /etc/cni /opt/cni)
 # Cilium's live state, which neither k3s-killall.sh nor the uninstaller remove. The
 # socket-LB links pinned under /sys/fs/bpf/cilium stay attached to this machine's root

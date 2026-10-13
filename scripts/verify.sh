@@ -86,7 +86,7 @@ show_pressure_before() {
 warn_if_short_on_memory "checks may fail while k3s stalls on its datastore"
 
 # Without a Lab, every check would fail for the same reason.
-lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
+need_lab
 run_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if ! kc get --raw /readyz --request-timeout=10s >/dev/null; then
   # A Lab that doesn't answer may be k3s restarting.

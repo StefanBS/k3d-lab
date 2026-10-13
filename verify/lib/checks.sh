@@ -124,6 +124,9 @@ hubble_denied() {
   return 1
 }
 
+# Usage: pod_ip <namespace> <pod>
+pod_ip() { kubectl -n "$1" get pod "$2" -o jsonpath='{.status.podIP}'; }
+
 # Usage: [DENIED_BY=POLICY_DENY] expect_denied <description> <namespace> <pod> <url> <hubble observe filters>...
 # Says OK if the pod's request to the URL, with busybox's wget, fails and Hubble records
 # a flow from the pod matching the filters as dropped by policy. Otherwise says FAIL,
@@ -140,7 +143,7 @@ expect_denied() {
   fi
   if ! hubble_denied --from-pod "$ns/$pod" "$@"; then
     echo "FAIL  $what: failed, but Hubble has no drop by policy"
-    ip=$(kubectl -n "$ns" get pod "$pod" -o jsonpath='{.status.podIP}')
+    ip=$(pod_ip "$ns" "$pod")
     echo "      Hubble's last flows from $ns/$pod:"
     hubble_observe --since 5m --last 20 -o compact --from-pod "$ns/$pod" 2>&1 | sed 's/^/        /'
     echo "      Hubble's last flows from its IP, $ip:"

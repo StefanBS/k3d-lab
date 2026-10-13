@@ -9,18 +9,14 @@ spec:
     healthy, and the dashboards from Git (platform/grafana-dashboards/) loaded.
   steps:
     - try:
-        # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
-        # verify.sh exports LAB_CA_CERT.
         - script:
-            content: >-
-              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
-              --cacert "$LAB_CA_CERT" -o /dev/null https://grafana.lab.localhost/api/health
+            content: ../lib/host-curl.sh -o /dev/null https://grafana.lab.localhost/api/health
         # Grafana asks each datasource itself; without a login, as the anonymous viewer.
         # It answers 400 when one isn't healthy.
         - script:
             content: |
               bad=0
-              for uid in prometheus loki tempo; do
+              for uid in $(yq '.datasources["datasources.yaml"].datasources[].uid' ../../platform/grafana/values.yaml); do
                 echo -n "$uid: "
                 curl -sS --fail-with-body --retry 5 --retry-all-errors --retry-delay 2 -w '\n' \
                   "https://grafana.lab.localhost/api/datasources/uid/$uid/health" || bad=1
@@ -29,7 +25,7 @@ spec:
         # The sidecar loads dashboards a few seconds after Grafana starts: until then, 404.
         - script:
             content: |
-              for uid in k3d-lab hubble admission-policy; do
+              for uid in $(jq -r .uid ../../platform/grafana-dashboards/*.json); do
                 curl -sS --fail --retry 12 --retry-all-errors --retry-delay 5 \
                   -o /dev/null "https://grafana.lab.localhost/api/dashboards/uid/$uid" || exit 1
               done

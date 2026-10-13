@@ -33,14 +33,12 @@ done
 # why (verify.sh).
 [[ -z $RUN_DEBUG ]] || record_pressure
 
-lab_exists || die "there's no Lab; run 'just up'"
-kc -n argocd get application/root >/dev/null 2>&1 || die "the Lab has no root Application; run 'just down', then 'just up'"
+need_root_application
 commit=$(pushed_commit "$revision")
 # A paused Application never syncs the new commit, so the wait below would only time out.
 paused=$(kc -n argocd get appprojects -o json | paused_applications | paste -sd' ')
 [[ -z $paused ]] || die "paused, so they'd never sync $revision: $paused; 'just resume <name>' each first"
-export LAB_RUN_SINCE
-LAB_RUN_SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+start_run_clock
 trap 'report_run track' EXIT
 
 # The same two fields up.sh sets: the root Application's own revision, and the one its
@@ -53,23 +51,11 @@ REVISION=$revision yq -n -o json '
   .spec.source.helm.valuesObject.revision = strenv(REVISION)' |
   kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
 
-# Waits until applications_behind prints nothing for the Applications that `kc get` selects,
-# logging what's still behind whenever that changes. Gives up after 15 minutes.
-wait_caught_up() {
-  local behind last='' deadline=$((SECONDS + 900))
-  while :; do
-    # A sync can be heavy enough for k3s to restart, so a failed get is waited out too.
-    behind=$(kc -n argocd get applications "$@" -o json 2>/dev/null |
-      applications_behind "$LAB_REPO" "$commit") || behind="the Lab's API isn't answering"
-    [[ -n $behind ]] || return 0
-    if [[ $behind != "$last" ]]; then
-      log "Still behind: $(cut -d: -f1 <<<"$behind" | paste -sd' ')"
-      last=$behind
-    fi
-    ((SECONDS < deadline)) || die "ArgoCD hasn't caught up with $revision after 15 minutes:"$'\n'"$behind"
-    sleep 5
-  done
-}
+# Waits until applications_behind prints nothing for the Applications that `kc get` selects.
+still_behind() { kc -n argocd get applications "$@" -o json | applications_behind "$LAB_REPO" "$commit"; }
+wait_caught_up() { wait_until_none 900 "ArgoCD hasn't caught up with $revision" still_behind "$@"; }
+# Every Application starts out behind, so the log names them without saying why.
+wait_summary() { cut -d: -f1 | paste -sd' '; }
 
 # True once the ApplicationSet controller has taken every refresh asked of it: it removes
 # the annotation when it has.

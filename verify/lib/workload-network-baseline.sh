@@ -68,8 +68,6 @@ done
 
 # Usage: podinfo_pod <namespace>
 podinfo_pod() { kubectl -n "$1" get pods -l app=podinfo -o jsonpath='{.items[0].metadata.name}'; }
-# Usage: pod_ip <namespace> <pod>
-pod_ip() { kubectl -n "$1" get pod "$2" -o jsonpath='{.status.podIP}'; }
 
 bad=0
 
