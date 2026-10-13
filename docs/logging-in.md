@@ -83,6 +83,16 @@ oauth2-proxy finds Dex as ArgoCD does, through CoreDNS and the Gateway. The cook
 
 Both diagrams show a browser that Dex doesn't know yet. For one it remembers, Dex answers `GET sso.lab.localhost/auth` with the redirect to the callback straight away, and the form and the POST drop out.
 
+**Logging out** of the Rollouts dashboard and Hubble UI, which have no button for it, is one address:
+
+```
+https://hubble.lab.localhost/oauth2/sign_out?rd=https://sso.lab.localhost/logout
+```
+
+It's oauth2-proxy's own path, which the Gateway hands it like the callback. oauth2-proxy drops its cookie, which closes both UIs, then sends the browser to Dex's logout, which ends `dex_session`: the next request to either UI gets Dex's form. Without the `rd`, Dex still remembers the browser and signs it straight back in. A tab of Hubble UI left open says "Data streams are reconnecting" from then on, as its requests are sent to Dex: reload it.
+
+oauth2-proxy's cookie lasts a week, its default, so these two UIs stay open after Dex has forgotten the browser. ArgoCD and Grafana each keep a session of their own: logging out here leaves them signed in, and their own menus log out of them.
+
 **When Dex or oauth2-proxy is down**, ArgoCD and Grafana still open with their Break-glass logins. The Rollouts dashboard and Hubble UI answer 403 at their addresses, since the Gateway's check fails closed. A port-forward to a UI's Service reaches it, as it never passes the Gateway:
 
 ```sh

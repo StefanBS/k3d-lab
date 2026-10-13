@@ -86,7 +86,7 @@ One login, the **Lab login**, opens ArgoCD, Grafana, the Rollouts dashboard and 
 
 ArgoCD and Grafana each keep a Break-glass login too, new with every Lab, for when Dex is down. ComfyUI has no login.
 
-[Logging in](docs/logging-in.md) has how the sign-in works, with a diagram for each kind of UI, and how to reach a UI when Dex or oauth2-proxy is down.
+[Logging in](docs/logging-in.md) has how the sign-in works, with a diagram for each kind of UI, how to log out, and how to reach a UI when Dex or oauth2-proxy is down.
 
 ## How the Lab works
 
