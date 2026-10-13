@@ -24,7 +24,7 @@ Cross-namespace isolation comes from the default-deny, not from a guardrail. A d
 ## Consequences
 
 - A new Workload that names its ports `http` and `metrics` writes no network policy until it calls the internet or another namespace.
-- Reading a Workload's folder no longer shows everything its pods may do. The README's section on network policy and Hubble's dropped flows fill that gap.
+- Reading a Workload's folder no longer shows everything its pods may do. `docs/networking.md`'s section on network policy and Hubble's dropped flows fill that gap.
 - A Workload that ever needs the kube-apiserver needs the guardrail narrowed by the Platform, not an allow of its own.
 - Workloads are in their own ArgoCD project, which can't create cluster-scoped resources or deploy into Platform namespaces. That keeps them from writing a `CiliumClusterwideNetworkPolicy` of their own.
 - Nothing yet stops a Workload's own policy from allowing too much inside the tiers, for example `toEntities: [world]`. An admission policy would, once the Lab has more than one author.
