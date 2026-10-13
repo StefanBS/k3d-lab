@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # The Secret Store (ADR 0003): everything about the OpenBao on the Host that holds the
-# secrets Workloads need. Two ways in:
-#   - Sourced after lib.sh and host.sh, by host-setup.sh, doctor.sh and up.sh: it adds
-#     its steps to the Host's (HOST_STEPS), and gives up.sh secret_store_trust_lab.
+# secrets that outlive a Lab: the ones Workloads need, and single sign-on's (ADR 0013).
+# Two ways in:
+#   - Sourced after lib.sh and host.sh, by host-setup.sh, doctor.sh, up.sh and creds.sh:
+#     it adds its steps to the Host's (HOST_STEPS), and gives up.sh
+#     secret_store_trust_lab.
 #   - Run, as secret-store.sh <subcommand> (just secret-store <recipe>):
 #       bao <arguments>  Runs the bao CLI as the Secret Store's root, such as:
 #                        kv put -mount=lab workloads/<workload>/<key> <field>=<value>
@@ -20,6 +22,8 @@ if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
   # shellcheck source=host.sh
   source "$(dirname "$0")/host.sh"
 fi
+# shellcheck source=sso-state.sh
+source "$(dirname "${BASH_SOURCE[0]}")/sso-state.sh"
 
 # OpenBao, as a rootless Podman Quadlet of the owner's. All of its state lives in
 # SECRET_STORE_DIR, which backup archives: the Raft data, the unseal key, the root token,
@@ -64,6 +68,7 @@ HOST_STEPS+=(
   secret_store_initialised owner "Secret Store is initialised"
   secret_store_unsealed owner "Secret Store is unsealed"
   secret_store_has_kv_mount owner "Secret Store has the KV v2 mount lab/"
+  sso_secrets_exist owner "Secret Store has the Lab login and each OIDC client's secret"
 )
 
 # In the running firewall. Only root can query the permanent configuration without
@@ -261,7 +266,8 @@ bao_enabled() {
   [[ $(secret_store_bao "$1" list -format=json | yq -p json -o yaml "has(\"$2/\")") == true ]]
 }
 
-# Where Workloads' secrets live: lab/workloads/<workload>/<key>.
+# Where Workloads' secrets live, at lab/workloads/<workload>/<key>, and the Platform's
+# own, at lab/platform/.
 secret_store_has_kv_mount() { bao_enabled secrets lab 2>/dev/null; }
 fix_secret_store_has_kv_mount() {
   changed "Creating the KV v2 mount lab/"
@@ -278,11 +284,76 @@ secret_store_bao() {
     podman exec -i -e BAO_TOKEN "$SECRET_STORE_UNIT" bao "$@"
 }
 
+# Single sign-on's secrets (ADR 0013): the Lab login's password and each OIDC client's
+# secret, at lab/platform/sso/. Generated once and never changed, so the Lab login
+# survives every Lab. Which ones, sso-state.sh reads from Dex's config, so a new client
+# there gets its secret at the next `just host setup`.
+DEX_CONFIG=$LAB_ROOT/platform/dex/config.yaml
+
+# sso_secret_read <path under lab/>: prints that secret as `bao kv get -format=json`
+# does, or nothing if the Secret Store has none there. Fails if the Secret Store can't
+# say, which must not read as "none": the next step would generate it again.
+sso_secret_read() {
+  local out status=0
+  # Never from stdin, which is the caller's list of secrets.
+  out=$(secret_store_bao kv get -mount=lab -format=json "$1" 2>&1 </dev/null) || status=$?
+  if ((status == 0)); then
+    printf '%s\n' "$out"
+  elif [[ $out != *"No value found"* ]]; then
+    printf '%s\n' "$out" >&2
+    return 1
+  fi
+}
+
+# sso_secrets_missing: prints "<path under lab/> <field>..." for each of single
+# sign-on's secrets that lacks fields in the Secret Store, one per line. Fails if it
+# can't tell.
+sso_secrets_missing() {
+  local wanted path fields secret missing
+  wanted=$(sso_secrets <"$DEX_CONFIG") || return
+  while read -r path fields; do
+    secret=$(sso_secret_read "$path") || return
+    # shellcheck disable=SC2086 # one argument per field.
+    missing=$(sso_missing_fields $fields <<<"$secret") || return
+    # shellcheck disable=SC2086 # on one line.
+    [[ -z $missing ]] || echo "$path" $missing
+  done <<<"$wanted"
+}
+
+sso_secrets_exist() {
+  local missing
+  missing=$(sso_secrets_missing 2>/dev/null) && [[ -z $missing ]]
+}
+fix_sso_secrets_exist() {
+  local missing path fields
+  missing=$(sso_secrets_missing) || die "can't read single sign-on's secrets from the Secret Store"
+  while read -r path fields; do
+    changed "Generating lab/$path ($fields) in the Secret Store"
+    # shellcheck disable=SC2086 # one argument per field.
+    sso_secret_generate "$path" $fields
+  done <<<"$missing"
+}
+
+# sso_secret_generate <path under lab/> <field>...: gives that secret a random value
+# for each of those fields, and leaves its others alone. The write names the version it
+# read (-cas), so it never replaces a value, even one written since. The values go to
+# bao on stdin: an argument would show up in the Host's process list.
+sso_secret_generate() {
+  local path=$1 version write=patch field
+  shift
+  version=$(sso_secret_read "$path" | sso_secret_version) || die "can't read lab/$path from the Secret Store"
+  ((version > 0)) || write=put
+  # 32 hex characters, which is also a length oauth2-proxy takes for its cookie secret.
+  for field; do printf '%s\t%s\n' "$field" "$(openssl rand -hex 16)"; done |
+    jq -Rn '[inputs | split("\t") | {(.[0]): .[1]}] | add' |
+    quietly secret_store_bao kv "$write" -mount=lab -cas="$version" "$path" -
+}
+
 # secret_store_trust_lab: makes the Lab and the Secret Store trust each other. ESO reads
-# Workloads' secrets with Kubernetes auth (platform/external-secrets/values.yaml), and
-# every Lab has a new API CA, so the auth is pointed at it here. OpenBao keeps no token
-# of the Lab's: it checks each login's token with a TokenReview made with that same
-# token. ESO, in turn, trusts the Secret Store's certificate through the Lab CA.
+# secrets with Kubernetes auth (platform/external-secrets/values.yaml), and every Lab
+# has a new API CA, so the auth is pointed at it here. OpenBao keeps no token of the
+# Lab's: it checks each login's token with a TokenReview made with that same token.
+# ESO, in turn, trusts the Secret Store's certificate through the Lab CA.
 secret_store_trust_lab() {
   local eso_ns eso_audience
   lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
@@ -293,18 +364,26 @@ secret_store_trust_lab() {
 path "lab/data/workloads/*" { capabilities = ["read"] }
 path "lab/metadata/workloads/*" { capabilities = ["read", "list"] }
 EOF
+  # The same for the Platform's own, lab/platform/*, which no Workload may read
+  # (ADR 0013): the Lab login and the OIDC clients' secrets.
+  quietly secret_store_bao policy write eso-platform - <<'EOF'
+path "lab/data/platform/*" { capabilities = ["read"] }
+path "lab/metadata/platform/*" { capabilities = ["read", "list"] }
+EOF
   eso_ns=$(component_namespace platform/external-secrets)
   eso_audience=$(platform_fact eso.audience)
   quietly secret_store_bao write auth/kubernetes/role/eso \
     bound_service_account_names=external-secrets bound_service_account_namespaces="$eso_ns" \
     audience="$eso_audience" token_policies=eso token_ttl=1h
+  # Each role is bound to a ServiceAccount of its own, so neither reads the other's.
+  quietly secret_store_bao write auth/kubernetes/role/eso-platform \
+    bound_service_account_names=external-secrets-platform bound_service_account_namespaces="$eso_ns" \
+    audience="$eso_audience" token_policies=eso-platform token_ttl=1h
   kc config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' |
     base64 -d | quietly secret_store_bao write auth/kubernetes/config \
     kubernetes_host="https://$(lab_server_ip):6443" kubernetes_ca_cert=- disable_local_ca_jwt=true
-  # The ClusterSecretStore trusts the Secret Store's certificate through this.
-  kc create namespace "$eso_ns" --dry-run=client -o yaml | kc apply --server-side -f - >/dev/null
-  kc -n "$eso_ns" create configmap lab-ca --from-file=ca.crt="$LAB_CA_CERT" --dry-run=client -o yaml |
-    kc apply --server-side -f - >/dev/null
+  # The ClusterSecretStores trust the Secret Store's certificate through this.
+  lab_ca_configmap "$eso_ns"
 }
 
 # secret_store_backup <path>: OpenBao stops while it's archived, so the data can't change

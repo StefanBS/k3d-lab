@@ -19,3 +19,4 @@ platformNamespaces:
   - kube-system
   - kyverno
   - monitoring
+  - sso

@@ -1,0 +1,92 @@
+# What Dex reads from its environment, from the Secret Store (ADR 0013): the Lab login's
+# password, as the bcrypt hash Dex wants, and each client's secret, under the names
+# config.yaml gives them. Rendered once: bcrypt salts every hash, so a refresh would
+# change the Secret each time.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: dex
+spec:
+  refreshInterval: "0"
+  secretStoreRef: {kind: ClusterSecretStore, name: secret-store-platform}
+  target:
+    name: dex
+    template:
+      data:
+        LAB_LOGIN_HASH: '{{ .password | bcrypt }}'
+        OAUTH2_PROXY_CLIENT_SECRET: '{{ .oauth2proxy }}'
+        ARGOCD_CLIENT_SECRET: '{{ .argocd }}'
+        GRAFANA_CLIENT_SECRET: '{{ .grafana }}'
+  data:
+    - secretKey: password
+      remoteRef: {key: platform/sso/login, property: password}
+    - secretKey: oauth2proxy
+      remoteRef: {key: platform/sso/clients/oauth2-proxy, property: secret}
+    - secretKey: argocd
+      remoteRef: {key: platform/sso/clients/argocd, property: secret}
+    - secretKey: grafana
+      remoteRef: {key: platform/sso/clients/grafana, property: secret}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: dex}
+  template:
+    metadata:
+      labels: {app: dex}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: dex
+          image: ghcr.io/dexidp/dex
+          args: [dex, serve, /etc/dex/config.yaml]
+          # The pod waits for the Secret, which ESO makes.
+          envFrom:
+            - secretRef: {name: dex}
+          ports:
+            - {name: http, containerPort: 5556}
+          readinessProbe:
+            httpGet: {path: /.well-known/openid-configuration, port: http}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 5m, memory: 32Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/dex}
+      volumes:
+        - name: config
+          configMap: {name: dex}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+spec:
+  selector: {app: dex}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+# The issuer's address, for the browser. Pods reach the same name through CoreDNS
+# (platform/coredns-custom/).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dex
+spec:
+  parentRefs:
+    - name: lab
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - sso.lab.localhost
+  rules:
+    - backendRefs:
+        - {name: dex, port: 80}

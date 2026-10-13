@@ -49,6 +49,11 @@ install_component() {
 lab_exists && die "a Lab already exists; run 'just down' first"
 lab_ca_exists || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host setup'"
 secret_store_unsealed || die "the Secret Store isn't running and unsealed; run 'just host setup'"
+# Before anything is built: without them Dex never starts, and a sync that never ends
+# says nothing of why.
+sso_missing=$(sso_secrets_missing) || die "can't read single sign-on's secrets from the Secret Store"
+[[ -z $sso_missing ]] || die "the Secret Store lacks what single sign-on needs; run 'just host setup'. Missing, under lab/:
+$sso_missing"
 taken=$(lab_host_ports_taken)
 [[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
 $taken"
@@ -114,6 +119,14 @@ install_component cilium
 log "Waiting for every node to be Ready"
 kc wait --for=condition=Ready nodes --all --timeout=5m >/dev/null
 
+# What signs in through Dex calls it over TLS from the Lab CA (ADR 0013), and trusts it
+# from this ConfigMap. argocd-server mounts it, so ArgoCD's comes before ArgoCD; Dex's
+# other clients start later, once ArgoCD syncs them.
+log "Giving single sign-on's clients the Lab CA"
+for client in argocd grafana oauth2-proxy; do
+  lab_ca_configmap "$(component_namespace "platform/$client")"
+done
+
 install_component argocd
 
 # The Lab CA's key never goes in Git: cert-manager's lab-ca ClusterIssuer
@@ -123,8 +136,8 @@ cert_manager_ns=$(component_namespace platform/cert-manager)
 kc create namespace "$cert_manager_ns" >/dev/null
 kc -n "$cert_manager_ns" create secret tls lab-ca --cert "$LAB_CA_CERT" --key "$LAB_CA_KEY" >/dev/null
 
-# ESO reads Workloads' secrets from the Secret Store on the Host (ADR 0003), and each
-# new Lab has to be introduced to it.
+# ESO reads secrets from the Secret Store on the Host (ADR 0003), and each new Lab has
+# to be introduced to it.
 secret_store_trust_lab
 
 # From here on, Git is the only source of truth: ArgoCD takes over Cilium and itself,

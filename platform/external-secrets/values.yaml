@@ -41,6 +41,62 @@ extraObjects:
                 audiences:
                   - k3d-lab-secret-store
                   - https://kubernetes.default.svc.cluster.local
+  # The Platform's own way into the Secret Store (ADR 0013), for the Lab login and the
+  # OIDC clients' secrets at lab/platform/*: a ServiceAccount of its own, which `just up`
+  # binds to the role eso-platform, read-only on lab/platform/* alone. So no Workload's
+  # ExternalSecret can read them: the role eso can't, and only the namespaces under
+  # `conditions` may use this ClusterSecretStore.
+  - |
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: external-secrets-platform
+  # OpenBao checks this ServiceAccount's tokens with a TokenReview too, and the chart's
+  # systemAuthDelegator only covers ESO's own.
+  - |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: external-secrets-platform-auth-delegator
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: system:auth-delegator
+    subjects:
+      - kind: ServiceAccount
+        name: external-secrets-platform
+        namespace: external-secrets
+  - |
+    apiVersion: external-secrets.io/v1
+    kind: ClusterSecretStore
+    metadata:
+      name: secret-store-platform
+      annotations:
+        argocd.argoproj.io/sync-wave: "1"
+    spec:
+      conditions:
+        - namespaces: [sso, argocd, monitoring]
+      provider:
+        vault:
+          server: https://host.k3d.internal:8200
+          path: lab
+          version: v2
+          caProvider:
+            type: ConfigMap
+            name: lab-ca
+            namespace: external-secrets
+            key: ca.crt
+          auth:
+            kubernetes:
+              mountPath: kubernetes
+              role: eso-platform
+              # The same audiences as the role eso's, above.
+              serviceAccountRef:
+                name: external-secrets-platform
+                namespace: external-secrets
+                audiences:
+                  - k3d-lab-secret-store
+                  - https://kubernetes.default.svc.cluster.local
 # How the controller reaches the Secret Store: host.k3d.internal is the Host's address
 # on the Lab network, LAB_GATEWAY in scripts/lib.sh, which `just lint` checks this
 # against. Only ESO talks to the Secret Store, so only its controller resolves the name.

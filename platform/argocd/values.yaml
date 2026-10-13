@@ -8,6 +8,25 @@ configs:
     # defaults that CRD schemas fill in, such as Gateway API's parentRefs group and
     # kind, keep Applications OutOfSync forever.
     controller.diff.server.side: true
+  # Single sign-on with the Lab login, through Dex at https://sso.lab.localhost
+  # (ADR 0013). The local admin stays, as the Break-glass login.
+  cm:
+    # The client secret is read from the Secret argocd-sso, which ESO makes from the
+    # Secret Store (platform/argocd-sso/). There's no rootCA here, which would put a
+    # machine's certificate in Git: argocd-server trusts the Lab CA from a file (below).
+    oidc.config: |
+      name: Lab
+      issuer: https://sso.lab.localhost
+      clientID: argocd
+      clientSecret: $argocd-sso:clientSecret
+      requestedScopes: [openid, profile, email]
+      # Also the tokens Verify's check sso-login gets, with its own client.
+      allowedAudiences: [argocd, verify]
+  rbac:
+    # Dex gives a static user no groups, so the admin role goes to the Lab login's email.
+    scopes: "[email]"
+    policy.csv: |
+      g, lab@lab.localhost, role:admin
 server:
   httproute:
     enabled: true
@@ -19,7 +38,19 @@ server:
       - argocd.lab.localhost
   resources:
     requests: {cpu: 10m, memory: 64Mi}
-# Nothing logs in through SSO or needs notifications in the Lab, so neither runs.
+  # The Lab CA, which signed the certificate Dex answers with, beside the image's public
+  # CAs: Go reads every file in this directory. `just up` makes the ConfigMap before it
+  # installs ArgoCD, whose pod waits for it.
+  volumes:
+    - name: lab-ca
+      configMap:
+        name: lab-ca
+  volumeMounts:
+    - name: lab-ca
+      mountPath: /etc/ssl/certs/lab-ca.crt
+      subPath: ca.crt
+# Single sign-on is the Lab's own Dex (platform/dex/), not the chart's, and nothing in
+# the Lab needs notifications, so neither runs.
 dex:
   enabled: false
 notifications:

@@ -1,0 +1,21 @@
+# ArgoCD's OIDC client secret, from the Secret Store, the same value Dex has (ADR 0013).
+# Not in ArgoCD's chart: `just up` installs ArgoCD before ESO's CRDs exist, and ArgoCD
+# retries this until they do. Until then ArgoCD runs, with its Break-glass login.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: argocd-sso
+spec:
+  refreshInterval: "0"
+  secretStoreRef: {kind: ClusterSecretStore, name: secret-store-platform}
+  target:
+    name: argocd-sso
+    template:
+      metadata:
+        # ArgoCD only reads $<secret>:<key> from a Secret with this label.
+        labels: {app.kubernetes.io/part-of: argocd}
+      data:
+        clientSecret: '{{ .secret }}'
+  data:
+    - secretKey: secret
+      remoteRef: {key: platform/sso/clients/argocd, property: secret}

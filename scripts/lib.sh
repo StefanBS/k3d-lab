@@ -24,7 +24,8 @@ LAB_SUBNET=172.28.0.0/16
 LAB_SUBNET_NETMASK=255.255.0.0 # LAB_SUBNET's /16, for the Lab CA's name constraints
 LAB_GATEWAY=172.28.0.1
 # The Server is the first container on the Lab network, so it always gets this address.
-# Cilium's values pin it (lint checks they match), and up.sh checks it got it.
+# Cilium's values and CoreDNS's entry for single sign-on pin it (lint checks they match),
+# and up.sh checks it got it.
 LAB_SERVER_IP=172.28.0.2
 # ArgoCD reads the Lab from here, without credentials.
 LAB_REPO=https://github.com/StefanBS/k3d-lab.git
@@ -240,6 +241,12 @@ declare -A PLATFORM_FACTS=(
   # The Secret ESO generates Grafana's admin login into.
   [grafana.admin-secret]='platform/grafana/values.yaml|.admin.existingSecret'
   [rollouts.host]='platform/argo-rollouts/values.yaml|.dashboard.httproute.hostnames[0]'
+  [hubble.host]='platform/hubble/hubble.yaml|select(.kind == "HTTPRoute") | .spec.hostnames[0]'
+  # Single sign-on: Dex's address, and the Lab login, which signs in by its email.
+  [sso.url]='platform/dex/config.yaml|.issuer'
+  [sso.login]='platform/dex/config.yaml|.staticPasswords[0].email'
+  # What pods resolve Dex's name to: the Server, where the Gateway listens.
+  [sso.server-ip]='platform/coredns-custom/coredns-custom.yaml|.data["sso.override"] | capture("IN A (?P<ip>[0-9.]+)") | .ip'
   # The audience of the tokens ESO logs in to the Secret Store with.
   [eso.audience]='platform/external-secrets/values.yaml|.extraObjects[0] | from_yaml | .spec.provider.vault.auth.kubernetes.serviceAccountRef.audiences[0]'
   # Where ESO reaches the Secret Store: the Lab network's gateway.
@@ -252,6 +259,7 @@ declare -A PLATFORM_FACTS=(
 declare -A PLATFORM_PINNED_FACTS=(
   [eso.gateway-ip]=LAB_GATEWAY
   [cilium.server-ip]=LAB_SERVER_IP
+  [sso.server-ip]=LAB_SERVER_IP
 )
 
 # platform_fact <name>: prints that fact. Fails if there's no such fact, or if it

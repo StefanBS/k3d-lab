@@ -25,8 +25,8 @@ hubble:
     auto:
       method: cronJob
   # The relay gathers the flows every node's agent sees, for the UI. The UI has no
-  # login, like the Rollouts dashboard: its HTTPRoute for https://hubble.lab.localhost
-  # is in platform/hubble.
+  # login of its own: its HTTPRoute for https://hubble.lab.localhost, in platform/hubble,
+  # puts the Lab login in front of it.
   relay:
     enabled: true
     resources:

@@ -11,7 +11,9 @@ controller:
       sha256: 1904ca787d33107c140521899d61fff030ee75d99908bd175fca5a4647759061
   resources:
     requests: {cpu: 10m, memory: 64Mi}
-# Shows every Rollout and lets anyone on the Host promote or abort one: it has no login.
+# Shows every Rollout, and promotes or aborts one. It has no login of its own, so the
+# Gateway asks oauth2-proxy (platform/oauth2-proxy/) about each request, which the Lab
+# login opens (ADR 0013). The route still points at the dashboard's own Service.
 dashboard:
   enabled: true
   httproute:
@@ -22,5 +24,21 @@ dashboard:
         sectionName: https
     hostnames:
       - rollouts.lab.localhost
+    rules:
+      - filters:
+          - type: ExternalAuth
+            externalAuth:
+              protocol: HTTP
+              backendRef: {name: oauth2-proxy, namespace: sso, port: 80}
+              http:
+                # Envoy otherwise sends oauth2-proxy neither: it needs the cookie to
+                # know the session, and the scheme to build its callback.
+                allowedHeaders: [cookie, x-forwarded-proto]
+                # Not optional on Cilium 1.20.2: without it, every header of
+                # oauth2-proxy's answer is copied onto the request, its Content-Length
+                # included, so a POST reaches the dashboard cut to 13 bytes
+                # (cilium/cilium#48770). Any list does; oauth2-proxy doesn't send this
+                # header here.
+                allowedResponseHeaders: [x-auth-request-email]
   resources:
     requests: {cpu: 5m, memory: 32Mi}
