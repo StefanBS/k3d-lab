@@ -86,7 +86,7 @@ One login, the **Lab login**, opens ArgoCD, Grafana, the Rollouts dashboard and 
 
 [Dex](https://dexidp.io) (`platform/dex/`) signs it in, at https://sso.lab.localhost. Its config is in Git with no secret in it, and ESO gives it the password's hash and each client's secret from the Secret Store. It runs as two instances, which share their signing keys, the logins in progress and their sessions as custom resources in the namespace `sso`: a sign-in's requests can each reach either one. Those go with the Lab.
 
-You type it once. Dex remembers the browser for a day, with its cookie `dex_session`, and answers every other UI's login without showing its form: ArgoCD's and Grafana's "Lab" buttons, and the first request to the Rollouts dashboard or Hubble UI, go there and back by themselves. Unless you tick "remember me" on Dex's form, the cookie goes when the browser closes; the UIs you had opened stay signed in. This is Dex's auth sessions, experimental in 2.46. A restart of Dex keeps them.
+You type it once. Dex remembers the browser for a day, with its cookie `dex_session`, and answers every other UI's login without showing its form: ArgoCD's and Grafana's "Lab" buttons, and the first request to the Rollouts dashboard or Hubble UI, go there and back by themselves. Dex's form has "remember me" ticked: untick it, and the cookie goes when the browser closes, though the UIs you had opened stay signed in. This is Dex's auth sessions, experimental in 2.46. A restart of Dex keeps them.
 
 A UI uses Dex in one of two ways:
 

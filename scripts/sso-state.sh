@@ -1,6 +1,7 @@
-# Which secrets single sign-on keeps in the Secret Store (ADR 0013), and which of them it
-# still lacks. Sourced by secret-store.sh, and on its own by scripts/tests/, so it sets
-# no shell options and runs nothing when sourced.
+# Which secrets single sign-on keeps in the Secret Store (ADR 0013), which of them it
+# still lacks, and whether Dex's instances share their signing keys. Sourced by
+# secret-store.sh and verify/lib/sso-login.sh, and on its own by scripts/tests/, so it
+# sets no shell options and runs nothing when sourced.
 # shellcheck shell=bash
 
 # sso_secret_clients: reads Dex's config (platform/dex/config.yaml) on stdin, and prints
@@ -57,4 +58,24 @@ sso_missing_fields() {
 # replace anything checks for.
 sso_secret_version() {
   jq -rn '[inputs][0].data.metadata.version // 0'
+}
+
+# sso_keys_shared: reads one line for each ready instance of Dex: the ids of its signing
+# keys as a sorted JSON array, or an empty line if it gave none. Prints how many
+# instances there are, if they are at least two and all have the same keys: with a state
+# of its own, each would have made its own. Otherwise prints what is wrong, and fails.
+sso_keys_shared() {
+  local verdict
+  verdict=$(jq -Rrs '
+    (split("\n") | if .[-1] == "" then .[:-1] else . end) as $answers
+    | ($answers | length) as $instances
+    | ($answers | map(select(test("^\\[\"") | not)) | length) as $silent
+    | ($answers | unique | length) as $sets
+    | if $instances == 1 then "1 instance is ready, not two"
+      elif $instances < 2 then "\($instances) instances are ready, not two"
+      elif $silent > 0 then "\($silent) of \($instances) instances gave no signing keys"
+      elif $sets > 1 then "\($instances) instances have \($sets) different sets of signing keys"
+      else $instances end')
+  echo "$verdict"
+  [[ $verdict =~ ^[0-9]+$ ]]
 }

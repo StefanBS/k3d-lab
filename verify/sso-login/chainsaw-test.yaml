@@ -11,7 +11,7 @@ spec:
     login and refuses a wrong password, ArgoCD's API takes that token, the Rollouts
     dashboard and Hubble UI send a request without a session to Dex and one sign-in
     opens both, Grafana signs the Lab login in as an Admin, that sign-in opens ArgoCD
-    without Dex asking again, and ArgoCD's and Grafana's Break-glass logins still work.
+    and Hubble UI without Dex asking again, and ArgoCD's and Grafana's Break-glass logins still work.
   steps:
     - use:
         template: ../lib/deploy-probes.yaml

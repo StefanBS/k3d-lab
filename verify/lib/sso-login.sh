@@ -8,7 +8,7 @@
 #   - The Rollouts dashboard and Hubble UI send a request without a session to Dex, and
 #     one sign-in opens both.
 #   - Grafana signs the Lab login in through Dex, as an Admin.
-#   - That sign-in opens ArgoCD too, without Dex asking again.
+#   - That sign-in opens ArgoCD and Hubble UI too, without Dex asking again.
 #   - ArgoCD's and Grafana's Break-glass logins still work.
 # Every request trusts only the Lab CA (verify.sh exports LAB_CA_CERT). No secret is
 # passed as an argument, where the Host's process list would show it: each goes to curl
@@ -18,6 +18,8 @@
 set -euo pipefail
 # shellcheck source=checks.sh
 source "$(dirname "$0")/checks.sh"
+# shellcheck source=../../scripts/sso-state.sh
+source "$(dirname "$0")/../../scripts/sso-state.sh"
 
 sso=https://sso.lab.localhost
 argocd=https://argocd.lab.localhost
@@ -40,12 +42,6 @@ fail() {
 # A failed connection is retried: the Gateway drops some while a route changes.
 lab_curl() {
   curl -sS --cacert "$LAB_CA_CERT" --retry 5 --retry-delay 2 --retry-connrefused "$@"
-}
-
-# Usage: secret_value <namespace> <secret> <key>
-# Prints the value, and a newline after it.
-secret_value() {
-  kubectl -n "$1" get secret "$2" -o json | KEY=$3 yq -p json '.data[strenv(KEY)] | @base64d'
 }
 
 # Usage: token_status <password>
@@ -98,14 +94,19 @@ password=$("$(dirname "$0")/../../scripts/secret-store.sh" bao kv get -mount=lab
 # state of its own each would have made its own keys, and a UI would refuse a token that
 # another instance signed. Asked of each pod through the Lab's API, since the Gateway
 # picks one itself. The sign-ins below then reach either instance with each request.
-dex_pods=$(kubectl -n sso get pods -l app=dex --field-selector status.phase=Running -o name)
-dex_keys=$(for pod in $dex_pods; do
-  kubectl get --raw "/api/v1/namespaces/sso/pods/${pod#pod/}:5556/proxy/keys" | jq -c '[.keys[].kid] | sort' || echo "no answer from $pod"
-done | sort | uniq -c)
-if [[ $(wc -w <<<"$dex_pods") -ge 2 && $(wc -l <<<"$dex_keys") -eq 1 && $dex_keys == *'["'* ]]; then
-  ok "Dex's $(wc -w <<<"$dex_pods") instances have the same signing keys"
+# Only of the pods that are Ready and staying: while Dex is replaced, one more is
+# starting or going. A request that fails counts as an instance that gave no keys.
+dex_pods=$(kubectl -n sso get pods -l app=dex -o json | jq -r '.items[]
+  | select(.metadata.deletionTimestamp == null)
+  | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))
+  | .metadata.name') || dex_pods=""
+if verdict=$(for pod in $dex_pods; do
+  kids=$(kubectl get --raw "/api/v1/namespaces/sso/pods/$pod:5556/proxy/keys" | jq -c '[.keys[].kid] | sort') || kids=""
+  printf '%s\n' "$kids"
+done | sso_keys_shared); then
+  ok "Dex's $verdict instances have the same signing keys"
 else
-  fail "Dex's instances don't share their signing keys: $(wc -w <<<"$dex_pods") running, with the keys $(paste -sd' ' <<<"$dex_keys")"
+  fail "Dex's instances don't share their signing keys: $verdict"
 fi
 
 # The password grant.
@@ -173,10 +174,17 @@ if [[ $landed == "200 $argocd/" && $who == "$login" ]]; then
 else
   fail "The sign-in to Grafana doesn't open ArgoCD: its login ends on '${landed%%\?*}', as '${who:-nobody}'"
 fi
+# The same for a UI behind oauth2-proxy, which this jar has no cookie of.
+landed=$(browse "$tmp/grafana.jar" "$hubble/")
+if [[ $landed == "200 $hubble/" ]]; then
+  ok "The sign-in to Grafana opens Hubble UI too, without Dex asking again"
+else
+  fail "The sign-in to Grafana doesn't open Hubble UI: it ends on '${landed%%\?*}'"
+fi
 
 # The Break-glass logins, which need neither Dex nor oauth2-proxy.
-status=$(secret_value argocd argocd-initial-admin-secret password |
-  jq -Rs '{"username": "admin", "password": rtrimstr("\n")}' |
+status=$(kubectl -n argocd get secret argocd-initial-admin-secret -o json |
+  jq '{"username": "admin", "password": (.data.password | @base64d)}' |
   lab_curl -o "$tmp/session" -w '%{http_code}' -H 'Content-Type: application/json' -d @- "$argocd/api/v1/session")
 if [[ $status == 200 ]] && jq -e 'has("token")' "$tmp/session" >/dev/null 2>&1; then
   ok "ArgoCD's Break-glass login works"

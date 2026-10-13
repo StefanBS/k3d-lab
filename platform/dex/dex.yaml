@@ -111,6 +111,9 @@ spec:
           env:
             # The `sessions` block of config.yaml needs it.
             - {name: DEX_SESSIONS_ENABLED, value: "true"}
+            # Dex otherwise ignores a key of config.yaml it doesn't know, so a misspelt
+            # one would silently leave its default. With this it doesn't start.
+            - {name: DEX_CONFIG_DISALLOW_UNKNOWN_FIELDS, value: "true"}
           ports:
             - {name: http, containerPort: 5556}
           readinessProbe:

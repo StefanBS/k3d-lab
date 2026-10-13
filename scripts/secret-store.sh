@@ -353,7 +353,7 @@ sso_secret_generate() {
 # Lab's: it checks each login's token with a TokenReview made with that same token.
 # ESO, in turn, trusts the Secret Store's certificate through the Lab CA.
 secret_store_trust_lab() {
-  local eso_ns eso_audience spec role service_account path
+  local eso_ns eso_audience spec role service_account part
   lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
   log "Pointing the Secret Store's Kubernetes auth at the Lab"
   bao_enabled auth kubernetes || quietly secret_store_bao auth enable kubernetes
@@ -365,10 +365,10 @@ secret_store_trust_lab() {
   # and the OIDC clients' secrets. Each is bound to a ServiceAccount of its own, so
   # neither reads the other's.
   for spec in "eso external-secrets workloads" "eso-platform external-secrets-platform platform"; do
-    read -r role service_account path <<<"$spec"
+    read -r role service_account part <<<"$spec"
     quietly secret_store_bao policy write "$role" - <<EOF
-path "lab/data/$path/*" { capabilities = ["read"] }
-path "lab/metadata/$path/*" { capabilities = ["read", "list"] }
+path "lab/data/$part/*" { capabilities = ["read"] }
+path "lab/metadata/$part/*" { capabilities = ["read", "list"] }
 EOF
     quietly secret_store_bao write "auth/kubernetes/role/$role" \
       bound_service_account_names="$service_account" bound_service_account_namespaces="$eso_ns" \

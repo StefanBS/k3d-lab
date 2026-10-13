@@ -121,3 +121,33 @@ secret() {
   run sso_secret_answer 2 <<<"Error making API request. Code: 503. Errors: * Vault is sealed"
   [[ $status -ne 0 ]]
 }
+
+@test "two instances of Dex with the same signing keys: says how many" {
+  run sso_keys_shared <<<$'["a","b"]\n["a","b"]'
+  [[ $status -eq 0 && $output == 2 ]]
+}
+
+@test "two instances with keys of their own: fails, and says so" {
+  run sso_keys_shared <<<$'["a"]\n["b"]'
+  [[ $status -ne 0 && $output == "2 instances have 2 different sets of signing keys" ]]
+}
+
+@test "one instance didn't answer: fails, rather than passing on the other's keys" {
+  run sso_keys_shared <<<$'["a"]\n'
+  [[ $status -ne 0 && $output == "1 of 2 instances gave no signing keys" ]]
+}
+
+@test "an instance with no keys yet: fails" {
+  run sso_keys_shared <<<$'[]\n[]'
+  [[ $status -ne 0 && $output == "2 of 2 instances gave no signing keys" ]]
+}
+
+@test "one instance alone: fails, since nothing shows its keys are shared" {
+  run sso_keys_shared <<<'["a"]'
+  [[ $status -ne 0 && $output == "1 instance is ready, not two" ]]
+}
+
+@test "no instance at all: fails" {
+  run sso_keys_shared </dev/null
+  [[ $status -ne 0 && $output == "0 instances are ready, not two" ]]
+}
