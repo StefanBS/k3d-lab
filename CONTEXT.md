@@ -57,7 +57,7 @@ The certificate authority on the Host that signs every TLS certificate the Lab a
 _Avoid_: self-signed cert, root cert
 
 **Lab login**:
-The one identity that opens every UI of the Lab. It's kept in the Secret Store, so it survives tearing the Lab down.
+The one identity that opens every UI of the Platform, and a Workload's UI that opts in. It's kept in the Secret Store, so it survives tearing the Lab down.
 _Avoid_: Lab user, SSO user, admin
 
 **Break-glass login**:
