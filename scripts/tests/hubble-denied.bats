@@ -15,7 +15,7 @@ case "$*" in
   *"hubble observe"*)
     while IFS= read -r flow; do
       echo "$flow" 2>/dev/null || exit 141
-      sleep 0.2
+      sleep "${FLOW_PAUSE:-0.2}"
     done <"$FLOWS"
     ;;
 esac
@@ -47,13 +47,13 @@ flow() { echo "{\"flow\":{\"verdict\":\"DROPPED\",\"drop_reason_desc\":\"$1\"}}"
 
 @test "DENIED_BY=POLICY_DENY, and only the default-deny dropped it: not found" {
   { flow POLICY_DENIED; flow POLICY_DENIED; } >"$FLOWS"
-  DENIED_BY=POLICY_DENY run hubble_denied --from-pod guardrail/client
+  FLOW_PAUSE=0 DENIED_BY=POLICY_DENY run hubble_denied --from-pod guardrail/client
   [[ $status -eq 1 ]]
 }
 
 @test "drops for another reason: not found" {
   { flow UNSUPPORTED_L3_PROTOCOL; flow STALE_OR_UNROUTABLE_IP; } >"$FLOWS"
-  run hubble_denied --from-pod strict/client
+  FLOW_PAUSE=0 run hubble_denied --from-pod strict/client
   [[ $status -eq 1 ]]
 }
 

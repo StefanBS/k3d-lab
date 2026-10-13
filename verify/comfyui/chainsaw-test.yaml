@@ -25,11 +25,9 @@ spec:
               status:
                 desiredNumberScheduled: 1
                 numberReady: 1
-        # verify.sh exports LAB_CA_CERT.
         - script:
             content: >-
-              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
-              --cacert "$LAB_CA_CERT" https://comfyui.lab.localhost/system_stats |
+              ../lib/host-curl.sh https://comfyui.lab.localhost/system_stats |
               yq -p json -e '.devices[0].name | test("RX 7800 XT")'
         # The guard logs once, when ComfyUI loads it.
         - script:

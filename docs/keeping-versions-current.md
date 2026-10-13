@@ -1,6 +1,6 @@
 # Keeping versions current
 
-Renovate (`renovate.json5`) opens PRs for every pinned version that has a newer release: the charts in `component.yaml`, the k3s image, image tags, the tools in `mise.toml`, CI's actions and mise, GitHub release assets, and the Secret Store's image in `scripts/host.sh`. It groups related updates into one PR, such as Observability or GPU, and lists everything it tracks in its Dependency Dashboard issue. It never merges: every PR runs `just lint`, and waits for you.
+Renovate (`renovate.json5`) opens PRs for every pinned version that has a newer release: the charts in `component.yaml`, the k3s image, image tags, the tools in `mise.toml`, CI's actions and mise, GitHub release assets, and the Secret Store's image in `scripts/secret-store.sh`. It groups related updates into one PR, such as Observability or GPU, and lists everything it tracks in its Dependency Dashboard issue. It never merges: every PR runs `just lint`, and waits for you.
 
 A pin in a file Renovate can't read by itself, such as a script, gets a comment on the line above, like the Secret Store's image in `scripts/secret-store.sh`. It works in any `.sh` or YAML file and the Justfile:
 

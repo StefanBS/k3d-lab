@@ -10,8 +10,7 @@ source "$(dirname "$0")/demos-state.sh"
 (($# == 1)) && [[ $1 == on || $1 == off ]] || die "usage: just demos on|off"
 if [[ $1 == on ]]; then demos=true want=ready; else demos=false want=gone; fi
 
-lab_exists || die "there's no Lab; run 'just up'"
-kc -n argocd get application/root >/dev/null 2>&1 || die "the Lab has no root Application; run 'just down', then 'just up'"
+need_root_application
 # The Demos, as this checkout has them, like the checks that verify runs.
 mapfile -t demo_components < <(demo_dirs)
 ((${#demo_components[@]})) || die "no Workload in workloads/ is a Demo (role: demo in its component.yaml)"
@@ -25,19 +24,8 @@ yq -n -o json ".metadata.annotations.\"argocd.argoproj.io/refresh\" = \"hard\" |
   kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
 
 # Run again on a Lab that already has them, or doesn't, it finds nothing to wait for.
-last='' deadline=$((SECONDS + 600))
-while :; do
-  # A sync can be heavy enough for k3s to restart, so a failed get is waited out too.
-  pending=$(kc -n argocd get applications -o json 2>/dev/null | demos_pending "$want" "${demo_components[@]##*/}" 2>/dev/null) ||
-    pending="the Lab's API isn't answering"
-  [[ -n $pending ]] || break
-  if [[ $pending != "$last" ]]; then
-    log "Still waiting: $(paste -sd';' <<<"$pending")"
-    last=$pending
-  fi
-  ((SECONDS < deadline)) || die "the Demos' Applications aren't $want after 10 minutes:"$'\n'"$pending"
-  sleep 5
-done
+still_pending() { kc -n argocd get applications -o json | demos_pending "$want" "${demo_components[@]##*/}"; }
+wait_until_none 600 "the Demos' Applications aren't $want" still_pending
 [[ $1 == off ]] || exit 0
 
 # namespace_deleted <name>: asks for the namespace to be deleted, and succeeds once it's

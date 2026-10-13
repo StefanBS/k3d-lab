@@ -8,7 +8,7 @@ source "$(dirname "$0")/host.sh"
 # shellcheck source=secret-store.sh
 source "$(dirname "$0")/secret-store.sh"
 
-lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
+need_lab
 
 argocd_url=https://$(platform_fact argocd.host)
 grafana_url=$(platform_fact grafana.url)

@@ -354,7 +354,7 @@ sso_secret_generate() {
 # ESO, in turn, trusts the Secret Store's certificate through the Lab CA.
 secret_store_trust_lab() {
   local eso_ns eso_audience spec role service_account part
-  lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
+  need_lab
   log "Pointing the Secret Store's Kubernetes auth at the Lab"
   bao_enabled auth kubernetes || quietly secret_store_bao auth enable kubernetes
   eso_ns=$(component_namespace platform/external-secrets)

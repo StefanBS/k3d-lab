@@ -64,7 +64,7 @@ cmd_join() {
   done
   [[ $eviction =~ ^[0-9]+(Ki|Mi|Gi|Ti)$ ]] || die "eviction=$eviction isn't a size such as 20Gi"
   need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
-  lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
+  need_lab
   # The GPU Node routes the Lab's subnet through this address (ADR 0002).
   why=$(host_lan_ip_current) || die "$why; run 'just host wizard'"
   gpu_node_reachable ||

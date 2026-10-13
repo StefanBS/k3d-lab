@@ -20,13 +20,10 @@ spec:
                 availableReplicas: 1
         - script:
             content: ../lib/hubble-has-flows.sh
-        # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
-        # verify.sh exports LAB_CA_CERT. The answer is a redirect to Dex, which this
-        # doesn't follow: sso-login signs in, and gets the page.
+        # The answer is a redirect to Dex, which this doesn't follow: sso-login signs in,
+        # and gets the page.
         - script:
-            content: >-
-              curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
-              --cacert "$LAB_CA_CERT" -o /dev/null https://hubble.lab.localhost/
+            content: ../lib/host-curl.sh -o /dev/null https://hubble.lab.localhost/
       catch:
         - script:
             content: kubectl -n kube-system get pods -l 'k8s-app in (hubble-relay, hubble-ui)' -o wide

@@ -51,7 +51,7 @@ for ns in "${workload_namespaces[@]}"; do
 done
 
 web_pod=$(kubectl -n "$namespace" get pods -l app=web -o jsonpath='{.items[0].metadata.name}')
-web_ip=$(kubectl -n "$namespace" get pod "$web_pod" -o jsonpath='{.status.podIP}')
+web_ip=$(pod_ip "$namespace" "$web_pod")
 
 bad=0
 for ns in "${workload_namespaces[@]}"; do
