@@ -5,15 +5,13 @@
 # needs that secret in Dex's environment, from the ExternalSecret in dex.yaml.
 issuer: https://sso.lab.localhost
 # Every instance of Dex shares its signing keys, the logins in progress and the sessions
-# with the others, as custom resources in its own namespace (crds.yaml). In memory, each
-# would have its own, and a sign-in that reached two of them would fail. Nothing of it
-# outlives the Lab.
+# with the others, as custom resources in its own namespace. In memory, each would have
+# its own, and a sign-in that reached two of them would fail. Nothing of it outlives the
+# Lab. Dex creates the CRDs itself as it starts, the way it's meant to be run: a new Dex
+# that keeps one more kind of thing then needs nothing changed here.
 storage:
   type: kubernetes
-  config:
-    inCluster: true
-    # Dex doesn't create its CRDs: crds.yaml does.
-    crdHandling: check
+  config: {inCluster: true}
 web: {http: 0.0.0.0:5556}
 oauth2:
   skipApprovalScreen: true

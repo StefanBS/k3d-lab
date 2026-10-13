@@ -28,7 +28,7 @@ spec:
       remoteRef: {key: platform/sso/clients/grafana, property: secret}
 ---
 # Dex keeps its state as custom resources in this namespace (config.yaml's `storage`),
-# and may do no more than that with the Lab's API.
+# and creates their CRDs as it starts. It may do no more than that with the Lab's API.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -53,6 +53,27 @@ roleRef:
   name: dex
 subjects:
   - {kind: ServiceAccount, name: dex}
+---
+# Creating a CRD can't be limited to Dex's own: a rule can't name what doesn't exist yet.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dex
+rules:
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dex
+subjects:
+  - {kind: ServiceAccount, name: dex, namespace: sso}
 ---
 apiVersion: apps/v1
 kind: Deployment
