@@ -353,30 +353,27 @@ sso_secret_generate() {
 # Lab's: it checks each login's token with a TokenReview made with that same token.
 # ESO, in turn, trusts the Secret Store's certificate through the Lab CA.
 secret_store_trust_lab() {
-  local eso_ns eso_audience
+  local eso_ns eso_audience spec role service_account path
   lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"
   log "Pointing the Secret Store's Kubernetes auth at the Lab"
   bao_enabled auth kubernetes || quietly secret_store_bao auth enable kubernetes
-  # Read-only, and only Workloads' secrets: lab/workloads/<workload>/<key>.
-  quietly secret_store_bao policy write eso - <<'EOF'
-path "lab/data/workloads/*" { capabilities = ["read"] }
-path "lab/metadata/workloads/*" { capabilities = ["read", "list"] }
-EOF
-  # The same for the Platform's own, lab/platform/*, which no Workload may read
-  # (ADR 0013): the Lab login and the OIDC clients' secrets.
-  quietly secret_store_bao policy write eso-platform - <<'EOF'
-path "lab/data/platform/*" { capabilities = ["read"] }
-path "lab/metadata/platform/*" { capabilities = ["read", "list"] }
-EOF
   eso_ns=$(component_namespace platform/external-secrets)
   eso_audience=$(platform_fact eso.audience)
-  quietly secret_store_bao write auth/kubernetes/role/eso \
-    bound_service_account_names=external-secrets bound_service_account_namespaces="$eso_ns" \
-    audience="$eso_audience" token_policies=eso token_ttl=1h
-  # Each role is bound to a ServiceAccount of its own, so neither reads the other's.
-  quietly secret_store_bao write auth/kubernetes/role/eso-platform \
-    bound_service_account_names=external-secrets-platform bound_service_account_namespaces="$eso_ns" \
-    audience="$eso_audience" token_policies=eso-platform token_ttl=1h
+  # Two roles, each read-only and for its own half of the Secret Store: eso for
+  # Workloads' secrets, lab/workloads/<workload>/<key>, and eso-platform for the
+  # Platform's own, lab/platform/*, which no Workload may read (ADR 0013): the Lab login
+  # and the OIDC clients' secrets. Each is bound to a ServiceAccount of its own, so
+  # neither reads the other's.
+  for spec in "eso external-secrets workloads" "eso-platform external-secrets-platform platform"; do
+    read -r role service_account path <<<"$spec"
+    quietly secret_store_bao policy write "$role" - <<EOF
+path "lab/data/$path/*" { capabilities = ["read"] }
+path "lab/metadata/$path/*" { capabilities = ["read", "list"] }
+EOF
+    quietly secret_store_bao write "auth/kubernetes/role/$role" \
+      bound_service_account_names="$service_account" bound_service_account_namespaces="$eso_ns" \
+      audience="$eso_audience" token_policies="$role" token_ttl=1h
+  done
   kc config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' |
     base64 -d | quietly secret_store_bao write auth/kubernetes/config \
     kubernetes_host="https://$(lab_server_ip):6443" kubernetes_ca_cert=- disable_local_ca_jwt=true

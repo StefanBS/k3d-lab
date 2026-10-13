@@ -58,18 +58,24 @@ token_status() {
     --data-urlencode "username=$login" --data-urlencode password@-
 }
 
-# Usage: sign_in <cookie jar> <url>
+# Usage: browse <cookie jar> <url> [curl args]...
 # Opens the URL as a browser would, following every redirect and keeping the cookies in
-# the jar. If that ends on Dex's login form, fills it in with the Lab login and follows
-# the redirects again. Prints the HTTP status and the URL it ended on, and leaves the
-# page in $tmp/page.
+# the jar. Prints the HTTP status and the URL it ended on.
+browse() {
+  local jar=$1
+  shift
+  lab_curl -L -b "$jar" -c "$jar" -o /dev/null -w '%{http_code} %{url_effective}' "$@"
+}
+
+# Usage: sign_in <cookie jar> <url>
+# Browses to the URL. If that ends on Dex's login form, fills it in with the Lab login
+# and follows the redirects again. Prints the HTTP status and the URL it ended on.
 sign_in() {
   local jar=$1 url=$2 landed
-  landed=$(lab_curl -L -b "$jar" -c "$jar" -o "$tmp/page" -w '%{http_code} %{url_effective}' "$url")
+  landed=$(browse "$jar" "$url")
   if [[ $landed == "200 $sso/auth/local/login"* ]]; then
-    landed=$(printf %s "$password" | lab_curl -L -b "$jar" -c "$jar" -o "$tmp/page" \
-      -w '%{http_code} %{url_effective}' "${landed#* }" \
-      --data-urlencode "login=$login" --data-urlencode password@-)
+    landed=$(printf %s "$password" |
+      browse "$jar" "${landed#* }" --data-urlencode "login=$login" --data-urlencode password@-)
   fi
   echo "$landed"
 }
@@ -160,7 +166,7 @@ fi
 # One sign-in for every UI: Dex remembers the browser that signed in to Grafana. With
 # that jar, ArgoCD's login goes through Dex and back without the form: nothing here
 # fills it in, so ending on it is a failure.
-landed=$(lab_curl -L -b "$tmp/grafana.jar" -c "$tmp/grafana.jar" -o /dev/null -w '%{http_code} %{url_effective}' "$argocd/auth/login")
+landed=$(browse "$tmp/grafana.jar" "$argocd/auth/login")
 who=$(lab_curl -b "$tmp/grafana.jar" "$argocd/api/v1/session/userinfo" | jq -r '.username // empty' 2>/dev/null) || who=""
 if [[ $landed == "200 $argocd/" && $who == "$login" ]]; then
   ok "The sign-in to Grafana opens ArgoCD too, without Dex asking again"
@@ -177,9 +183,8 @@ if [[ $status == 200 ]] && jq -e 'has("token")' "$tmp/session" >/dev/null 2>&1; 
 else
   fail "ArgoCD's Break-glass login doesn't work: HTTP $status"
 fi
-status=$(jq -n --arg user "$(secret_value monitoring grafana-admin admin-user)" \
-  --rawfile password <(secret_value monitoring grafana-admin admin-password) \
-  '{"user": $user, "password": ($password | rtrimstr("\n"))}' |
+status=$(kubectl -n monitoring get secret grafana-admin -o json |
+  jq '.data | {"user": (.["admin-user"] | @base64d), "password": (.["admin-password"] | @base64d)}' |
   lab_curl -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d @- "$grafana/login")
 if [[ $status == 200 ]]; then
   ok "Grafana's Break-glass login works"

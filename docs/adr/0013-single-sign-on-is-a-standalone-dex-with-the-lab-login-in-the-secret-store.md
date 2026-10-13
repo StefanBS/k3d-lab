@@ -36,6 +36,6 @@ The Rollouts dashboard and Hubble UI had no login, and ArgoCD and Grafana each h
 - A Workload's UI can opt in with the same filter on its HTTPRoute.
 - The client secrets, and oauth2-proxy's cookie secret beside them, outlive a Lab though nothing needs them to. A new client means running `just host setup` again.
 - Dex's auth sessions are experimental, so a Dex update can change or drop them. Without them single sign-on still works, with one sign-in per UI.
-- Dex writes to the Lab's datastore: a few resources with each sign-in, and its signing keys when it rotates them. A restart of Dex, or of one instance, keeps the keys and the sessions. A new Lab starts without either.
+- Dex writes to the Lab's datastore. Each instance checks its storage every 15 seconds by creating a resource and deleting it, which Dex has no setting for: 16 writes a minute for the two, counted on an idle Lab. On top come a few resources with each sign-in, and the signing keys when Dex rotates them. A restart of Dex, or of one instance, keeps the keys and the sessions. A new Lab starts without either.
 - Dex may create any CRD in the Lab, though it can change or delete none. ArgoCD doesn't know of Dex's CRDs: they aren't in Git, and they go with the Lab.
 - The Server's address is repeated in one more place in Git, as a pinned Platform fact that lint checks.
