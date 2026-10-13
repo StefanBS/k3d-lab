@@ -201,6 +201,15 @@ fix_owner_in_docker_group() {
   usermod -aG docker "$LAB_OWNER"
 }
 
+# lab_ca_configmap <namespace>: puts the Lab CA's certificate in that namespace of the
+# Lab, as the ConfigMap lab-ca, creating the namespace if need be. For what calls the
+# Secret Store or single sign-on from inside the Lab, where nothing trusts the Lab CA.
+lab_ca_configmap() {
+  kc create namespace "$1" --dry-run=client -o yaml | kc apply --server-side -f - >/dev/null
+  kc -n "$1" create configmap lab-ca --from-file=ca.crt="$LAB_CA_CERT" --dry-run=client -o yaml |
+    kc apply --server-side -f - >/dev/null
+}
+
 # In the bundle curl and browsers read, which update-ca-trust extracts from the anchors.
 lab_ca_trusted() {
   openssl verify -CAfile /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem "$LAB_CA_CERT" >/dev/null 2>&1

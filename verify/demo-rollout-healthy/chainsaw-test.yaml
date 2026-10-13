@@ -10,8 +10,8 @@ spec:
     The demo Rollout (workloads/rollouts-demo/) is Healthy: fully promoted, with all of
     its traffic on the stable version, and it receives the load generator's requests
     through the Gateway. From the Host, the demo answers through the
-    Gateway at https://rollouts-demo.lab.localhost, and the Argo Rollouts dashboard at
-    https://rollouts.lab.localhost, both with a certificate from the Lab CA.
+    Gateway at https://rollouts-demo.lab.localhost, and the Argo Rollouts dashboard's
+    address, https://rollouts.lab.localhost, both with a certificate from the Lab CA.
   steps:
     - try:
         # A canary in progress is Progressing, and one the analysis aborted is Degraded.
@@ -32,6 +32,8 @@ spec:
             content: >-
               curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2
               --cacert "$LAB_CA_CERT" -o /dev/null https://rollouts-demo.lab.localhost/
+        # The dashboard's answer is a redirect to Dex, which this doesn't follow:
+        # sso-login signs in, and gets the page.
         - script:
             content: >-
               curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2

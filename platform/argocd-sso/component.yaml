@@ -1,0 +1,3 @@
+# No chart: the kustomization.yaml beside this is the component. ArgoCD's own single
+# sign-on settings are in platform/argocd/values.yaml; this adds what its chart can't.
+namespace: argocd

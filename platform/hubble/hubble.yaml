@@ -1,5 +1,7 @@
 # Hubble UI, which shows the flows Hubble Relay gathers from every node, live. It has no
-# login, like the Rollouts dashboard.
+# login of its own, so the Gateway asks oauth2-proxy (platform/oauth2-proxy/) about each
+# request, which the Lab login opens (ADR 0013). The route still points at the UI's own
+# Service: oauth2-proxy carries none of its traffic.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -12,7 +14,21 @@ spec:
   hostnames:
     - hubble.lab.localhost
   rules:
-    - backendRefs:
+    - filters:
+        - type: ExternalAuth
+          externalAuth:
+            protocol: HTTP
+            backendRef: {name: oauth2-proxy, namespace: sso, port: 80}
+            http:
+              # Envoy otherwise sends oauth2-proxy neither: it needs the cookie to know
+              # the session, and the scheme to build its callback.
+              allowedHeaders: [cookie, x-forwarded-proto]
+              # Not optional on Cilium 1.20.2: without it, every header of oauth2-proxy's
+              # answer is copied onto the request, its Content-Length included, so a
+              # POST reaches the UI cut to 13 bytes (cilium/cilium#48770). Any list
+              # does; oauth2-proxy doesn't send this header here.
+              allowedResponseHeaders: [x-auth-request-email]
+      backendRefs:
         - {name: hubble-ui, port: 80}
 ---
 # The flow metrics every cilium-agent serves, which the Alloy on its node scrapes. The

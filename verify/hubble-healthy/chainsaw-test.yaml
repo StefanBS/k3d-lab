@@ -5,8 +5,8 @@ metadata:
 spec:
   description: >-
     Hubble Relay is up and returns flows from every Ready node, the GPU Node included
-    when Joined. From the Host, Hubble UI answers at https://hubble.lab.localhost with a
-    certificate from the Lab CA.
+    when Joined. From the Host, Hubble UI's address, https://hubble.lab.localhost,
+    answers with a certificate from the Lab CA.
   steps:
     - try:
         - assert:
@@ -21,7 +21,8 @@ spec:
         - script:
             content: ../lib/hubble-has-flows.sh
         # --cacert replaces the Host's trust store, so only the Lab CA can make this pass.
-        # verify.sh exports LAB_CA_CERT.
+        # verify.sh exports LAB_CA_CERT. The answer is a redirect to Dex, which this
+        # doesn't follow: sso-login signs in, and gets the page.
         - script:
             content: >-
               curl -sS --fail --retry 5 --retry-all-errors --retry-delay 2

@@ -1,5 +1,6 @@
-# Anyone can look without logging in; changing things takes the admin login, which ESO
-# generates into the Secret named here (extraObjects, below). `just creds` prints it.
+# Anyone can look without logging in; changing things takes the Lab login, through Dex
+# (auth.generic_oauth, below). Grafana's own admin stays as the Break-glass login, which ESO
+# generates into the Secret named here (extraObjects, below). `just creds` prints both.
 admin:
   existingSecret: grafana-admin
 grafana.ini:
@@ -8,6 +9,21 @@ grafana.ini:
   auth.anonymous:
     enabled: true
     org_role: Viewer
+  # Single sign-on with the Lab login, through Dex at https://sso.lab.localhost
+  # (ADR 0013). The client secret comes from the environment (envValueFrom, below).
+  auth.generic_oauth:
+    enabled: true
+    name: Lab
+    client_id: grafana
+    scopes: openid email profile
+    auth_url: https://sso.lab.localhost/auth
+    token_url: https://sso.lab.localhost/token
+    api_url: https://sso.lab.localhost/userinfo
+    # Dex's certificate is from the Lab CA (extraConfigmapMounts, below).
+    tls_client_ca: /etc/lab-ca/ca.crt
+    # Dex gives a static user no groups, so Admin goes to the Lab login's email. The
+    # strings take single quotes: with backticks, it silently gives Viewer.
+    role_attribute_path: email == 'lab@lab.localhost' && 'Admin' || 'Viewer'
   # Grafana otherwise downloads a set of plugins at every start, which nothing here uses.
   plugins:
     preinstall_disabled: true
@@ -60,6 +76,19 @@ datasources:
             datasourceUid: prometheus
           nodeGraph:
             enabled: true
+# Grafana's OIDC client secret, from the Secret grafana-sso (extraObjects, below).
+# Grafana's pod waits for it, as it does for the Break-glass login's.
+envValueFrom:
+  GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+    secretKeyRef:
+      name: grafana-sso
+      key: client-secret
+# The Lab CA, which `just up` puts in this namespace.
+extraConfigmapMounts:
+  - name: lab-ca
+    configMap: lab-ca
+    mountPath: /etc/lab-ca
+    readOnly: true
 # Loads every ConfigMap labelled grafana_dashboard in this namespace, as
 # platform/grafana-dashboards/ makes them.
 sidecar:
@@ -82,9 +111,10 @@ testFramework:
 # Modest requests for a Host short on RAM.
 resources:
   requests: {cpu: 25m, memory: 128Mi}
-# The admin login: a new password for each Lab, generated once, so it never goes in
+# The Break-glass login: a new password for each Lab, generated once, so it never goes in
 # Git. Grafana's pod waits for the Secret. The chart runs these through tpl, so they
 # use no ESO templates: rewrite renames the generator's key, and Merge adds the user.
+# The last is the OIDC client secret, from the Secret Store: the same value Dex has.
 extraObjects:
   - apiVersion: generators.external-secrets.io/v1alpha1
     kind: Password
@@ -116,3 +146,19 @@ extraObjects:
               name: grafana-admin
           rewrite:
             - regexp: {source: ^password$, target: admin-password}
+  - apiVersion: external-secrets.io/v1
+    kind: ExternalSecret
+    metadata:
+      name: grafana-sso
+    spec:
+      refreshInterval: "0"
+      secretStoreRef:
+        kind: ClusterSecretStore
+        name: secret-store-platform
+      target:
+        name: grafana-sso
+      data:
+        - secretKey: client-secret
+          remoteRef:
+            key: platform/sso/clients/grafana
+            property: secret

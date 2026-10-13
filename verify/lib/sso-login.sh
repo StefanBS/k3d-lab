@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# Usage: sso-login.sh
+# Checks single sign-on from the Host, as a browser on it would use it (ADR 0013), with
+# the Lab login's password from the Secret Store:
+#   - Every instance of Dex has the same signing keys, so they share their state.
+#   - Dex gives the Lab login a token for its password, and refuses a wrong one.
+#   - ArgoCD's API takes that token, as its admin.
+#   - The Rollouts dashboard and Hubble UI send a request without a session to Dex, and
+#     one sign-in opens both.
+#   - Grafana signs the Lab login in through Dex, as an Admin.
+#   - That sign-in opens ArgoCD and Hubble UI too, without Dex asking again.
+#   - ArgoCD's and Grafana's Break-glass logins still work.
+# Every request trusts only the Lab CA (verify.sh exports LAB_CA_CERT). No secret is
+# passed as an argument, where the Host's process list would show it: each goes to curl
+# on stdin, or from a file in a directory that's deleted afterwards.
+# Run by sso-login, whose script steps point kubectl at the Lab through a context named
+# chainsaw.
+set -euo pipefail
+# shellcheck source=checks.sh
+source "$(dirname "$0")/checks.sh"
+# shellcheck source=../../scripts/sso-state.sh
+source "$(dirname "$0")/../../scripts/sso-state.sh"
+
+sso=https://sso.lab.localhost
+argocd=https://argocd.lab.localhost
+grafana=https://grafana.lab.localhost
+rollouts=https://rollouts.lab.localhost
+hubble=https://hubble.lab.localhost
+login=lab@lab.localhost
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+bad=0
+ok() { echo "OK    $1"; }
+fail() {
+  echo "FAIL  $1"
+  bad=1
+}
+
+# Usage: lab_curl <curl args>...
+# A failed connection is retried: the Gateway drops some while a route changes.
+lab_curl() {
+  curl -sS --cacert "$LAB_CA_CERT" --retry 5 --retry-delay 2 --retry-connrefused "$@"
+}
+
+# Usage: token_status <password>
+# Asks Dex for a token for the Lab login with that password, through Verify's own
+# client, which can only use this grant. Prints the HTTP status, and leaves Dex's answer
+# in $tmp/token.
+token_status() {
+  printf %s "$1" | lab_curl -o "$tmp/token" -w '%{http_code}' "$sso/token" \
+    -d grant_type=password -d client_id=verify -d 'scope=openid email' \
+    --data-urlencode "username=$login" --data-urlencode password@-
+}
+
+# Usage: browse <cookie jar> <url> [curl args]...
+# Opens the URL as a browser would, following every redirect and keeping the cookies in
+# the jar. Prints the HTTP status and the URL it ended on.
+browse() {
+  local jar=$1
+  shift
+  lab_curl -L -b "$jar" -c "$jar" -o /dev/null -w '%{http_code} %{url_effective}' "$@"
+}
+
+# Usage: sign_in <cookie jar> <url>
+# Browses to the URL. If that ends on Dex's login form, fills it in with the Lab login
+# and follows the redirects again. Prints the HTTP status and the URL it ended on.
+sign_in() {
+  local jar=$1 url=$2 landed
+  landed=$(browse "$jar" "$url")
+  if [[ $landed == "200 $sso/auth/local/login"* ]]; then
+    landed=$(printf %s "$password" |
+      browse "$jar" "${landed#* }" --data-urlencode "login=$login" --data-urlencode password@-)
+  fi
+  echo "$landed"
+}
+
+# Usage: expect_sent_to_dex <UI's name> <url>
+# Without a session, the UI's address answers with a redirect to Dex, not with the page.
+expect_sent_to_dex() {
+  local got
+  got=$(lab_curl -o /dev/null -w '%{http_code} %{redirect_url}' "$2")
+  if [[ $got == "302 $sso/"* ]]; then
+    ok "$1 sends a request without a session to Dex"
+  else
+    fail "$1 answers a request without a session with '${got%%\?*}', not a redirect to $sso"
+  fi
+}
+
+password=$("$(dirname "$0")/../../scripts/secret-store.sh" bao kv get -mount=lab -field=password platform/sso/login </dev/null)
+
+# Dex's instances share their state: each one's signing keys are the others'. With a
+# state of its own each would have made its own keys, and a UI would refuse a token that
+# another instance signed. Asked of each pod through the Lab's API, since the Gateway
+# picks one itself. The sign-ins below then reach either instance with each request.
+# Only of the pods that are Ready and staying: while Dex is replaced, one more is
+# starting or going. A request that fails counts as an instance that gave no keys.
+dex_pods=$(kubectl -n sso get pods -l app=dex -o json | jq -r '.items[]
+  | select(.metadata.deletionTimestamp == null)
+  | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))
+  | .metadata.name') || dex_pods=""
+if verdict=$(for pod in $dex_pods; do
+  kids=$(kubectl get --raw "/api/v1/namespaces/sso/pods/$pod:5556/proxy/keys" | jq -c '[.keys[].kid] | sort') || kids=""
+  printf '%s\n' "$kids"
+done | sso_keys_shared); then
+  ok "Dex's $verdict instances have the same signing keys"
+else
+  fail "Dex's instances don't share their signing keys: $verdict"
+fi
+
+# The password grant.
+status=$(token_status "$password")
+id_token=$(jq -r '.id_token // empty' "$tmp/token" 2>/dev/null) || id_token=""
+if [[ $status == 200 && -n $id_token ]]; then
+  ok "Dex gives the Lab login a token for its password"
+else
+  fail "Dex gives the Lab login no token for its password: HTTP $status"
+fi
+status=$(token_status "not-$password")
+# Only a refusal counts: a Dex that's down answers a wrong password with no token too.
+if [[ $status == 401 ]] && ! jq -e 'has("id_token")' "$tmp/token" >/dev/null 2>&1; then
+  ok "Dex refuses a wrong password"
+else
+  fail "Dex doesn't refuse a wrong password: HTTP $status"
+fi
+
+# ArgoCD takes Dex's token, and maps the Lab login to its admin role: listing
+# Applications takes a role, and ArgoCD gives none by default.
+printf 'Authorization: Bearer %s\n' "$id_token" >"$tmp/bearer"
+status=$(lab_curl -o "$tmp/applications" -w '%{http_code}' -H "@$tmp/bearer" "$argocd/api/v1/applications?fields=items.metadata.name")
+if [[ $status == 200 ]] && jq -e '[.items[].metadata.name] | index("root")' "$tmp/applications" >/dev/null 2>&1; then
+  ok "ArgoCD's API takes the Lab login's token, and lists the Applications"
+else
+  fail "ArgoCD's API doesn't list the Applications for the Lab login's token: HTTP $status"
+fi
+
+# The UIs behind oauth2-proxy.
+expect_sent_to_dex "The Rollouts dashboard" "$rollouts/"
+expect_sent_to_dex "Hubble UI" "$hubble/"
+landed=$(sign_in "$tmp/proxied.jar" "$hubble/")
+if [[ $landed == "200 $hubble/" ]]; then
+  ok "The Lab login opens Hubble UI"
+else
+  fail "The Lab login doesn't open Hubble UI: it ends on '${landed%%\?*}'"
+fi
+# With the cookie of that sign-in, and no redirect followed. The dashboard's own page:
+# it answers / with a redirect there, whoever asks.
+status=$(lab_curl -b "$tmp/proxied.jar" -o /dev/null -w '%{http_code}' "$rollouts/rollouts/")
+if [[ $status == 200 ]]; then
+  ok "The sign-in to Hubble UI opens the Rollouts dashboard too"
+else
+  fail "The sign-in to Hubble UI doesn't open the Rollouts dashboard: HTTP $status"
+fi
+
+# Grafana's own OIDC login. Its API takes no token of Dex's, so it's signed in to as a
+# browser would, which also shows the role it gives the Lab login.
+landed=$(sign_in "$tmp/grafana.jar" "$grafana/login/generic_oauth")
+who=$(lab_curl -b "$tmp/grafana.jar" "$grafana/api/user" | jq -r '.email // empty' 2>/dev/null) || who=""
+role=$(lab_curl -b "$tmp/grafana.jar" "$grafana/api/user/orgs" | jq -r '.[0].role // empty' 2>/dev/null) || role=""
+if [[ $who == "$login" && $role == Admin ]]; then
+  ok "Grafana signs the Lab login in through Dex, as an Admin"
+else
+  fail "Grafana doesn't sign the Lab login in as an Admin: it ends on '${landed%%\?*}', as '${who:-nobody}' with the role '${role:-none}'"
+fi
+
+# One sign-in for every UI: Dex remembers the browser that signed in to Grafana. With
+# that jar, ArgoCD's login goes through Dex and back without the form: nothing here
+# fills it in, so ending on it is a failure.
+landed=$(browse "$tmp/grafana.jar" "$argocd/auth/login")
+who=$(lab_curl -b "$tmp/grafana.jar" "$argocd/api/v1/session/userinfo" | jq -r '.username // empty' 2>/dev/null) || who=""
+if [[ $landed == "200 $argocd/" && $who == "$login" ]]; then
+  ok "The sign-in to Grafana opens ArgoCD too, without Dex asking again"
+else
+  fail "The sign-in to Grafana doesn't open ArgoCD: its login ends on '${landed%%\?*}', as '${who:-nobody}'"
+fi
+# The same for a UI behind oauth2-proxy, which this jar has no cookie of.
+landed=$(browse "$tmp/grafana.jar" "$hubble/")
+if [[ $landed == "200 $hubble/" ]]; then
+  ok "The sign-in to Grafana opens Hubble UI too, without Dex asking again"
+else
+  fail "The sign-in to Grafana doesn't open Hubble UI: it ends on '${landed%%\?*}'"
+fi
+
+# The Break-glass logins, which need neither Dex nor oauth2-proxy.
+status=$(kubectl -n argocd get secret argocd-initial-admin-secret -o json |
+  jq '{"username": "admin", "password": (.data.password | @base64d)}' |
+  lab_curl -o "$tmp/session" -w '%{http_code}' -H 'Content-Type: application/json' -d @- "$argocd/api/v1/session")
+if [[ $status == 200 ]] && jq -e 'has("token")' "$tmp/session" >/dev/null 2>&1; then
+  ok "ArgoCD's Break-glass login works"
+else
+  fail "ArgoCD's Break-glass login doesn't work: HTTP $status"
+fi
+status=$(kubectl -n monitoring get secret grafana-admin -o json |
+  jq '.data | {"user": (.["admin-user"] | @base64d), "password": (.["admin-password"] | @base64d)}' |
+  lab_curl -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d @- "$grafana/login")
+if [[ $status == 200 ]]; then
+  ok "Grafana's Break-glass login works"
+else
+  fail "Grafana's Break-glass login doesn't work: HTTP $status"
+fi
+
+exit "$bad"

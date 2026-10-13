@@ -1,0 +1,109 @@
+# The client secret Dex has for it too, and the secret it signs its cookie with. Both
+# are in the Secret Store, so a session outlives the pod.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: oauth2-proxy
+spec:
+  refreshInterval: "0"
+  secretStoreRef: {kind: ClusterSecretStore, name: secret-store-platform}
+  target:
+    name: oauth2-proxy
+  data:
+    - secretKey: client-secret
+      remoteRef: {key: platform/sso/clients/oauth2-proxy, property: secret}
+    - secretKey: cookie-secret
+      remoteRef: {key: platform/sso/clients/oauth2-proxy, property: cookie}
+---
+# One replica: the Gateway's check fails closed, so while this pod restarts, the UIs
+# behind it answer 403 for 5 to 10 seconds, which ADR 0013 accepts. It reads Dex's
+# configuration as it starts, and exits if Dex doesn't answer: in a new Lab it restarts
+# a couple of times, until Dex is up and CoreDNS knows its name.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: oauth2-proxy}
+  template:
+    metadata:
+      labels: {app: oauth2-proxy}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+      containers:
+        - name: oauth2-proxy
+          image: quay.io/oauth2-proxy/oauth2-proxy
+          args:
+            - --http-address=0.0.0.0:4180
+            - --provider=oidc
+            # The issuer as the browser names it. From a pod the name resolves to the
+            # Server (platform/coredns-custom/), whose certificate is from the Lab CA.
+            - --oidc-issuer-url=https://sso.lab.localhost
+            - --provider-ca-file=/etc/lab-ca/ca.crt
+            - --client-id=oauth2-proxy
+            # Anyone Dex signs in, which is the Lab login alone.
+            - --email-domain=*
+            # It proxies nothing. The Gateway's Envoy takes 200 as allowed, and sends
+            # any other answer, such as the redirect to Dex, back to the browser.
+            - --upstream=static://200
+            # Straight to Dex, with no "Sign in with" page first.
+            - --skip-provider-button=true
+            # The default, force, makes Dex show its approval page in spite of its
+            # skipApprovalScreen.
+            - --approval-prompt=auto
+            # It builds the callback, https://<the UI>/oauth2/callback, from the
+            # request's Host and X-Forwarded-Proto, so there's no --redirect-url: the
+            # Gateway hands it the callback like any other request to the UI.
+            - --reverse-proxy=true
+            # One sign-in opens every UI behind it.
+            - --cookie-domain=.lab.localhost
+            - --whitelist-domain=.lab.localhost
+            - --cookie-secure=true
+          env:
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: oauth2-proxy, key: client-secret}}
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom: {secretKeyRef: {name: oauth2-proxy, key: cookie-secret}}
+          ports:
+            - {name: http, containerPort: 4180}
+          readinessProbe:
+            httpGet: {path: /ping, port: http}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+          volumeMounts:
+            - {name: lab-ca, mountPath: /etc/lab-ca}
+      volumes:
+        # `just up` makes it.
+        - name: lab-ca
+          configMap: {name: lab-ca}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+spec:
+  selector: {app: oauth2-proxy}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+# Lets the HTTPRoutes of the UIs behind it name this Service in their ExternalAuth
+# filter: Hubble UI's (platform/hubble/) and the Rollouts dashboard's
+# (platform/argo-rollouts/).
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: external-auth
+spec:
+  from:
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, namespace: kube-system}
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, namespace: argo-rollouts}
+  to:
+    - {group: "", kind: Service, name: oauth2-proxy}

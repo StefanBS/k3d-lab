@@ -1,7 +1,9 @@
 # The Gateway API CRDs, at the version Cilium supports (its Gateway API docs name it).
 # `just up` applies these before installing Cilium, which only runs its Gateway
-# controller if the CRDs exist when it starts.
+# controller if the CRDs exist when it starts. The experimental channel, the only one
+# with HTTPRoute's ExternalAuth filter, which single sign-on needs (ADR 0013). k3s
+# installs none of its own (k3d/cluster.yaml).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/standard-install.yaml
+  - https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/experimental-install.yaml

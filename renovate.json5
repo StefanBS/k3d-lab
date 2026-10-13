@@ -110,6 +110,14 @@
       ],
     },
     {
+      // Dex and oauth2-proxy, which every UI's login depends on (ADR 0013).
+      groupName: 'Single sign-on',
+      matchDepNames: ['ghcr.io/dexidp/dex', 'quay.io/oauth2-proxy/oauth2-proxy'],
+      prBodyNotes: [
+        "**Before merging:** run `just verify sso-login` on a Lab built from this branch. `just lint` doesn't sign in.",
+      ],
+    },
+    {
       groupName: 'GPU',
       matchDepNames: ['amd-gpu', 'docker.io/rocm/k8s-device-plugin'],
     },

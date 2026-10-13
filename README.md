@@ -30,6 +30,7 @@ It prepares what outlives any Lab and is safe to re-run: a run with nothing to d
 - **Docker CE** ([ADR 0001](docs/adr/0001-docker-ce-runtime-alongside-podman.md)): installed with its data in `/home/docker-data` (labelled for SELinux like `/var/lib/docker`), started at boot, and usable without sudo through the `docker` group. If `podman-docker` is installed, `dnf` refuses Docker CE until you remove it (`sudo dnf remove podman-docker`); Podman itself can stay.
 - **The Lab CA** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): generated once in `~/.local/share/k3d-lab/ca/` and never regenerated, then trusted by the Host, so `curl` and browsers trust every Lab URL across rebuilds. Name constraints limit it to `lab.localhost` (where every Lab UI lives), `k3d.internal`, the Lab's subnet and loopback.
 - **The Secret Store** ([ADR 0003](docs/adr/0003-secret-store-and-lab-ca-live-on-the-host.md)): OpenBao, as the rootless Podman Quadlet `k3d-lab-secret-store` (a user service of yours, started at boot through lingering), with all its state in `~/.local/share/k3d-lab/secret-store/`. It unseals itself at every start, with OpenBao's `static` seal and a key generated once, and serves TLS from the Lab CA on port 8200. A firewalld policy lets only the Lab's subnet, `172.28.0.0/16`, reach that port, so it's closed to the LAN; the Secret Store only starts once that policy is in place. See Secrets.
+- **The Lab login** ([ADR 0013](docs/adr/0013-single-sign-on-is-a-standalone-dex-with-the-lab-login-in-the-secret-store.md)): its password, and a secret for each OIDC client in `platform/dex/config.yaml`, generated once into the Secret Store under `lab/platform/sso/` and never changed. A client added there later gets its secret at the next run; Dex and the client then each need it from an ExternalSecret, as `platform/dex/dex.yaml` gives Dex the others. `just up` refuses to build a Lab while one is missing.
 
 `just host setup` never escalates privileges. It goes through the steps in order, and when it reaches one that needs root, it stops and asks you to run the same script under sudo yourself, then `just host setup` again:
 
@@ -51,7 +52,7 @@ sudo scripts/host-setup.sh
 | `just demos on\|off` | Adds the Demos to the running Lab, or removes them with their namespaces, without rebuilding it. It stops once their Applications are Synced and Healthy, or gone. `just verify` skips a Demo's checks while the Lab has none, and says so. |
 | `just pause <name>` | Pauses a Workload or Platform component, named as its folder, for an experiment that has no business in Git: ArgoCD neither syncs nor self-heals its Application, so changes made by hand to it stay. The other Applications still sync. `just verify` warns while any is paused. |
 | `just resume <name>` | Lets ArgoCD sync a paused Workload or Platform component again, which puts Git back, and waits until it's Synced and Healthy. |
-| `just creds` | Prints each of the Lab's UIs with its URL and login. The passwords are new with every Lab. |
+| `just creds` | Prints the Lab login, which opens every UI of the Platform and stays the same across Labs, then each UI with its URL and its Break-glass login, which is new with every Lab. |
 | `just verify` | Checks how the running Lab behaves, with one Chainsaw test per check in `verify/`: a PASS or FAIL for each, and a non-zero exit on any FAIL. `just verify <check>...` runs only those checks, named by their folders; any Chainsaw flags go after them. `VERBOSE=1 just verify <check>` also shows what each passing step did, such as each OK line of the check's script, which is how to see what a new check really tests. While `just verify`, `just up --debug` or `just track --debug` runs, [below](https://github.com/facebookincubator/below) records the pressure on the Host and each cgroup in it every 2s into `~/.local/state/k3d-lab/below/`, keeping a week; when k3s on the Server logs slow SQL, dies or restarts, `verify` WARNs with the Server's cgroups and the Host's disk in the minute before. |
 | `just down` | Destroys the Lab completely, and fails if anything is left behind. A Joined GPU Node leaves first, if it's reachable. |
 | `just lint` | Static checks that need no Lab. CI runs it on every PR. |
@@ -77,9 +78,101 @@ The Gateway's wildcard certificate comes from cert-manager, signed by the Lab CA
 | Hubble | https://hubble.lab.localhost |
 | ComfyUI (while the GPU Node is Joined) | https://comfyui.lab.localhost |
 
-`just creds` prints each UI's admin login. Grafana also lets anyone look without logging in, and the Rollouts dashboard and Hubble UI have no login at all.
-
 A component adds its UI with an HTTPRoute for its own `<name>.lab.localhost`, whose `parentRefs` is the `https` listener of the Gateway `lab` in the namespace `gateway`.
+
+### Logging in
+
+One login, the **Lab login**, opens ArgoCD, Grafana, the Rollouts dashboard and Hubble UI ([ADR 0013](docs/adr/0013-single-sign-on-is-a-standalone-dex-with-the-lab-login-in-the-secret-store.md)). It's `lab@lab.localhost`, with a password that `just host setup` generated once into the Secret Store, so it's the same in every Lab. `just creds` prints it.
+
+[Dex](https://dexidp.io) (`platform/dex/`) signs it in, at https://sso.lab.localhost. Its config is in Git with no secret in it, and ESO gives it the password's hash and each client's secret from the Secret Store. It runs as two instances, which share their signing keys, the logins in progress and their sessions as custom resources in the namespace `sso`: a sign-in's requests can each reach either one. Those go with the Lab.
+
+You type it once. Dex remembers the browser for a day, with its cookie `dex_session`, and answers every other UI's login without showing its form: ArgoCD's and Grafana's "Lab" buttons, and the first request to the Rollouts dashboard or Hubble UI, go there and back by themselves. Dex's form has "remember me" ticked: untick it, and the cookie goes when the browser closes, though the UIs you had opened stay signed in. This is Dex's auth sessions, experimental in 2.46. A restart of Dex keeps them.
+
+A UI uses Dex in one of two ways:
+
+- **ArgoCD and Grafana speak OIDC themselves.** Each has a "Lab" button on its login page, and gives the Lab login its admin role. Each one's own admin login stays, as its **Break-glass login**, new with every Lab, for when Dex is down: `just creds` prints those too. Grafana still lets anyone look without logging in.
+- **The Rollouts dashboard and Hubble UI have no login of their own**, so the Gateway asks [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) (`platform/oauth2-proxy/`) about every request to them, through an `ExternalAuth` filter on their HTTPRoutes. Its cookie is for `.lab.localhost`, so one sign-in opens both. They have no Break-glass login.
+
+ComfyUI has no login.
+
+**A UI that speaks OIDC itself**, here ArgoCD. The UI trades the code for a token with Dex directly, from its pod, under the same name the browser used. There `sso.lab.localhost` resolves to the Server, where the Gateway listens, not to loopback: CoreDNS says so (`platform/coredns-custom/`).
+
+```mermaid
+sequenceDiagram
+    actor B as Browser
+    participant G as Gateway
+    participant A as ArgoCD
+    participant D as Dex
+    participant C as CoreDNS
+    B->>G: GET argocd.lab.localhost/auth/login, the Lab button on its login page
+    G->>A: the same request
+    A-->>B: 303 to sso.lab.localhost/auth, with client_id=argocd
+    B->>G: GET sso.lab.localhost/auth
+    G->>D: the same request
+    D-->>B: the login form, after two redirects of its own
+    B->>G: POST the Lab login, lab@lab.localhost and its password
+    G->>D: the same request
+    D-->>B: a redirect to argocd.lab.localhost/auth/callback, with a code
+    B->>G: GET argocd.lab.localhost/auth/callback with the code
+    G->>A: the same request
+    A->>C: sso.lab.localhost?
+    C-->>A: the Server's address
+    A->>G: POST sso.lab.localhost/token with the code and its client secret
+    G->>D: the same request
+    D-->>A: a token for the email lab@lab.localhost
+    Note over A: that email has the admin role
+    A-->>B: 303 to /, with the cookie argocd.token
+    B->>G: GET argocd.lab.localhost/
+    G->>A: the same request
+    A-->>B: the page, through the Gateway like every answer here
+```
+
+**A UI behind oauth2-proxy**, here Hubble UI. The Gateway asks oauth2-proxy about every request, the callback included, and passes on to the browser whatever it answers except a 200. oauth2-proxy never carries the UI's traffic: once it says 200, the Gateway sends the request to the UI's own Service.
+
+```mermaid
+sequenceDiagram
+    actor B as Browser
+    participant G as Gateway
+    participant O as oauth2-proxy
+    participant D as Dex
+    participant H as Hubble UI
+    B->>G: GET hubble.lab.localhost/
+    G->>O: may this request pass? It has no cookie
+    O-->>G: 302 to sso.lab.localhost/auth, with client_id=oauth2-proxy
+    G-->>B: the same 302
+    B->>G: GET sso.lab.localhost/auth
+    G->>D: the same request
+    D-->>B: the login form, after two redirects of its own
+    B->>G: POST the Lab login, lab@lab.localhost and its password
+    G->>D: the same request
+    D-->>B: a redirect to hubble.lab.localhost/oauth2/callback, with a code
+    B->>G: GET hubble.lab.localhost/oauth2/callback with the code
+    G->>O: may this request pass?
+    O->>G: POST sso.lab.localhost/token with the code and its client secret
+    G->>D: the same request
+    D-->>O: a token for the email lab@lab.localhost
+    O-->>G: 302 to /, with the cookie _oauth2_proxy for .lab.localhost
+    G-->>B: the same 302
+    B->>G: GET hubble.lab.localhost/ with the cookie
+    G->>O: may this request pass? It has the cookie
+    O-->>G: 200
+    G->>H: GET /
+    H-->>G: the page
+    G-->>B: the page
+```
+
+oauth2-proxy finds Dex as ArgoCD does, through CoreDNS and the Gateway. The cookie is for every name under `lab.localhost`, so the Rollouts dashboard's first request already passes the check.
+
+Both diagrams show a browser that Dex doesn't know yet. For one it remembers, Dex answers `GET sso.lab.localhost/auth` with the redirect to the callback straight away, and the form and the POST drop out.
+
+**When Dex or oauth2-proxy is down**, ArgoCD and Grafana still open with their Break-glass logins. The Rollouts dashboard and Hubble UI answer 403 at their addresses, since the Gateway's check fails closed. A port-forward to a UI's Service reaches it, as it never passes the Gateway:
+
+```sh
+kubectl --context k3d-lab -n kube-system port-forward svc/hubble-ui 8080:80
+kubectl --context k3d-lab -n argo-rollouts port-forward svc/argo-rollouts-dashboard 3100:3100
+```
+
+Hubble UI is then at http://localhost:8080, and the Rollouts dashboard at http://localhost:3100/rollouts/. That's no Break-glass login, and no way around the Lab login: whoever can port-forward can already change the Lab with `kubectl`.
 
 ## GitOps
 
@@ -124,7 +217,7 @@ Each component comes from its own upstream chart, never an umbrella chart, and a
 - **Alloy** (`platform/alloy/`) is the only collector: a DaemonSet whose pod on each node scrapes what runs there, the kubelet, cAdvisor and every ServiceMonitor or PodMonitor target, and remote-writes it all to Prometheus. Every series carries a `node` label.
 - **Prometheus** (`platform/prometheus/`) runs only its server, scrapes nothing itself and accepts remote writes. It keeps 7 days on a 10 Gi volume.
 - **kube-state-metrics** and **node-exporter** ship ServiceMonitors that Alloy picks up. node-exporter's `drm` collector reports the GPU Node's GPU. The Prometheus-operator CRDs (`platform/prometheus-operator-crds/`) are only the ServiceMonitor and PodMonitor CRDs; no operator runs.
-- **Grafana** (`platform/grafana/`) has Prometheus, Loki and Tempo as its datasources. Its admin password is new with every Lab: ESO generates it once into the Secret `grafana-admin` (a `Password` generator in its values), so it never goes in Git.
+- **Grafana** (`platform/grafana/`) has Prometheus, Loki and Tempo as its datasources. Anyone can look; changing things takes the Lab login (see Logging in). The password of its Break-glass login is new with every Lab: ESO generates it once into the Secret `grafana-admin` (a `Password` generator in its values), so it never goes in Git.
 
 A chart that ships a ServiceMonitor or PodMonitor is scraped with no change to Alloy, as long as its targets are pods: a target with no pod behind it, such as the API server's endpoints, runs on no node, so no Alloy scrapes it. Alloy and node-exporter tolerate the GPU Node's taint, so its metrics start as soon as it joins.
 
@@ -149,7 +242,7 @@ A Workload sends its traces over OTLP to `alloy.monitoring.svc`: port 4317 for g
 
 Cilium is the Lab's network, and Hubble shows what travels over it. Hubble is part of Cilium (`platform/cilium/values.yaml`); `platform/hubble/` adds its UI's HTTPRoute and its ServiceMonitor.
 
-- **Hubble UI**, at https://hubble.lab.localhost, shows every namespace's flows live, from Hubble Relay, which gathers them from the cilium-agent on every node, the GPU Node included while it's Joined.
+- **Hubble UI**, at https://hubble.lab.localhost, behind the Lab login, shows every namespace's flows live, from Hubble Relay, which gathers them from the cilium-agent on every node, the GPU Node included while it's Joined.
 - **Flow metrics**: every cilium-agent counts the flows it sees, forwarded and dropped, by namespace at both ends, and Alloy scrapes them like any other ServiceMonitor. The dashboard "Hubble network" shows drops by reason and by namespace. DNS and HTTP counts only cover the traffic that a network policy's DNS or HTTP rule sends through Cilium's proxies.
 
 ### Network policy for a Workload
@@ -185,7 +278,7 @@ To add a policy, write a `ValidatingPolicy` (`policies.kyverno.io/v1`, in CEL) i
 
 ## Progressive delivery
 
-**Argo Rollouts** (`platform/argo-rollouts/`) releases Workloads by canary, and its dashboard at https://rollouts.lab.localhost shows every Rollout. Anyone on the Host can promote or abort a Rollout there. A canary's traffic is split for real, by weight, at the Lab's Gateway: Rollouts' Gateway API plugin sets the weights of the Rollout's HTTPRoute, which Cilium applies. ArgoCD leaves those weights alone, as it does the version that Rollouts adds to each of the Rollout's Services' selectors (see GitOps).
+**Argo Rollouts** (`platform/argo-rollouts/`) releases Workloads by canary, and its dashboard at https://rollouts.lab.localhost shows every Rollout, and promotes or aborts one, behind the Lab login. A canary's traffic is split for real, by weight, at the Lab's Gateway: Rollouts' Gateway API plugin sets the weights of the Rollout's HTTPRoute, which Cilium applies. ArgoCD leaves those weights alone, as it does the version that Rollouts adds to each of the Rollout's Services' selectors (see GitOps).
 
 The demo Rollout (`workloads/rollouts-demo/`) is a Demo, so a Lab has it only when asked: build the Lab with `just up --demos`, or add it to a running one with `just demos on`. It's podinfo, at https://rollouts-demo.lab.localhost. A small load generator sends it 5 requests per second through the Gateway. A canary goes through these steps:
 
@@ -203,7 +296,7 @@ To try it, push a change to the branch the Lab tracks, and watch the dashboard, 
 
 ## Secrets
 
-Workloads get their secrets as Kubernetes Secrets from **External Secrets Operator** (`platform/external-secrets/`), which reads them from the Secret Store on the Host. Secrets never go in Git, and survive `just down`.
+Workloads get their secrets as Kubernetes Secrets from **External Secrets Operator** (`platform/external-secrets/`), which reads them from the Secret Store on the Host. Secrets never go in Git, and survive `just down`. The Platform's own, the Lab login and the OIDC clients' secrets, are there too, out of every Workload's reach.
 
 Each secret lives in OpenBao's KV v2 mount `lab/`, at `lab/workloads/<workload>/<key>`, and holds one or more fields. Write one with:
 
@@ -232,6 +325,7 @@ spec:
 ```
 
 - **How ESO logs in:** with OpenBao's Kubernetes auth, as the role `eso`, which can only read `lab/workloads/*`. `just up` points that auth at each new Lab, and nothing in the Lab holds a token of OpenBao's: OpenBao checks each of ESO's short-lived tokens with a TokenReview made with that same token, and accepts only tokens meant for it (the audience `k3d-lab-secret-store`), so no other token of ESO's service account can log in. ESO reaches OpenBao at `https://host.k3d.internal:8200`, the Host's address on the Lab network, which only ESO's controller resolves (through its pod's `hostAliases`), and trusts its certificate through the Lab CA.
+- **The Platform's secrets** live at `lab/platform/`, which the role `eso` can't read. ESO reads them as a second role, `eso-platform`, bound to a ServiceAccount of its own, behind the ClusterSecretStore `secret-store-platform`, which only the namespaces `sso`, `argocd` and `monitoring` may use ([ADR 0013](docs/adr/0013-single-sign-on-is-a-standalone-dex-with-the-lab-login-in-the-secret-store.md)).
 - **What's kept on the Host:** `~/.local/share/k3d-lab/secret-store/` holds OpenBao's Raft data, its unseal key, and `init.json` with the root token and recovery key. The unseal key sits next to the data, so encryption at rest is mostly for show. `just secret-store bao` uses the root token.
 
 ### Backup and restore

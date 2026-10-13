@@ -1,0 +1,60 @@
+# Dex's config, with no secret in it: Dex reads the Lab login's hash and each client's
+# secret from its environment (the Secret dex, in dex.yaml). `just host setup` and
+# `just up` read the clients that have a secretEnv from here (scripts/sso-state.sh), so a
+# new one gets its secret in the Secret Store at the next `just host setup`. It still
+# needs that secret in Dex's environment, from the ExternalSecret in dex.yaml.
+issuer: https://sso.lab.localhost
+# Every instance of Dex shares its signing keys, the logins in progress and the sessions
+# with the others, as custom resources in its own namespace. In memory, each would have
+# its own, and a sign-in that reached two of them would fail. Nothing of it outlives the
+# Lab. Dex creates the CRDs itself as it starts, the way it's meant to be run: a new Dex
+# that keeps one more kind of thing then needs nothing changed here.
+storage:
+  type: kubernetes
+  config: {inCluster: true}
+web: {http: 0.0.0.0:5556}
+oauth2:
+  skipApprovalScreen: true
+  # The password grant, which only Verify's check sso-login uses.
+  passwordConnector: local
+enablePasswordDB: true
+# One sign-in for every UI: Dex remembers the browser that signed in, with its cookie
+# dex_session, and answers the next UI's login without showing its form. Experimental in
+# Dex 2.46, behind the feature flag DEX_SESSIONS_ENABLED (dex.yaml). The sessions are in
+# the storage like everything else, so every instance knows them, and so does a
+# restarted one.
+sessions:
+  # By default no client's sign-in counts for another.
+  ssoSharedWithDefault: all
+  # A day, used or not: Dex's default forgets a session left alone for an hour.
+  absoluteLifetime: 24h
+  validIfNotUsedFor: 24h
+# The Lab login. Dex signs it in by its email: the username is only a claim. A static
+# user has no groups, so each UI maps its admin role to the email.
+staticPasswords:
+  - email: lab@lab.localhost
+    username: lab
+    userID: 0b0d7f5a-6f0e-4c53-9d2c-6a1f3e2b7a74
+    hashFromEnv: LAB_LOGIN_HASH
+staticClients:
+  # The UIs with no login of their own, which oauth2-proxy signs in: each one's callback
+  # is on its own host (platform/oauth2-proxy/).
+  - id: oauth2-proxy
+    name: Lab UIs
+    secretEnv: OAUTH2_PROXY_CLIENT_SECRET
+    redirectURIs:
+      - https://hubble.lab.localhost/oauth2/callback
+      - https://rollouts.lab.localhost/oauth2/callback
+  - id: argocd
+    name: ArgoCD
+    secretEnv: ARGOCD_CLIENT_SECRET
+    redirectURIs: [https://argocd.lab.localhost/auth/callback]
+  - id: grafana
+    name: Grafana
+    secretEnv: GRAFANA_CLIENT_SECRET
+    redirectURIs: [https://grafana.lab.localhost/login/generic_oauth]
+  # Verify's check sso-login. Public and without a redirect URI, so it can only use the
+  # password grant, which needs the Lab login's password anyway.
+  - id: verify
+    name: Verify
+    public: true

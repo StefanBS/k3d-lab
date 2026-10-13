@@ -1,0 +1,23 @@
+# What the Lab adds to k3s's CoreDNS, whose Corefile imports every *.override of this
+# ConfigMap into its server block. CoreDNS picks a change up by itself, without a
+# restart, but only after about a minute.
+#
+# Pods resolve sso.lab.localhost to the Server (ADR 0013). A UI that trades a code for
+# a token with Dex must call the issuer by the name the browser uses, and
+# *.lab.localhost is loopback inside a pod too. The Gateway's Envoy listens on the
+# Server's own network, so that address reaches it from every node; the Gateway's
+# Service only answers pods on the Server. The address is LAB_SERVER_IP in
+# scripts/lib.sh, which `just lint` checks this against. No AAAA: an empty answer,
+# rather than the loopback one that follows.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+data:
+  sso.override: |
+    template IN A sso.lab.localhost {
+      answer "{{ .Name }} 60 IN A 172.28.0.2"
+    }
+    template IN AAAA sso.lab.localhost {
+      rcode NOERROR
+    }
