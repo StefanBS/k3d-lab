@@ -7,6 +7,7 @@
 #   - The Rollouts dashboard and Hubble UI send a request without a session to Dex, and
 #     one sign-in opens both.
 #   - Grafana signs the Lab login in through Dex, as an Admin.
+#   - That sign-in opens ArgoCD too, without Dex asking again.
 #   - ArgoCD's and Grafana's Break-glass logins still work.
 # Every request trusts only the Lab CA (verify.sh exports LAB_CA_CERT). No secret is
 # passed as an argument, where the Host's process list would show it: each goes to curl
@@ -139,6 +140,17 @@ if [[ $who == "$login" && $role == Admin ]]; then
   ok "Grafana signs the Lab login in through Dex, as an Admin"
 else
   fail "Grafana doesn't sign the Lab login in as an Admin: it ends on '${landed%%\?*}', as '${who:-nobody}' with the role '${role:-none}'"
+fi
+
+# One sign-in for every UI: Dex remembers the browser that signed in to Grafana. With
+# that jar, ArgoCD's login goes through Dex and back without the form: nothing here
+# fills it in, so ending on it is a failure.
+landed=$(lab_curl -L -b "$tmp/grafana.jar" -c "$tmp/grafana.jar" -o /dev/null -w '%{http_code} %{url_effective}' "$argocd/auth/login")
+who=$(lab_curl -b "$tmp/grafana.jar" "$argocd/api/v1/session/userinfo" | jq -r '.username // empty' 2>/dev/null) || who=""
+if [[ $landed == "200 $argocd/" && $who == "$login" ]]; then
+  ok "The sign-in to Grafana opens ArgoCD too, without Dex asking again"
+else
+  fail "The sign-in to Grafana doesn't open ArgoCD: its login ends on '${landed%%\?*}', as '${who:-nobody}'"
 fi
 
 # The Break-glass logins, which need neither Dex nor oauth2-proxy.

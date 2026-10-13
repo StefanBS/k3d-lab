@@ -12,6 +12,16 @@ oauth2:
   # The password grant, which only Verify's check sso-login uses.
   passwordConnector: local
 enablePasswordDB: true
+# One sign-in for every UI: Dex remembers the browser that signed in, with its cookie
+# dex_session, and answers the next UI's login without showing its form. Experimental in
+# Dex 2.46, behind the feature flag DEX_SESSIONS_ENABLED (dex.yaml). The sessions are in
+# memory like everything else, so a restart of Dex costs one more sign-in.
+sessions:
+  # By default no client's sign-in counts for another.
+  ssoSharedWithDefault: all
+  # A day, used or not: Dex's default forgets a session left alone for an hour.
+  absoluteLifetime: 24h
+  validIfNotUsedFor: 24h
 # The Lab login. Dex signs it in by its email: the username is only a claim. A static
 # user has no groups, so each UI maps its admin role to the email.
 staticPasswords:

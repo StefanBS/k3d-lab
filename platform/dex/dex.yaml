@@ -50,6 +50,9 @@ spec:
           # The pod waits for the Secret, which ESO makes.
           envFrom:
             - secretRef: {name: dex}
+          env:
+            # The `sessions` block of config.yaml needs it.
+            - {name: DEX_SESSIONS_ENABLED, value: "true"}
           ports:
             - {name: http, containerPort: 5556}
           readinessProbe:
