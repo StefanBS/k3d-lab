@@ -49,12 +49,20 @@ The infrastructure components the Lab provides to Workloads, such as networking,
 _Avoid_: infra, system apps, add-ons
 
 **Secret Store**:
-The vault on the Host that holds the secrets Workloads need. It lives outside the Lab, so it survives tearing the Lab down.
+The vault on the Host that holds the secrets that must outlive a Lab: the ones Workloads need, and the Lab login. It lives outside the Lab, so it survives tearing the Lab down.
 _Avoid_: vault (on its own), secrets manager
 
 **Lab CA**:
 The certificate authority on the Host that signs every TLS certificate the Lab and the Secret Store serve. The Host trusts it once, and it survives tearing the Lab down.
 _Avoid_: self-signed cert, root cert
+
+**Lab login**:
+The one identity that opens every UI of the Lab. It's kept in the Secret Store, so it survives tearing the Lab down.
+_Avoid_: Lab user, SSO user, admin
+
+**Break-glass login**:
+A UI's own local admin login, new with every Lab, for when the Lab login can't be used.
+_Avoid_: admin password, local admin
 
 **Workload**:
 Something deployed into the Lab as an experiment, running on top of the Platform.
