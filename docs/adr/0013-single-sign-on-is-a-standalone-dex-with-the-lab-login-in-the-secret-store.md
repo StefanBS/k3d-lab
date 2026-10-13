@@ -25,7 +25,7 @@ The Rollouts dashboard and Hubble UI had no login, and ArgoCD and Grafana each h
 ## Consequences
 
 - The whole Lab runs on Gateway API's experimental channel. Every Verify check passed on it.
-- Cilium adds one auth filter to the Gateway's whole https listener, and it fails closed. While oauth2-proxy's one pod restarts, the two UIs behind it answer 403 for about 10 seconds, which is accepted. They have no Break-glass login: with Dex or oauth2-proxy down they can't be opened, and the Lab is then changed with `kubectl` or through ArgoCD.
+- Cilium adds one auth filter to the Gateway's whole https listener, and it fails closed. While oauth2-proxy's one pod restarts, the two UIs behind it answer 403 for about 10 seconds, which is accepted. They have no Break-glass login: with Dex or oauth2-proxy down they can't be opened at their addresses. A `kubectl port-forward` to a UI's Service still reaches it, since it never passes the Gateway. That is no way around the login: whoever can port-forward can already change the Lab with `kubectl`.
 - On Cilium 1.20.2, a route with the filter must set `allowedResponseHeaders`, or POST bodies reach the UI cut short (cilium/cilium#48770). Deleting such a route can make the Gateway's other routes answer 403 on open connections (cilium/cilium#49132).
 - oauth2-proxy admits anyone Dex signs in, which is right while there is one identity. A second one would need rules there.
 - A Workload's UI can opt in with the same filter on its HTTPRoute.
