@@ -2,6 +2,7 @@
 # Usage: sso-login.sh
 # Checks single sign-on from the Host, as a browser on it would use it (ADR 0013), with
 # the Lab login's password from the Secret Store:
+#   - Every instance of Dex has the same signing keys, so they share their state.
 #   - Dex gives the Lab login a token for its password, and refuses a wrong one.
 #   - ArgoCD's API takes that token, as its admin.
 #   - The Rollouts dashboard and Hubble UI send a request without a session to Dex, and
@@ -86,6 +87,20 @@ expect_sent_to_dex() {
 }
 
 password=$("$(dirname "$0")/../../scripts/secret-store.sh" bao kv get -mount=lab -field=password platform/sso/login </dev/null)
+
+# Dex's instances share their state: each one's signing keys are the others'. With a
+# state of its own each would have made its own keys, and a UI would refuse a token that
+# another instance signed. Asked of each pod through the Lab's API, since the Gateway
+# picks one itself. The sign-ins below then reach either instance with each request.
+dex_pods=$(kubectl -n sso get pods -l app=dex --field-selector status.phase=Running -o name)
+dex_keys=$(for pod in $dex_pods; do
+  kubectl get --raw "/api/v1/namespaces/sso/pods/${pod#pod/}:5556/proxy/keys" | jq -c '[.keys[].kid] | sort' || echo "no answer from $pod"
+done | sort | uniq -c)
+if [[ $(wc -w <<<"$dex_pods") -ge 2 && $(wc -l <<<"$dex_keys") -eq 1 && $dex_keys == *'["'* ]]; then
+  ok "Dex's $(wc -w <<<"$dex_pods") instances have the same signing keys"
+else
+  fail "Dex's instances don't share their signing keys: $(wc -w <<<"$dex_pods") running, with the keys $(paste -sd' ' <<<"$dex_keys")"
+fi
 
 # The password grant.
 status=$(token_status "$password")

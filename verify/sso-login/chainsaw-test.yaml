@@ -7,11 +7,11 @@ spec:
     The Lab login opens every UI of the Platform (ADR 0013). From a client pod on every
     Ready node, Dex answers at https://sso.lab.localhost, the name the UIs that sign in
     through it call it by. From the Host, with the Lab login's password from the Secret
-    Store: Dex gives a token for it and refuses a wrong one, ArgoCD's API takes that
-    token, the Rollouts dashboard and Hubble UI send a request without a session to Dex
-    and one sign-in opens both, Grafana signs the Lab login in as an Admin, that sign-in
-    opens ArgoCD without Dex asking again, and ArgoCD's and Grafana's Break-glass logins
-    still work.
+    Store: Dex's two instances have the same signing keys, Dex gives a token for the Lab
+    login and refuses a wrong password, ArgoCD's API takes that token, the Rollouts
+    dashboard and Hubble UI send a request without a session to Dex and one sign-in
+    opens both, Grafana signs the Lab login in as an Admin, that sign-in opens ArgoCD
+    without Dex asking again, and ArgoCD's and Grafana's Break-glass logins still work.
   steps:
     - use:
         template: ../lib/deploy-probes.yaml
@@ -24,7 +24,7 @@ spec:
                 name: dex
                 namespace: sso
               status:
-                availableReplicas: 1
+                availableReplicas: 2
         - assert:
             resource:
               apiVersion: apps/v1
@@ -52,6 +52,6 @@ spec:
         - script:
             content: kubectl -n sso logs deploy/oauth2-proxy --tail 20
         - script:
-            content: kubectl -n sso logs deploy/dex --tail 20
+            content: kubectl -n sso logs -l app=dex --prefix --tail 20
         - script:
             content: kubectl -n kube-system get configmap coredns-custom -o yaml | yq .data

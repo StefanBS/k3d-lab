@@ -27,18 +27,55 @@ spec:
     - secretKey: grafana
       remoteRef: {key: platform/sso/clients/grafana, property: secret}
 ---
+# Dex keeps its state as custom resources in this namespace (config.yaml's `storage`),
+# and may do no more than that with the Lab's API.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dex
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dex
+rules:
+  - apiGroups: [dex.coreos.com]
+    resources: ["*"]
+    verbs: [get, list, create, update, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dex
+subjects:
+  - {kind: ServiceAccount, name: dex}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: dex
 spec:
-  replicas: 1
+  # Two, which share their state (config.yaml's `storage`): a sign-in's requests can
+  # each reach either, and one can restart while the other signs in.
+  replicas: 2
   selector:
     matchLabels: {app: dex}
   template:
     metadata:
       labels: {app: dex}
     spec:
+      serviceAccountName: dex
+      # On different nodes when two can take them, so one node's restart leaves a Dex.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app: dex}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001

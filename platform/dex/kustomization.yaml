@@ -1,8 +1,10 @@
-# Dex, the Lab's single sign-on provider, at https://sso.lab.localhost (ADR 0013). It
-# keeps nothing: one static user, the Lab login, and the clients in config.yaml.
+# Dex, the Lab's single sign-on provider, at https://sso.lab.localhost (ADR 0013): one
+# static user, the Lab login, and the clients in config.yaml. Its instances share what
+# they keep, as custom resources in their namespace (crds.yaml), which go with the Lab.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - crds.yaml
   - dex.yaml
 # A change to the config restarts Dex, through the ConfigMap's name.
 configMapGenerator:
