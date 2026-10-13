@@ -106,3 +106,18 @@ secret() {
   run sso_secret_version <<<"Error making API request."
   [[ $status -ne 0 ]]
 }
+
+@test "bao found the secret: its answer is the secret" {
+  run sso_secret_answer 0 <<<"$(secret 1 '{"secret": "a"}')"
+  [[ $status -eq 0 && $(jq -r .data.data.secret <<<"$output") == a ]]
+}
+
+@test "bao says there's no secret there: nothing, and no failure" {
+  run sso_secret_answer 2 <<<"No value found at lab/data/platform/sso/login"
+  [[ $status -eq 0 && -z $output ]]
+}
+
+@test "bao fails for any other reason, such as a sealed Secret Store: fails, rather than saying there's none" {
+  run sso_secret_answer 2 <<<"Error making API request. Code: 503. Errors: * Vault is sealed"
+  [[ $status -ne 0 ]]
+}

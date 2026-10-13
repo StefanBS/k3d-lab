@@ -1,6 +1,6 @@
-# Which OIDC clients keep a secret in the Secret Store (ADR 0013). Sourced by
-# secret-store.sh, and on its own by scripts/tests/, so it sets no shell options and runs
-# nothing when sourced.
+# Which secrets single sign-on keeps in the Secret Store (ADR 0013), and which of them it
+# still lacks. Sourced by secret-store.sh, and on its own by scripts/tests/, so it sets
+# no shell options and runs nothing when sourced.
 # shellcheck shell=bash
 
 # sso_secret_clients: reads Dex's config (platform/dex/config.yaml) on stdin, and prints
@@ -27,6 +27,21 @@ sso_secrets() {
       echo "platform/sso/clients/$client secret"
     fi
   done
+}
+
+# sso_secret_answer <status>: reads what `bao kv get -format=json` printed on stdin,
+# errors included, given the status it exited with. Prints the secret, or nothing when
+# the Secret Store says it has none there. Fails on any other answer, such as a Secret
+# Store that's sealed: that must not read as "none".
+sso_secret_answer() {
+  local status=$1 answer
+  answer=$(cat)
+  if ((status == 0)); then
+    printf '%s\n' "$answer"
+  elif [[ $answer != *"No value found"* ]]; then
+    printf '%s\n' "$answer" >&2
+    return 1
+  fi
 }
 
 # sso_missing_fields <field>...: reads a secret on stdin, as `bao kv get -format=json`

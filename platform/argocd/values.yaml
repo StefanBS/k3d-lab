@@ -9,7 +9,7 @@ configs:
     # kind, keep Applications OutOfSync forever.
     controller.diff.server.side: true
   # Single sign-on with the Lab login, through Dex at https://sso.lab.localhost
-  # (ADR 0013). The local admin stays, as the Break-glass login.
+  # (ADR 0013). ArgoCD's own admin stays, as the Break-glass login.
   cm:
     # The client secret is read from the Secret argocd-sso, which ESO makes from the
     # Secret Store (platform/argocd-sso/). There's no rootCA here, which would put a

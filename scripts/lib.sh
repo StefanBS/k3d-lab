@@ -238,12 +238,11 @@ component_namespace() { yq '.namespace' "$LAB_ROOT/$1/component.yaml"; }
 declare -A PLATFORM_FACTS=(
   [argocd.host]='platform/argocd/values.yaml|.global.domain'
   [grafana.url]='platform/grafana/values.yaml|.["grafana.ini"].server.root_url'
-  # The Secret ESO generates Grafana's admin login into.
+  # The Secret ESO generates Grafana's Break-glass login into.
   [grafana.admin-secret]='platform/grafana/values.yaml|.admin.existingSecret'
   [rollouts.host]='platform/argo-rollouts/values.yaml|.dashboard.httproute.hostnames[0]'
   [hubble.host]='platform/hubble/hubble.yaml|select(.kind == "HTTPRoute") | .spec.hostnames[0]'
-  # Single sign-on: Dex's address, and the Lab login, which signs in by its email.
-  [sso.url]='platform/dex/config.yaml|.issuer'
+  # The Lab login, which signs in by its email.
   [sso.login]='platform/dex/config.yaml|.staticPasswords[0].email'
   # What pods resolve Dex's name to: the Server, where the Gateway listens.
   [sso.server-ip]='platform/coredns-custom/coredns-custom.yaml|.data["sso.override"] | capture("IN A (?P<ip>[0-9.]+)") | .ip'

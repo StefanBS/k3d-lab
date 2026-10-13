@@ -35,14 +35,14 @@ spec:
                 availableReplicas: 1
         # CoreDNS picks its entry for the name up by itself, but only a minute or so
         # after ArgoCD applies it (platform/coredns-custom/), so each pod keeps trying
-        # for 1m, which keeps a few nodes within the exec timeout. busybox's wget
+        # for up to 1m, which keeps a few nodes within the exec timeout. busybox's wget
         # doesn't check the certificate; the Host's requests, below, do.
         - script:
             content: >-
               ../lib/on-ready-nodes.sh "$NAMESPACE" app=client
-              -- sh -c 'for attempt in $(seq 12); do
+              -- sh -c 'for attempt in $(seq 6); do
               wget -qO /dev/null -T 5 https://sso.lab.localhost/.well-known/openid-configuration && exit 0;
-              sleep 5; done; exit 1'
+              sleep 5; done; echo "no answer from https://sso.lab.localhost"; exit 1'
         - script:
             content: ../lib/sso-login.sh
       catch:

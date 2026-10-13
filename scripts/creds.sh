@@ -19,7 +19,7 @@ hubble_url=https://$(platform_fact hubble.host)
 
 # `just host setup` generated it, once.
 lab_password=$(secret_store_bao kv get -mount=lab -field=password platform/sso/login </dev/null)
-# ArgoCD generates its admin password at install and keeps it in this Secret.
+# The Break-glass logins. ArgoCD generates its own at install, and keeps it in this Secret.
 argocd_password=$(kc -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
 # `just up` generates Grafana's.
 grafana_login=$(kc -n "$grafana_ns" get secret "$grafana_secret" -o json)

@@ -1,7 +1,8 @@
 # Dex's config, with no secret in it: Dex reads the Lab login's hash and each client's
 # secret from its environment (the Secret dex, in dex.yaml). `just host setup` and
 # `just up` read the clients that have a secretEnv from here (scripts/sso-state.sh), so a
-# new one gets its secret in the Secret Store at the next `just host setup`.
+# new one gets its secret in the Secret Store at the next `just host setup`. It still
+# needs that secret in Dex's environment, from the ExternalSecret in dex.yaml.
 issuer: https://sso.lab.localhost
 # Nothing to keep: a restart only ends the logins in progress, and makes new signing keys.
 storage: {type: memory}

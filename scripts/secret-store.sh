@@ -297,12 +297,7 @@ sso_secret_read() {
   local out status=0
   # Never from stdin, which is the caller's list of secrets.
   out=$(secret_store_bao kv get -mount=lab -format=json "$1" 2>&1 </dev/null) || status=$?
-  if ((status == 0)); then
-    printf '%s\n' "$out"
-  elif [[ $out != *"No value found"* ]]; then
-    printf '%s\n' "$out" >&2
-    return 1
-  fi
+  sso_secret_answer "$status" <<<"$out"
 }
 
 # sso_secrets_missing: prints "<path under lab/> <field>..." for each of single
@@ -327,6 +322,9 @@ sso_secrets_exist() {
 fix_sso_secrets_exist() {
   local missing path fields
   missing=$(sso_secrets_missing) || die "can't read single sign-on's secrets from the Secret Store"
+  # Nothing, when the check only failed for want of an answer: the loop would still
+  # read one empty line.
+  [[ -n $missing ]] || return 0
   while read -r path fields; do
     changed "Generating lab/$path ($fields) in the Secret Store"
     # shellcheck disable=SC2086 # one argument per field.

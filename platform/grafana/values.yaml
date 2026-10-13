@@ -1,5 +1,5 @@
 # Anyone can look without logging in; changing things takes the Lab login, through Dex
-# (auth.generic_oauth, below). The local admin stays as the Break-glass login, which ESO
+# (auth.generic_oauth, below). Grafana's own admin stays as the Break-glass login, which ESO
 # generates into the Secret named here (extraObjects, below). `just creds` prints both.
 admin:
   existingSecret: grafana-admin
@@ -77,7 +77,7 @@ datasources:
           nodeGraph:
             enabled: true
 # Grafana's OIDC client secret, from the Secret grafana-sso (extraObjects, below).
-# Grafana's pod waits for it, as it does for the admin login's.
+# Grafana's pod waits for it, as it does for the Break-glass login's.
 envValueFrom:
   GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
     secretKeyRef:
@@ -111,7 +111,7 @@ testFramework:
 # Modest requests for a Host short on RAM.
 resources:
   requests: {cpu: 25m, memory: 128Mi}
-# The admin login: a new password for each Lab, generated once, so it never goes in
+# The Break-glass login: a new password for each Lab, generated once, so it never goes in
 # Git. Grafana's pod waits for the Secret. The chart runs these through tpl, so they
 # use no ESO templates: rewrite renames the generator's key, and Merge adds the user.
 # The last is the OIDC client secret, from the Secret Store: the same value Dex has.

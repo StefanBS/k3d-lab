@@ -46,11 +46,11 @@ secret_value() {
   kubectl -n "$1" get secret "$2" -o json | KEY=$3 yq -p json '.data[strenv(KEY)] | @base64d'
 }
 
-# Usage: token <password>
+# Usage: token_status <password>
 # Asks Dex for a token for the Lab login with that password, through Verify's own
 # client, which can only use this grant. Prints the HTTP status, and leaves Dex's answer
 # in $tmp/token.
-token() {
+token_status() {
   printf %s "$1" | lab_curl -o "$tmp/token" -w '%{http_code}' "$sso/token" \
     -d grant_type=password -d client_id=verify -d 'scope=openid email' \
     --data-urlencode "username=$login" --data-urlencode password@-
@@ -87,18 +87,19 @@ expect_sent_to_dex() {
 password=$("$(dirname "$0")/../../scripts/secret-store.sh" bao kv get -mount=lab -field=password platform/sso/login </dev/null)
 
 # The password grant.
-status=$(token "$password")
+status=$(token_status "$password")
 id_token=$(jq -r '.id_token // empty' "$tmp/token" 2>/dev/null) || id_token=""
 if [[ $status == 200 && -n $id_token ]]; then
   ok "Dex gives the Lab login a token for its password"
 else
   fail "Dex gives the Lab login no token for its password: HTTP $status"
 fi
-status=$(token "not-$password")
-if [[ $status != 200 ]] && ! jq -e 'has("id_token")' "$tmp/token" >/dev/null 2>&1; then
-  ok "Dex refuses a wrong password (HTTP $status)"
+status=$(token_status "not-$password")
+# Only a refusal counts: a Dex that's down answers a wrong password with no token too.
+if [[ $status == 401 ]] && ! jq -e 'has("id_token")' "$tmp/token" >/dev/null 2>&1; then
+  ok "Dex refuses a wrong password"
 else
-  fail "Dex gives a token for a wrong password"
+  fail "Dex doesn't refuse a wrong password: HTTP $status"
 fi
 
 # ArgoCD takes Dex's token, and maps the Lab login to its admin role: listing

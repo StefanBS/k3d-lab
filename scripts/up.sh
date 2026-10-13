@@ -123,8 +123,8 @@ kc wait --for=condition=Ready nodes --all --timeout=5m >/dev/null
 # from this ConfigMap. argocd-server mounts it, so ArgoCD's comes before ArgoCD; Dex's
 # other clients start later, once ArgoCD syncs them.
 log "Giving single sign-on's clients the Lab CA"
-for client in argocd grafana oauth2-proxy; do
-  lab_ca_configmap "$(component_namespace "platform/$client")"
+for component in argocd grafana oauth2-proxy; do
+  lab_ca_configmap "$(component_namespace "platform/$component")"
 done
 
 install_component argocd
