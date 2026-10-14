@@ -14,9 +14,10 @@ source "$(dirname "$0")/run-diagnostics.sh"
 
 usage="usage: just track [<branch or tag>] [--debug]"
 revision=''
+debug=''
 for arg; do
   case $arg in
-    --debug) RUN_DEBUG=1 ;;
+    --debug) debug=1 ;;
     -*) die "unknown argument '$arg'; $usage" ;;
     *)
       [[ -z $revision ]] || die "$usage"
@@ -29,7 +30,7 @@ done
 
 # A sync can be heavy enough for k3s to stall on its datastore, and the pressure then says
 # why (verify.sh).
-[[ -z $RUN_DEBUG ]] || record_pressure
+[[ -z $debug ]] || record_pressure
 
 need_root_application
 commit=$(pushed_commit "$revision")
@@ -37,7 +38,7 @@ commit=$(pushed_commit "$revision")
 paused=$(kc -n argocd get appprojects -o json | paused_applications | paste -sd' ')
 [[ -z $paused ]] || die "paused, so they'd never sync $revision: $paused; 'just resume <name>' each first"
 start_run_clock
-trap 'report_run track' EXIT
+trap 'report_run track "$debug"' EXIT
 
 log "Pointing the Lab at $revision (${commit:0:7})"
 root_application_track "$revision"
@@ -65,4 +66,4 @@ kc -n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overw
 log "Waiting for every Application to sync $revision"
 wait_settled 900 --at "$commit"
 
-[[ -z $RUN_DEBUG ]] || exec "$LAB_ROOT/scripts/verify.sh"
+[[ -z $debug ]] || exec "$LAB_ROOT/scripts/verify.sh"

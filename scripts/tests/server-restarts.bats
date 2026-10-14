@@ -51,29 +51,60 @@ SLOW='time="2026-10-09T10:21:00Z" level=warning msg="Slow SQL: DELETE FROM kine 
   [[ -z $output ]]
 }
 
-# server_stall < logs: the stall that matters most, when it was, and what k3s did: the
-# first death, else the first restart, else the first slow SQL.
+# server_cause <outcome> < logs: the Death, Restart or Stall that says most about why, when
+# it was, and what k3s did: the first Death, else the first Restart, else the first slow
+# SQL. Work that failed counts any of them; work that succeeded counts only a Restart.
 
-@test "stall: slow SQL, then a fatal error: the fatal error, which killed k3s" {
-  run server_stall < <(printf '%s\n' "$ADDON" "$SLOW" "$FATAL" "$START_1")
+@test "cause, failed: slow SQL, then a fatal error: the Death, which killed k3s" {
+  run server_cause failed < <(printf '%s\n' "$ADDON" "$SLOW" "$FATAL" "$START_1")
   [[ $status -eq 0 ]]
   [[ $output == "2026-10-09T10:21:01Z died" ]]
 }
 
-@test "stall: slow SQL, then a restart without a fatal error, as after the OOM killer: the restart" {
-  run server_stall < <(printf '%s\n' "$SLOW" "$ADDON" "$START_2")
+@test "cause, failed: slow SQL, then a Restart without a fatal error, as after the OOM killer: the Restart" {
+  run server_cause failed < <(printf '%s\n' "$SLOW" "$ADDON" "$START_2")
   [[ $status -eq 0 ]]
   [[ $output == "2026-10-09T10:26:06Z restarted" ]]
 }
 
-@test "stall: only slow SQL: its first time" {
-  run server_stall < <(printf '%s\n' "$ADDON" "$SLOW" "${SLOW/10:21:00/10:22:00}")
+@test "cause, failed: only slow SQL: its first time" {
+  run server_cause failed < <(printf '%s\n' "$ADDON" "$SLOW" "${SLOW/10:21:00/10:22:00}")
   [[ $status -eq 0 ]]
   [[ $output == "2026-10-09T10:21:00Z logged slow SQL" ]]
 }
 
-@test "stall: only the Addon controller starting: no stall" {
-  run server_stall < <(printf '%s\n' "$ADDON")
+@test "cause, failed: a fatal error, not yet restarted: the Death" {
+  run server_cause failed < <(printf '%s\n' "$SLOW" "$FATAL")
+  [[ $status -eq 0 ]]
+  [[ $output == "2026-10-09T10:21:01Z died" ]]
+}
+
+@test "cause, failed: only the Addon controller starting: none" {
+  run server_cause failed < <(printf '%s\n' "$ADDON")
+  [[ $status -eq 1 ]]
+  [[ -z $output ]]
+}
+
+@test "cause, succeeded: a Death, then a Restart: still the Death" {
+  run server_cause succeeded < <(printf '%s\n' "$SLOW" "$FATAL" "$START_1" "$ADDON")
+  [[ $status -eq 0 ]]
+  [[ $output == "2026-10-09T10:21:01Z died" ]]
+}
+
+@test "cause, succeeded: a Restart alone: the Restart" {
+  run server_cause succeeded < <(printf '%s\n' "$SLOW" "$START_2" "$ADDON")
+  [[ $status -eq 0 ]]
+  [[ $output == "2026-10-09T10:26:06Z restarted" ]]
+}
+
+@test "cause, succeeded: only slow SQL, which the work waited out: none (#135)" {
+  run server_cause succeeded < <(printf '%s\n' "$ADDON" "$SLOW")
+  [[ $status -eq 1 ]]
+  [[ -z $output ]]
+}
+
+@test "cause, succeeded: a fatal error, not yet restarted: none, since only a Restart counts" {
+  run server_cause succeeded < <(printf '%s\n' "$SLOW" "$FATAL")
   [[ $status -eq 1 ]]
   [[ -z $output ]]
 }
