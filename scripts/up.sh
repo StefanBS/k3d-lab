@@ -116,7 +116,7 @@ kc apply --server-side -k "$LAB_ROOT/platform/gateway-api" >/dev/null
 install_component cilium
 
 log "Waiting for every node to be Ready"
-kc wait --for=condition=Ready nodes --all --timeout=5m >/dev/null
+wait_nodes_ready 300
 
 # What signs in through Dex calls it over TLS from the Lab CA (ADR 0013), and trusts it
 # from this ConfigMap. argocd-server mounts it, so ArgoCD's comes before ArgoCD; Dex's
@@ -188,12 +188,10 @@ EOF
 # Settled counts only those that ArgoCD lists.
 log "Waiting for ArgoCD to sync the Lab"
 mapfile -t appsets < <(helm template gitops "$LAB_ROOT/gitops" --show-only templates/applicationsets.yaml |
-  yq -N 'select(.kind == "ApplicationSet") | "applicationset/" + .metadata.name')
-# One at a time: given several, --for=create fails at once on any that don't exist yet.
-for appset in "${appsets[@]}"; do
-  kc -n argocd wait "$appset" --for=create --timeout=5m >/dev/null
-done
-kc -n argocd wait "${appsets[@]}" --for=condition=ResourcesUpToDate --timeout=5m >/dev/null
+  yq -N 'select(.kind == "ApplicationSet") | .metadata.name')
+# Without names, the wait would count whichever ApplicationSets are listed.
+((${#appsets[@]})) || die "the gitops chart renders no ApplicationSets"
+wait_applicationsets 300 "${appsets[@]}"
 wait_settled 900 --at "$commit"
 
 [[ -z $RUN_DEBUG ]] || exec "$LAB_ROOT/scripts/verify.sh"
