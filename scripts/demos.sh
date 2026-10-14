@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # Adds the Demos to the running Lab, or removes them, without rebuilding it, and stops
-# once their Applications are Synced and Healthy, or gone with their namespaces.
+# once their Applications are Settled, or gone with their namespaces.
 # Usage: demos.sh on|off. `just up --demos` builds a Lab with them from the start.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=demos-state.sh
-source "$(dirname "$0")/demos-state.sh"
 
 (($# == 1)) && [[ $1 == on || $1 == off ]] || die "usage: just demos on|off"
-if [[ $1 == on ]]; then demos=true want=ready; else demos=false want=gone; fi
+if [[ $1 == on ]]; then demos=true gone=(); else demos=false gone=(--gone); fi
 
 need_root_application
 # The Demos, as this checkout has them, like the checks that verify runs.
@@ -24,8 +22,7 @@ yq -n -o json ".metadata.annotations.\"argocd.argoproj.io/refresh\" = \"hard\" |
   kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
 
 # Run again on a Lab that already has them, or doesn't, it finds nothing to wait for.
-still_pending() { kc -n argocd get applications -o json | demos_pending "$want" "${demo_components[@]##*/}"; }
-wait_until_none 600 "the Demos' Applications aren't $want" still_pending
+wait_settled 600 "${gone[@]}" "${demo_components[@]##*/}"
 [[ $1 == off ]] || exit 0
 
 # namespace_deleted <name>: asks for the namespace to be deleted, and succeeds once it's

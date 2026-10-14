@@ -31,12 +31,5 @@ fi
 # Without a refresh, ArgoCD would compare the Application again only at its next poll.
 kc -n argocd annotate application "$application" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
 log "Waiting for ArgoCD to put $application back as Git has it"
-# Prints the Application's state, until that's Synced and Healthy.
-unsettled() {
-  local state
-  state=$(kc -n argocd get application "$application" \
-    -o jsonpath='{.status.sync.status}, {.status.health.status}') || return
-  [[ $state == "Synced, Healthy" ]] || echo "$state"
-}
-wait_until_none 600 "$application isn't Synced and Healthy" unsettled
+wait_settled 600 "$application"
 log "Resumed $application"

@@ -80,6 +80,10 @@ _Avoid_: GPU job, GPU app
 A Workload's or Platform component's state while ArgoCD neither syncs nor self-heals its Application (`just pause`), so changes made by hand to it stay until `just resume` puts Git back.
 _Avoid_: frozen, suspended, detached
 
+**Settled**:
+An Application's state once ArgoCD has synced it at the commit the Lab tracks and it's Healthy. `just up`, `track`, `demos`, `resume` and `gpu join` each wait for the Applications they change to be Settled.
+_Avoid_: ready, done, caught up
+
 ### Network policy
 
 **Guardrails**:

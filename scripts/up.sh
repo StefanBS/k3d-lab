@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the Lab from scratch, and stops once every Application is Synced and Healthy.
+# Builds the Lab from scratch, and stops once every Application is Settled.
 # Usage: up.sh [REVISION=<branch or tag>] [--demos] [--debug]. ArgoCD reads the Lab from that
 # revision of LAB_REPO. By default, that's the branch checked out here, since verify runs
 # the checks from this checkout: a Lab built from another branch would fail checks it was
@@ -57,7 +57,7 @@ $sso_missing"
 taken=$(lab_host_ports_taken)
 [[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
 $taken"
-pushed_commit "$revision" >/dev/null
+commit=$(pushed_commit "$revision")
 trap 'report_run up' EXIT
 
 # Makes / rshared inside the k3d Nodes, which Cilium's bpffs mount needs.
@@ -184,8 +184,8 @@ EOF
 
 # The root Application can be Healthy before it has even created the ApplicationSets,
 # so they are waited for by name, rendered from the same chart. Once each says
-# ResourcesUpToDate, every Application exists to be waited for: `wait --all` waits only
-# for those it finds when it starts.
+# ResourcesUpToDate, every Application exists to be waited for: the wait for them to be
+# Settled counts only those that ArgoCD lists.
 log "Waiting for ArgoCD to sync the Lab"
 mapfile -t appsets < <(helm template gitops "$LAB_ROOT/gitops" --show-only templates/applicationsets.yaml |
   yq -N 'select(.kind == "ApplicationSet") | "applicationset/" + .metadata.name')
@@ -194,8 +194,6 @@ for appset in "${appsets[@]}"; do
   kc -n argocd wait "$appset" --for=create --timeout=5m >/dev/null
 done
 kc -n argocd wait "${appsets[@]}" --for=condition=ResourcesUpToDate --timeout=5m >/dev/null
-kc -n argocd wait application/root --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
-kc -n argocd wait applications --all --for=jsonpath='{.status.sync.status}'=Synced --timeout=15m >/dev/null
-kc -n argocd wait applications --all --for=jsonpath='{.status.health.status}'=Healthy --timeout=15m >/dev/null
+wait_settled 900 --at "$commit"
 
 [[ -z $RUN_DEBUG ]] || exec "$LAB_ROOT/scripts/verify.sh"

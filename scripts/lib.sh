@@ -84,28 +84,8 @@ retry() {
   done
 }
 
-# wait_until_none <seconds> <what's late> <command>...: runs the command every 5 seconds
-# until it prints nothing, each line it prints being something still pending. Logs what's
-# pending whenever that changes, and gives up after that many seconds.
-wait_until_none() {
-  local seconds=$1 late=$2 pending last=''
-  shift 2
-  local deadline=$((SECONDS + seconds))
-  while :; do
-    # A sync can be heavy enough for k3s to restart, so a failed command is waited out too.
-    pending=$("$@" 2>/dev/null) || pending="the Lab's API isn't answering"
-    [[ -n $pending ]] || return 0
-    if [[ $pending != "$last" ]]; then
-      log "Still waiting: $(wait_summary <<<"$pending")"
-      last=$pending
-    fi
-    ((SECONDS < deadline)) || die "$late after $((seconds / 60)) minutes:"$'\n'"$pending"
-    sleep 5
-  done
-}
-# How wait_until_none logs what's pending, which it reads on stdin. A script that waits
-# for too many lines to log whole defines its own.
-wait_summary() { paste -sd';'; }
+# shellcheck source=wait.sh
+source "$LAB_ROOT/scripts/wait.sh"
 
 # What the scripts record about the Lab, outside the repo.
 LAB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/k3d-lab
@@ -139,6 +119,36 @@ record_pressure() {
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
+# shellcheck source=applications-state.sh
+source "$LAB_ROOT/scripts/applications-state.sh"
+
+# wait_settled <seconds> [--at <commit>] [--group <group>] [--gone] [<name>...]: waits
+# until the Lab's Applications are Settled, as applications_unsettled takes the options,
+# with --at a commit of LAB_REPO. Gives up after that many seconds.
+wait_settled() {
+  local seconds=$1 late="these Applications aren't Settled" args=()
+  shift
+  while (($#)); do
+    case $1 in
+      --at)
+        args+=(--at "$LAB_REPO" "$2")
+        shift 2
+        ;;
+      --gone)
+        late="these Applications aren't gone"
+        args+=("$1")
+        shift
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+  wait_until_none "$seconds" "$late" applications_in_lab_unsettled "${args[@]}"
+}
+applications_in_lab_unsettled() { kc -n argocd get applications -o json | applications_unsettled "$@"; }
+
 need_lab() { lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"; }
 # For the scripts that patch the root Application, which up.sh creates last.
 need_root_application() {

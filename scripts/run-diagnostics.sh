@@ -28,7 +28,7 @@ warn_if_server_restarted() {
 
 # A run of up or track is a regular one unless it's given --debug. Both kinds leave the
 # same Lab. A debugging run also records the pressure and ends with verify, which prints
-# every diagnostic; a regular run stops once every Application is Synced and Healthy.
+# every diagnostic; a regular run stops once every Application is Settled.
 RUN_DEBUG=''
 # LAB_RUN_SINCE: from when a restart of k3s on the Server counts against the run, as
 # Docker's --since takes it. Unset until the run has done what restarts it on purpose.
