@@ -7,8 +7,6 @@
 # (run-diagnostics.sh).
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=track-state.sh
-source "$(dirname "$0")/track-state.sh"
 # shellcheck source=pause-state.sh
 source "$(dirname "$0")/pause-state.sh"
 # shellcheck source=run-diagnostics.sh
@@ -51,12 +49,6 @@ REVISION=$revision yq -n -o json '
   .spec.source.helm.valuesObject.revision = strenv(REVISION)' |
   kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
 
-# Waits until applications_behind prints nothing for the Applications that `kc get` selects.
-still_behind() { kc -n argocd get applications "$@" -o json | applications_behind "$LAB_REPO" "$commit"; }
-wait_caught_up() { wait_until_none 900 "ArgoCD hasn't caught up with $revision" still_behind "$@"; }
-# Every Application starts out behind, so the log names them without saying why.
-wait_summary() { cut -d: -f1 | paste -sd' '; }
-
 # True once the ApplicationSet controller has taken every refresh asked of it: it removes
 # the annotation when it has.
 applicationsets_refreshed() {
@@ -67,7 +59,7 @@ applicationsets_refreshed() {
 }
 
 log "Waiting for the root Application to sync $revision"
-wait_caught_up --field-selector metadata.name=root
+wait_settled 900 --at "$commit" root
 # The ApplicationSets read the branch's components again, as up.sh waits for them to:
 # when only its commit changed, their own spec didn't, so they'd wait for their next
 # poll to generate a new component's Application.
@@ -78,6 +70,6 @@ kc -n argocd wait applicationsets --all --for=condition=ResourcesUpToDate --time
 # Likewise, an Application whose spec the root's sync didn't change waits for a refresh.
 kc -n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overwrite >/dev/null
 log "Waiting for every Application to sync $revision"
-wait_caught_up
+wait_settled 900 --at "$commit"
 
 [[ -z $RUN_DEBUG ]] || exec "$LAB_ROOT/scripts/verify.sh"

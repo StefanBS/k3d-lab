@@ -90,7 +90,7 @@ cmd_join() {
   retry 180 platform_daemonsets_ready "$apps" || die "the Platform's DaemonSets aren't all Ready on the GPU Node; see 'kubectl --context $LAB_CONTEXT get pods -A -o wide'"
   # ArgoCD sees a DaemonSet Healthy again a few seconds after its pods are. Only the
   # Platform's: a GPU Workload's Application is Healthy once its pod runs, in its own time.
-  kc -n argocd wait applications -l k3d-lab/group=platform --for=jsonpath='{.status.health.status}'=Healthy --timeout=3m >/dev/null
+  wait_settled 180 --group platform
   node=$(gpu_node_in_lab)
   log "The GPU Node is Joined as ${node%% *}"
 }
