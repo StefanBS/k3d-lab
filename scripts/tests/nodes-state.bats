@@ -40,6 +40,10 @@ k3d-lab-agent-0: NotReady" "$(node k3d-lab-server-0 False)" "$(node k3d-lab-agen
   expect "gpu: NotReady" "$(node gpu)"
 }
 
+@test "no nodes listed, as before the Server registers itself: pending" {
+  expect "no nodes yet"
+}
+
 @test "no nodes to read, as when the request failed: fails" {
   run nodes_unready <<<""
   [[ $status -ne 0 ]]

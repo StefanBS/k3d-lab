@@ -50,6 +50,10 @@ demos: not ResourcesUpToDate" platform workloads demos -- \
     "$(applicationset demos Unknown)" "$(applicationset platform True)" "$(applicationset other False)"
 }
 
+@test "none listed, before the root Application creates them: pending" {
+  expect "no ApplicationSets yet" --
+}
+
 @test "no ApplicationSets to read, as when the request failed: fails" {
   run applicationsets_pending platform <<<""
   [[ $status -ne 0 ]]

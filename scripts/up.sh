@@ -189,6 +189,8 @@ EOF
 log "Waiting for ArgoCD to sync the Lab"
 mapfile -t appsets < <(helm template gitops "$LAB_ROOT/gitops" --show-only templates/applicationsets.yaml |
   yq -N 'select(.kind == "ApplicationSet") | .metadata.name')
+# Without names, the wait would count whichever ApplicationSets are listed.
+((${#appsets[@]})) || die "the gitops chart renders no ApplicationSets"
 wait_applicationsets 300 "${appsets[@]}"
 wait_settled 900 --at "$commit"
 
