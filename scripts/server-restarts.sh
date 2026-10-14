@@ -1,4 +1,4 @@
-# Whether k3s on the Server restarted or stalled, from its logs. Sourced by
+# Whether k3s on the Server restarted, died or stalled, from its logs. Sourced by
 # run-diagnostics.sh, and on its own by scripts/tests/, so it sets no shell options and
 # runs nothing when sourced.
 # shellcheck shell=bash
@@ -33,16 +33,19 @@ server_restarts() {
     }'
 }
 
-# server_stall < <k3s logs>: prints the stall that says most about why k3s failed, as the
-# logs give its time, and what k3s did then. The first death, since a later one may only
-# follow from it; else the first restart, as after the OOM killer, which logs no fatal
-# error; else the first slow SQL. Fails when k3s did none of them.
-server_stall() {
-  awk "$SERVER_LOG_FIELD"'
+# server_cause <succeeded|failed> < <k3s logs>: prints the Death, Restart or Stall that says
+# most about why, as the logs give its time, and what k3s did then. The first Death, since
+# a later one may only follow from it; else the first Restart, as after the OOM killer,
+# which logs no fatal error; else the first slow SQL. Work that failed counts any of them.
+# Work that succeeded counts them only if k3s restarted: it waited out a Stall, and a Death
+# without a Restart would have failed it (#135). Fails when none counts.
+server_cause() {
+  awk -v outcome="$1" "$SERVER_LOG_FIELD"'
     /level=fatal/ && died == "" { died = field("time") }
     /msg="Starting k3s v/ && restarted == "" { restarted = field("time") }
     /msg="Slow SQL/ && slow == "" { slow = field("time") }
     END {
+      if (outcome == "succeeded" && restarted == "") exit 1
       if (died != "") print died, "died"
       else if (restarted != "") print restarted, "restarted"
       else if (slow != "") print slow, "logged slow SQL"

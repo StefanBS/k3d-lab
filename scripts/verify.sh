@@ -5,8 +5,8 @@
 # Leading plain words name the checks to run, the folders in verify/; without any, every
 # check runs. The rest go to `chainsaw test`, such as --pause-on-failure. VERBOSE=1 also
 # shows what each passing step did, such as the OK lines of a check's script.
-# LAB_RUN_SINCE, a time that a debugging run of up or track sets (run-diagnostics.sh),
-# makes it also warn of k3s restarts on the Server between then and the checks' start.
+# Run by a Debugging run of up or track, it also warns of a Restart during the run
+# (run-diagnostics.sh).
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=host.sh
@@ -15,8 +15,6 @@ source "$(dirname "$0")/host.sh"
 source "$(dirname "$0")/pause-state.sh"
 # shellcheck source=run-diagnostics.sh
 source "$(dirname "$0")/run-diagnostics.sh"
-# shellcheck source=below.sh
-source "$(dirname "$0")/below.sh"
 
 # The checks that call the Lab from the Host trust only the Lab CA.
 export LAB_CA_CERT
@@ -33,74 +31,19 @@ done
 # k3s may stall on its datastore during the run, and the pressure then says why.
 record_pressure
 
-# warn_if_server_stalled <since> <consequence>: WARNs when k3s on the Server restarted
-# since then, given as Docker's --since takes it, since checks then fail for that reason
-# rather than the change's. When it stalled on its datastore, also shows the pressure
-# before, which says what stalled it.
-warn_if_server_stalled() {
-  local logs restarts stall
-  logs=$(server_logs "$1")
-  if restarts=$(server_restarts <<<"$logs"); then warn "$restarts; $2"; fi
-  if stall=$(server_stall <<<"$logs"); then show_pressure_before "$stall"; fi
-}
-
-# docker_disk: the disk under Docker's data root, as diskstats names it, such as sda: the
-# k3d Nodes' datastores are there. The disk itself, not the volume or partition on it,
-# since swap and the Host's other volumes may share it.
-docker_disk() {
-  local volume
-  volume=$(df --output=source "$(docker info -f '{{.DockerRootDir}}')" | tail -1)
-  lsblk -snro NAME,TYPE "$volume" | awk '$2 == "disk" { print $1; found = 1; exit } END { exit !found }'
-}
-
-# show_pressure_before <stall>: WARNs with the pressure on the Server's cgroups and the
-# Host's disk in the minute before k3s stalled, given as server_stall prints it, from
-# what below recorded.
-show_pressure_before() {
-  local end at id disk args table lines
-  end=$(date -ud "${1%% *}" +%s)
-  at="k3s on the Server ${1#* } at $(date -ud "@$end" +%T) UTC"
-  # below prints its times in the local time zone; k3s logs them in UTC.
-  table=$(
-    if id=$(docker inspect -f '{{.Id}}' "$LAB_SERVER" 2>/dev/null); then
-      mapfile -t args < <(below_server_dump_args "$id" "$end")
-      TZ=UTC below --config "$LAB_BELOW_CONFIG" "${args[@]}" 2>/dev/null || true
-    fi
-    if disk=$(docker_disk 2>/dev/null); then
-      mapfile -t args < <(below_disk_dump_args "$disk" "$end")
-      TZ=UTC below --config "$LAB_BELOW_CONFIG" "${args[@]}" 2>/dev/null || true
-    fi
-  ) || true
-  if table=$(below_table <<<"$table"); then
-    warn "$at; the pressure in the minute before, from below's store ('below --config $LAB_BELOW_CONFIG replay -t $((end - 60))' replays it):"
-    mapfile -t lines <<<"$table"
-    printf '      %s\n' "${lines[@]}"
-  else
-    warn "$at; below recorded nothing from the minute before in $LAB_BELOW_DIR"
-  fi
-}
-
-# Before the Lab's own checks, since memory may be why it doesn't answer.
-warn_if_short_on_memory "checks may fail while k3s stalls on its datastore"
-
 # Without a Lab, every check would fail for the same reason.
 need_lab
 run_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if ! kc get --raw /readyz --request-timeout=10s >/dev/null; then
-  # A Lab that doesn't answer may be k3s restarting.
-  warn_if_server_stalled 10m "that may be why"
+  # A Lab that doesn't answer may be k3s restarting, during the run that ran verify.
+  diagnose_server failed "$(run_since 10m)" "that may be why"
   die "the Lab doesn't answer"
 fi
-# A restart during up or track leaves a Lab that may pass every check, though k3s died
-# while it was built or synced (#135). Only a restart: slow SQL alone, which the run waited
-# out, says nothing here.
-if [[ -n ${LAB_RUN_SINCE:-} ]]; then
-  logs=$(server_logs "$LAB_RUN_SINCE" "$run_start")
-  if restarts=$(server_restarts <<<"$logs"); then
-    warn "$restarts; during the run, before verify"
-    if stall=$(server_stall <<<"$logs"); then show_pressure_before "$stall"; fi
-  fi
-fi
+# Before the Lab's own checks, since k3s may stall while the Host is short on memory.
+warn_if_short_on_memory "checks may fail while k3s stalls on its datastore"
+# A Restart during up or track leaves a Lab that may pass every check, though k3s died
+# while it was built or synced (#135).
+if since=$(run_since); then diagnose_server succeeded "$since" "$run_start" "during the run, before verify"; fi
 
 # A paused Application drifts from Git on purpose, so its checks may fail.
 while read -r application; do
@@ -151,9 +94,8 @@ fi
 # pipeline fails if Chainsaw does.
 if ! chainsaw test "${args[@]}" "$@" | grep --line-buffered -Ev '^=== (RUN|PAUSE|CONT) '; then
   # The Host may have run short during the run, though it wasn't at the start.
-  warn_if_short_on_memory "that may be why checks failed"
-  warn_if_server_stalled "$run_start" "that may be why checks failed"
+  diagnose_server failed "$run_start" "that may be why checks failed"
   exit 1
 fi
-# Passing checks may still have waited out a restart, which is worth knowing.
-warn_if_server_stalled "$run_start" "checks passed anyway"
+# Passing checks may still have waited out a Restart, which is worth knowing.
+diagnose_server succeeded "$run_start" "checks passed anyway"

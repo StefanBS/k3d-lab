@@ -19,12 +19,13 @@ source "$(dirname "$0")/run-diagnostics.sh"
 
 revision=$(git -C "$LAB_ROOT" branch --show-current)
 demos=false
+debug=''
 for arg; do
   case $arg in
     REVISION=?*) revision=${arg#REVISION=} ;;
     --demos) demos=true ;;
     --debug)
-      RUN_DEBUG=1
+      debug=1
       demos=true
       ;;
     *) die "unknown argument '$arg'; usage: just up [REVISION=<branch>] [--demos] [--debug]" ;;
@@ -32,9 +33,9 @@ for arg; do
 done
 [[ -n $revision ]] || die "no branch is checked out; check one out, or pass REVISION=<branch or tag>"
 
-# k3s may stall on its datastore during the build or the checks, and the pressure then
-# says why (verify.sh).
-[[ -z $RUN_DEBUG ]] || record_pressure
+# k3s may stall on its datastore during the build or the checks, and the Pressure then
+# says why (run-diagnostics.sh).
+[[ -z $debug ]] || record_pressure
 
 # Installs a Platform component that ArgoCD can't install itself: the same chart,
 # version and values that ArgoCD then manages it with.
@@ -58,7 +59,7 @@ taken=$(lab_host_ports_taken)
 [[ -z $taken ]] || die "the Lab's Gateway needs these Host ports, but something already listens there:
 $taken"
 commit=$(pushed_commit "$revision")
-trap 'report_run up' EXIT
+trap 'report_run up "$debug"' EXIT
 
 # Makes / rshared inside the k3d Nodes, which Cilium's bpffs mount needs.
 export K3D_FIX_MOUNTS=1
@@ -161,4 +162,4 @@ mapfile -t appsets < <(helm template gitops "$LAB_ROOT/gitops" --show-only templ
 wait_applicationsets 300 "${appsets[@]}"
 wait_settled 900 --at "$commit"
 
-[[ -z $RUN_DEBUG ]] || exec "$LAB_ROOT/scripts/verify.sh"
+[[ -z $debug ]] || exec "$LAB_ROOT/scripts/verify.sh"
