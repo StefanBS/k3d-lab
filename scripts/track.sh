@@ -39,15 +39,8 @@ paused=$(kc -n argocd get appprojects -o json | paused_applications | paste -sd'
 start_run_clock
 trap 'report_run track' EXIT
 
-# The same two fields up.sh sets: the root Application's own revision, and the one its
-# chart gives every Application it generates. A hard refresh makes ArgoCD read the
-# branch again now, rather than at its next poll, also when only its commit changed.
 log "Pointing the Lab at $revision (${commit:0:7})"
-REVISION=$revision yq -n -o json '
-  .metadata.annotations."argocd.argoproj.io/refresh" = "hard" |
-  .spec.source.targetRevision = strenv(REVISION) |
-  .spec.source.helm.valuesObject.revision = strenv(REVISION)' |
-  kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
+root_application_track "$revision"
 
 # True once the ApplicationSet controller has taken every refresh asked of it: it removes
 # the annotation when it has.

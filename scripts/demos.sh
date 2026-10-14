@@ -13,13 +13,8 @@ need_root_application
 mapfile -t demo_components < <(demo_dirs)
 ((${#demo_components[@]})) || die "no Workload in workloads/ is a Demo (role: demo in its component.yaml)"
 
-# The value up.sh sets: the workloads ApplicationSet leaves the Demos out while it's
-# false. A hard refresh makes ArgoCD render the root Application again now, rather than
-# at its next poll.
 log "Turning the Lab's Demos $1: ${demo_components[*]##*/}"
-yq -n -o json ".metadata.annotations.\"argocd.argoproj.io/refresh\" = \"hard\" |
-  .spec.source.helm.valuesObject.demos = $demos" |
-  kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
+root_application_set_demos "$demos"
 
 # Run again on a Lab that already has them, or doesn't, it finds nothing to wait for.
 wait_settled 600 "${gone[@]}" "${demo_components[@]##*/}"

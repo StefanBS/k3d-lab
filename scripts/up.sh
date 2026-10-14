@@ -147,40 +147,7 @@ log "Handing the Lab over to ArgoCD, tracking $revision"
 # renders them.
 helm template gitops "$LAB_ROOT/gitops" --show-only templates/appprojects.yaml |
   kc apply -f - >/dev/null
-kc apply -f - >/dev/null <<EOF
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: root
-  namespace: argocd
-spec:
-  project: platform
-  source:
-    repoURL: $LAB_REPO
-    targetRevision: "$revision"
-    path: gitops
-    helm:
-      valuesObject:
-        repoURL: $LAB_REPO
-        revision: "$revision"
-        demos: $demos
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: argocd
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - RespectIgnoreDifferences=true
-  # The sync windows that 'just pause' adds to a project stay, until 'just resume'. Git
-  # sets none, so the whole list is left to the Lab: a window added in Git would not apply.
-  ignoreDifferences:
-    - group: argoproj.io
-      kind: AppProject
-      jsonPointers:
-        - /spec/syncWindows
-EOF
+root_application_manifest "$revision" "$demos" | kc apply -f - >/dev/null
 
 # The root Application can be Healthy before it has even created the ApplicationSets,
 # so they are waited for by name, rendered from the same chart. Once each says

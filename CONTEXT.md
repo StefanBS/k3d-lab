@@ -76,12 +76,16 @@ _Avoid_: example, sample, showcase
 A Workload that requests the GPU Node's GPU (`amd.com/gpu`) and tolerates its taint, so it runs only on the GPU Node, and only while it's Joined.
 _Avoid_: GPU job, GPU app
 
+**Tracked revision**:
+The branch or tag of the Lab's repo that its Platform and Workloads are read from. `just up` sets it, and `just track` changes it.
+_Avoid_: target revision, deployed branch
+
 **Paused**:
 A Workload's or Platform component's state while ArgoCD neither syncs nor self-heals its Application (`just pause`), so changes made by hand to it stay until `just resume` puts Git back.
 _Avoid_: frozen, suspended, detached
 
 **Settled**:
-An Application's state once ArgoCD has synced it at the commit the Lab tracks and it's Healthy. `just up`, `track`, `demos`, `resume` and `gpu join` each wait for the Applications they change to be Settled.
+An Application's state once ArgoCD has synced it at the commit of the Tracked revision and it's Healthy. `just up`, `track`, `demos`, `resume` and `gpu join` each wait for the Applications they change to be Settled.
 _Avoid_: ready, done, caught up
 
 ### Network policy
