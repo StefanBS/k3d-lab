@@ -28,7 +28,7 @@ SCOPE=docker-916acc8a636f8969b504fea9a9cf33a3ac01741e09a1d1657cb1710f01c42511.sc
 CSV
   )
   [[ $status -eq 0 ]]
-  [[ ${lines[0]} == "WARN  k3s on the Server died at 10:21:01 UTC; the pressure in the minute before, from below's store ('below --config /home/me/.local/state/k3d-lab/below/below.conf replay -t 1791541201' replays it):" ]]
+  [[ ${lines[0]} == "WARN  k3s on the Server died at 10:21:01 UTC; the Pressure in the minute before, from below's store ('below --config /home/me/.local/state/k3d-lab/below/below.conf replay -t 1791541201' replays it):" ]]
   [[ ${lines[1]} == "      UTC       cgroup     cpu     io      io-full mem     mem-full memory     majflt  read       write" ]]
   [[ ${lines[2]} == "      10:20:59  Server     0.06%   12.50%  3.10%   0.00%   0.00%    4.3 GB     0       0.0 B/s    1.4 MB/s" ]]
   [[ ${lines[3]} == "      10:20:59  disk sda   -       -       -       -       -        -          -       18 KB/s    124 KB/s" ]]

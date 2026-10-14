@@ -28,8 +28,8 @@ done
 [[ -n $revision ]] || revision=$(git -C "$LAB_ROOT" branch --show-current)
 [[ -n $revision ]] || die "no branch is checked out; check one out, or pass <branch or tag>"
 
-# A sync can be heavy enough for k3s to stall on its datastore, and the pressure then says
-# why (verify.sh).
+# A sync can be heavy enough for k3s to stall on its datastore, and the Pressure then says
+# why (run-diagnostics.sh).
 [[ -z $debug ]] || record_pressure
 
 need_root_application

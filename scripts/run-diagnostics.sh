@@ -31,9 +31,11 @@ server_logs() {
 # k3d Nodes' datastores are there. The disk itself, not the volume or partition on it,
 # since swap and the Host's other volumes may share it.
 docker_disk() {
-  local volume
+  local volume ancestry
   volume=$(df --output=source "$(docker info -f '{{.DockerRootDir}}')" | tail -1)
-  lsblk -snro NAME,TYPE "$volume" | disk_under
+  # Captured first: disk_under stops at the disk, and lsblk could die of the closed pipe.
+  ancestry=$(lsblk -snro NAME,TYPE "$volume")
+  disk_under <<<"$ancestry"
 }
 
 # disk_under < <lsblk -snro NAME,TYPE <volume>>: the disk in the volume's ancestry, which
@@ -63,7 +65,7 @@ pressure_before() {
   end=$(date -ud "${1%% *}" +%s)
   at="k3s on the Server ${1#* } at $(date -ud "@$end" +%T) UTC"
   if table=$(below_table); then
-    warn "$at; the pressure in the minute before, from below's store ('below --config $LAB_BELOW_CONFIG replay -t $((end - 60))' replays it):"
+    warn "$at; the Pressure in the minute before, from below's store ('below --config $LAB_BELOW_CONFIG replay -t $((end - 60))' replays it):"
     mapfile -t lines <<<"$table"
     printf '      %s\n' "${lines[@]}"
   else
@@ -124,5 +126,5 @@ report_run() {
   else
     warn_if_short_on_memory "that may be why it failed"
   fi
-  [[ -n $2 ]] || log "For the next attempt, 'just $1 --debug' records the pressure and runs every check"
+  [[ -n $2 ]] || log "For the next attempt, 'just $1 --debug' records the Pressure and runs every check"
 }

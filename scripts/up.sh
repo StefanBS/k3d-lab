@@ -33,8 +33,8 @@ for arg; do
 done
 [[ -n $revision ]] || die "no branch is checked out; check one out, or pass REVISION=<branch or tag>"
 
-# k3s may stall on its datastore during the build or the checks, and the pressure then
-# says why (verify.sh).
+# k3s may stall on its datastore during the build or the checks, and the Pressure then
+# says why (run-diagnostics.sh).
 [[ -z $debug ]] || record_pressure
 
 # Installs a Platform component that ArgoCD can't install itself: the same chart,
