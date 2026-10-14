@@ -66,7 +66,7 @@ wait_settled 900 --at "$commit" root
 log "Waiting for the ApplicationSets to generate the Applications"
 kc -n argocd annotate applicationsets --all argocd.argoproj.io/application-set-refresh=true --overwrite >/dev/null
 retry 300 applicationsets_refreshed || die "the ApplicationSets haven't refreshed after 5 minutes"
-kc -n argocd wait applicationsets --all --for=condition=ResourcesUpToDate --timeout=5m >/dev/null
+wait_applicationsets 300
 # Likewise, an Application whose spec the root's sync didn't change waits for a refresh.
 kc -n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overwrite >/dev/null
 log "Waiting for every Application to sync $revision"

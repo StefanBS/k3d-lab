@@ -82,7 +82,7 @@ cmd_join() {
 
   log "Waiting for the GPU Node to be Ready"
   retry 120 gpu_node_registered || die "the GPU Node didn't register with the Lab; see 'journalctl -u k3s-agent' on it"
-  kc wait --for=condition=Ready nodes -l "$GPU_NODE_LABEL_KEY" --timeout=3m >/dev/null
+  wait_nodes_ready 180 -l "$GPU_NODE_LABEL_KEY"
   log "Waiting for the Platform's DaemonSets to run on it"
   # The DaemonSet controller counts the new node a moment after it's Ready.
   sleep 2

@@ -149,6 +149,32 @@ wait_settled() {
 }
 applications_in_lab_unsettled() { kc -n argocd get applications -o json | applications_unsettled "$@"; }
 
+# shellcheck source=applicationsets-state.sh
+source "$LAB_ROOT/scripts/applicationsets-state.sh"
+
+# wait_applicationsets <seconds> [<name>...]: waits until the Lab's ApplicationSets, or
+# only those named, exist and say ResourcesUpToDate, so every Application they generate
+# exists. Gives up after that many seconds.
+wait_applicationsets() {
+  local seconds=$1
+  shift
+  wait_until_none "$seconds" "these ApplicationSets haven't generated their Applications" \
+    applicationsets_in_lab_pending "$@"
+}
+applicationsets_in_lab_pending() { kc -n argocd get applicationsets -o json | applicationsets_pending "$@"; }
+
+# shellcheck source=nodes-state.sh
+source "$LAB_ROOT/scripts/nodes-state.sh"
+
+# wait_nodes_ready <seconds> [<kubectl get option>...]: waits until the Lab's nodes, or
+# those the options select, such as -l <label>, are Ready. Gives up after that many seconds.
+wait_nodes_ready() {
+  local seconds=$1
+  shift
+  wait_until_none "$seconds" "these nodes aren't Ready" nodes_in_lab_unready "$@"
+}
+nodes_in_lab_unready() { kc get nodes -o json "$@" | nodes_unready; }
+
 need_lab() { lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"; }
 # For the scripts that patch the root Application, which up.sh creates last.
 need_root_application() {
