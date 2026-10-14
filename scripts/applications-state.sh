@@ -47,8 +47,9 @@ applications_unsettled() {
       [$sources | to_entries[] | select($commit != "" and .value.repoURL == $repo) | .key as $i |
         {tracks: .value.targetRevision, compared: ($compared[$i].targetRevision // "nothing"),
           synced: ($revisions[$i] // "")}] as $ours |
-      (.status.sync.status // "Unknown") as $sync |
-      (.status.health.status // "Unknown") as $health |
+      # Before its first comparison, ArgoCD gives an Application an empty status, not none.
+      (.status.sync.status // "" | if . == "" then "Unknown" end) as $sync |
+      (.status.health.status // "" | if . == "" then "Unknown" end) as $health |
       [$ours[] | select(.compared != .tracks) | .compared] as $stale |
       [$ours[] | select(.synced != $commit) | .synced] as $elsewhere |
       if $sync != "Synced" or $health != "Healthy" then "\($sync), \($health)"

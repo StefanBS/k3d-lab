@@ -92,6 +92,10 @@ cilium: Synced, Progressing" -- \
   expect "grafana: Unknown, Unknown" -- '{"metadata": {"name": "grafana"}}'
 }
 
+@test "with an empty status, as before ArgoCD first compares it: unsettled, with its state Unknown" {
+  expect "grafana: Unknown, Unknown" -- '{"metadata": {"name": "grafana"}, "status": {"sync": {"status": ""}}}'
+}
+
 @test "named: only those count" {
   expect "rollouts-demo: Synced, Progressing" rollouts-demo -- \
     "$(application root OutOfSync Healthy "$commit" "$repo")" \
