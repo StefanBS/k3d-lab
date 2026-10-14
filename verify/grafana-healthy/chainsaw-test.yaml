@@ -18,7 +18,7 @@ spec:
               bad=0
               for uid in $(yq '.datasources["datasources.yaml"].datasources[].uid' ../../platform/grafana/values.yaml); do
                 echo -n "$uid: "
-                curl -sS --fail-with-body --retry 5 --retry-all-errors --retry-delay 2 -w '\n' \
+                ../lib/host-curl.sh --fail-with-body -w '\n' \
                   "https://grafana.lab.localhost/api/datasources/uid/$uid/health" || bad=1
               done
               exit "$bad"
@@ -26,6 +26,6 @@ spec:
         - script:
             content: |
               for uid in $(jq -r .uid ../../platform/grafana-dashboards/*.json); do
-                curl -sS --fail --retry 12 --retry-all-errors --retry-delay 5 \
+                ../lib/host-curl.sh --retry 12 --retry-delay 5 \
                   -o /dev/null "https://grafana.lab.localhost/api/dashboards/uid/$uid" || exit 1
               done
