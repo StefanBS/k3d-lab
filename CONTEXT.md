@@ -88,6 +88,28 @@ _Avoid_: frozen, suspended, detached
 An Application's state once ArgoCD has synced it at the commit of the Tracked revision and it's Healthy. `just up`, `track`, `demos`, `resume` and `gpu join` each wait for the Applications they change to be Settled.
 _Avoid_: ready, done, caught up
 
+### Diagnosing the Server
+
+**Debugging run**:
+A run of `just up` or `just track` given `--debug`, which also records the Pressure and ends with `just verify`. It leaves the same Lab as a regular run.
+_Avoid_: debug mode, verbose run
+
+**Stall**:
+k3s on the Server blocked on its datastore for long enough to log slow SQL. It may end in a Death.
+_Avoid_: hang, freeze
+
+**Death**:
+k3s on the Server exiting on its own, such as on a fatal datastore error or by the OOM killer.
+_Avoid_: crash
+
+**Restart**:
+k3s on the Server starting again, after a Death or because a run restarted it on purpose.
+_Avoid_: reboot
+
+**Pressure**:
+What was recorded about the load on the Server's cgroups and the Host's disk, which says what caused a Stall.
+_Avoid_: load, metrics
+
 ### Network policy
 
 **Guardrails**:
