@@ -5,7 +5,7 @@ A new Lab synced every Application at once. One that needed another's CRDs or we
 - **One ApplicationSet per Wave, ordered by the root Application's sync waves.** `platform-crds` is sync wave 0, `platform-controllers` 1, `platform` (every component that sets no Wave) 2, and `workloads` 3. The root Application's sync applies each only once the one before is Healthy.
 - **An ApplicationSet is Healthy once every Application it generated is** (a health check in `platform/argocd/values.yaml`). ArgoCD's own check says Healthy once the Applications exist, which would order nothing.
 - **Progressive Syncs are enabled, but no ApplicationSet uses them.** With the flag on, an Application's change of health requeues its ApplicationSet, so its status says so within seconds. With it off, that waits for the next refresh, three minutes later, and so would every Wave.
-- **A sync times out after 30 minutes** (`controller.sync.timeout.seconds`). A root sync behind a Wave that never gets Healthy would otherwise run forever, and the root couldn't sync another revision.
+- **A sync times out after 15 minutes** (`controller.sync.timeout.seconds`), twice the 8 minutes a new Lab's root sync took. It applies to every sync, since ArgoCD has no timeout per Application. A root sync behind a Wave that never gets Healthy would otherwise run forever, and the root couldn't sync another revision.
 
 ## Considered Options
 

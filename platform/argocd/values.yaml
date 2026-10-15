@@ -16,8 +16,8 @@ configs:
     # Ends a sync stuck waiting on a Wave that never gets Healthy, such as the root
     # Application's on a branch that breaks a controller: until it ends, the root syncs
     # no other revision, so `just track` couldn't move off that branch. Longer than a
-    # new Lab's whole Platform takes.
-    controller.sync.timeout.seconds: 1800
+    # new Lab's whole Platform takes: its root sync took 8 minutes.
+    controller.sync.timeout.seconds: 900
   # Single sign-on with the Lab login, through Dex at https://sso.lab.localhost
   # (ADR 0013). ArgoCD's own admin stays, as the Break-glass login.
   cm:
