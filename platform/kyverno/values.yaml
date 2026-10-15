@@ -28,9 +28,9 @@ reportsController:
   # doesn't cover Gateway API's routes, and a policy on a kind it can't read is never
   # Ready.
   # Argo Rollouts adds its own kinds to view, but only once it's installed, alongside
-  # the policies, after the Waves (ADR 0014). A policy that Kyverno found it couldn't read for
-  # stayed not Ready for 15 minutes after the role was there. Granted here, they're in
-  # place before any policy, and need no CRD.
+  # the policies, after the Waves (ADR 0014). A policy that Kyverno found it couldn't
+  # read for stayed not Ready for 15 minutes after the role was there. Granted here,
+  # they're in place before any policy, and need no CRD.
   rbac:
     clusterRole:
       extraResources:
