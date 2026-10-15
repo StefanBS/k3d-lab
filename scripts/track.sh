@@ -7,8 +7,6 @@
 # (run-diagnostics.sh).
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=lib/pauses.sh
-source "$(dirname "$0")/lib/pauses.sh"
 # shellcheck source=lib/run-diagnostics.sh
 source "$(dirname "$0")/lib/run-diagnostics.sh"
 
@@ -35,7 +33,7 @@ done
 need_root_application
 commit=$(pushed_commit "$revision")
 # A paused Application never syncs the new commit, so the wait below would only time out.
-paused=$(kc -n argocd get appprojects -o json | paused_applications | paste -sd' ')
+paused=$(paused_applications | paste -sd' ') || die "can't read the Lab's AppProjects"
 [[ -z $paused ]] || die "paused, so they'd never sync $revision: $paused; 'just resume <name>' each first"
 start_run_clock
 trap 'report_run track "$debug"' EXIT
@@ -43,26 +41,16 @@ trap 'report_run track "$debug"' EXIT
 log "Pointing the Lab at $revision (${commit:0:7})"
 root_application_track "$revision"
 
-# True once the ApplicationSet controller has taken every refresh asked of it: it removes
-# the annotation when it has.
-applicationsets_refreshed() {
-  local pending
-  pending=$(kc -n argocd get applicationsets \
-    -o jsonpath='{.items[*].metadata.annotations.argocd\.argoproj\.io/application-set-refresh}' 2>/dev/null) &&
-    [[ -z $pending ]]
-}
-
 log "Waiting for the root Application to sync $revision"
 wait_settled 900 --at "$commit" root
 # The ApplicationSets read the branch's components again, as up.sh waits for them to:
 # when only its commit changed, their own spec didn't, so they'd wait for their next
 # poll to generate a new component's Application.
 log "Waiting for the ApplicationSets to generate the Applications"
-kc -n argocd annotate applicationsets --all argocd.argoproj.io/application-set-refresh=true --overwrite >/dev/null
-retry 300 applicationsets_refreshed || die "the ApplicationSets haven't refreshed after 5 minutes"
+refresh_applicationsets 300
 wait_applicationsets 300
 # Likewise, an Application whose spec the root's sync didn't change waits for a refresh.
-kc -n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overwrite >/dev/null
+refresh_applications
 log "Waiting for every Application to sync $revision"
 wait_settled 900 --at "$commit"
 

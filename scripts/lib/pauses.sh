@@ -1,5 +1,6 @@
-# Which Applications 'just pause' has paused. Sourced by pause.sh and verify.sh, and on
-# its own by scripts/tests/, so it sets no shell options and runs nothing when sourced.
+# Pausing one Application with 'just pause', resuming it, and which are paused. Sourced by
+# lib.sh, and on its own by scripts/tests/, so it sets no shell options and runs nothing
+# when sourced.
 # shellcheck shell=bash
 # shellcheck disable=SC2016 # the $names in the jq programs are jq's, not the shell's.
 
@@ -8,10 +9,38 @@
 # description tells it apart from any other window.
 PAUSE_DESCRIPTION="just pause"
 
-# paused_applications: reads the Lab's AppProjects (kubectl get appprojects -o json) on
-# stdin, and prints each paused Application's name, one per line.
+# paused_applications: prints each paused Application's name, one per line. Fails when
+# the Lab's AppProjects can't be read.
 paused_applications() {
-  jq -r --arg d "$PAUSE_DESCRIPTION" '.items[].spec.syncWindows // [] | .[] | select(.description == $d) | .applications[]'
+  local projects
+  projects=$(kc -n argocd get appprojects -o json) || return 1
+  jq -r --arg d "$PAUSE_DESCRIPTION" '.items[].spec.syncWindows // [] | .[] | select(.description == $d) | .applications[]' <<<"$projects"
+}
+
+# pause_application <name>: adds the Application's pause to its project, unless it's
+# there already.
+pause_application() { _pause_patch "$1" pause_windows; }
+
+# resume_application <name>: removes the Application's pause from its project, and has
+# ArgoCD compare it with Git now, rather than at its next poll. wait_settled then waits
+# for ArgoCD to put Git back.
+resume_application() {
+  _pause_patch "$1" resume_windows
+  refresh_applications "$1"
+}
+
+# _pause_patch <application> pause_windows|resume_windows: sets its project's sync windows
+# to what the function makes of them. The resourceVersion makes the patch fail, rather
+# than drop a window, if the project changed since it was read.
+_pause_patch() {
+  local application=$1 windows=$2 project project_json
+  project=$(kc -n argocd get application "$application" -o jsonpath='{.spec.project}' 2>/dev/null) ||
+    die "the Lab has no Application named '$application'; 'kubectl -n argocd get applications' lists them"
+  project_json=$(kc -n argocd get appproject "$project" -o json) || die "can't read the AppProject $project"
+  jq -n --argjson windows "$("$windows" "$application" <<<"$project_json")" \
+    --arg version "$(jq -r .metadata.resourceVersion <<<"$project_json")" \
+    '{"metadata": {"resourceVersion": $version}, "spec": {"syncWindows": $windows}}' |
+    kc -n argocd patch appproject "$project" --type merge --patch-file /dev/stdin >/dev/null
 }
 
 # pause_windows <application>: reads its AppProject (kubectl get appproject -o json) on

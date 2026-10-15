@@ -11,8 +11,6 @@
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=lib/host.sh
 source "$(dirname "$0")/lib/host.sh"
-# shellcheck source=lib/pauses.sh
-source "$(dirname "$0")/lib/pauses.sh"
 # shellcheck source=lib/run-diagnostics.sh
 source "$(dirname "$0")/lib/run-diagnostics.sh"
 
@@ -48,7 +46,7 @@ if since=$(run_since); then diagnose_server succeeded "$since" "$run_start" "dur
 # A paused Application drifts from Git on purpose, so its checks may fail.
 while read -r application; do
   warn "$application is paused, so ArgoCD leaves it as it is and its checks may fail; 'just resume $application' puts Git back"
-done < <(kc -n argocd get appprojects -o json | paused_applications)
+done < <(paused_applications)
 
 # Chainsaw deletes each check's namespace, chainsaw-<random>, and those the check derives
 # from it, when the check ends. One still Active is a crashed run's, such as when k3s on

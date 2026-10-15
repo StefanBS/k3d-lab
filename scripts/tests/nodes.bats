@@ -1,10 +1,11 @@
 #!/usr/bin/env bats
-# Which of the Lab's nodes aren't Ready yet (scripts/lib/nodes.sh), without a Lab:
-# nodes_unready, with the Lab's nodes on stdin.
+# Waiting for the Lab's nodes to be Ready (scripts/lib/nodes.sh), without a Lab:
+# wait_nodes_ready, with kc answering the Lab's nodes.
 
 setup() {
   # shellcheck source=../lib/nodes.sh
   source "$BATS_TEST_DIRNAME/../lib/nodes.sh"
+  load lab
 }
 
 # node <name> [<Ready status>]: a node as kubectl lists it, with that Ready condition, or
@@ -15,11 +16,13 @@ node() {
       {"type": "Ready", "status": strenv(R)}]) // .'
 }
 
-# expect <output> <node>...: nodes_unready's output for a list of those nodes.
+# expect <pending> <node>...: what wait_nodes_ready says is still pending, while the Lab
+# lists those nodes.
 expect() {
   local want=$1 got
   shift
-  got=$(printf '%s\n' "$@" | jq -s '{"items": .}' | nodes_unready)
+  printf '%s\n' "$@" | jq -s '{"items": .}' | kc_answers get nodes -o json
+  got=$(still_pending wait_nodes_ready)
   [[ $got == "$want" ]] || {
     echo "want: $want"
     echo "got:  $got"
@@ -44,7 +47,18 @@ k3d-lab-agent-0: NotReady" "$(node k3d-lab-server-0 False)" "$(node k3d-lab-agen
   expect "no nodes yet"
 }
 
-@test "no nodes to read, as when the request failed: fails" {
-  run nodes_unready <<<""
-  [[ $status -ne 0 ]]
+@test "the request failed: pending, not passed" {
+  [[ $(still_pending wait_nodes_ready) == "the Lab's API isn't answering" ]]
+}
+
+@test "a selector: only the nodes it selects count" {
+  node gpu False | jq -s '{"items": .}' | kc_answers get nodes -o json -l k3d-lab/gpu
+  [[ $(still_pending wait_nodes_ready -l k3d-lab/gpu) == "gpu: NotReady" ]]
+}
+
+@test "still unready at the deadline: gives up, saying which" {
+  node gpu False | jq -s '{"items": .}' | kc_answers get nodes -o json
+  run wait_nodes_ready 30
+  [[ $status -eq 1 ]]
+  [[ ${lines[-2]} == "error: these nodes aren't Ready after 0 minutes:" && ${lines[-1]} == "gpu: NotReady" ]]
 }

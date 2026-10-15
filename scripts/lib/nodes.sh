@@ -1,6 +1,5 @@
-# Which of the Lab's nodes aren't Ready yet. Sourced by lib.sh, whose wait_nodes_ready
-# waits on it, and on its own by scripts/tests/, so it sets no shell options and runs
-# nothing when sourced.
+# The Lab's nodes: waiting for them to be Ready. Sourced by lib.sh, and on its own by
+# scripts/tests/, so it sets no shell options and runs nothing when sourced.
 # shellcheck shell=bash
 
 # nodes_unready: reads the Lab's nodes (kubectl get nodes -o json) on stdin, and prints
@@ -16,3 +15,12 @@ nodes_unready() {
       "\(.metadata.name): NotReady"
     end'
 }
+
+# wait_nodes_ready <seconds> [<kubectl get option>...]: waits until the Lab's nodes, or
+# those the options select, such as -l <label>, are Ready. Gives up after that many seconds.
+wait_nodes_ready() {
+  local seconds=$1
+  shift
+  wait_until_none "$seconds" "these nodes aren't Ready" nodes_in_lab_unready "$@"
+}
+nodes_in_lab_unready() { kc get nodes -o json "$@" | nodes_unready; }

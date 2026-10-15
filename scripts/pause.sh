@@ -5,31 +5,18 @@
 # Usage: pause.sh pause|resume <Application>
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=lib/pauses.sh
-source "$(dirname "$0")/lib/pauses.sh"
 
 (($# == 2)) && [[ $1 == pause || $1 == resume ]] || die "usage: just pause|resume <Workload or Platform component>"
 action=$1 application=$2
 
 need_lab
-project=$(kc -n argocd get application "$application" -o jsonpath='{.spec.project}' 2>/dev/null) ||
-  die "the Lab has no Application named '$application'; 'kubectl -n argocd get applications' lists them"
-
-# The resourceVersion makes the patch fail, rather than drop a window, if the project
-# changed since it was read.
-project_json=$(kc -n argocd get appproject "$project" -o json)
-jq -n --argjson windows "$("${action}_windows" "$application" <<<"$project_json")" \
-  --arg version "$(jq -r .metadata.resourceVersion <<<"$project_json")" \
-  '{"metadata": {"resourceVersion": $version}, "spec": {"syncWindows": $windows}}' |
-  kc -n argocd patch appproject "$project" --type merge --patch-file /dev/stdin >/dev/null
+"${action}_application" "$application"
 
 if [[ $action == pause ]]; then
   log "Paused $application: ArgoCD leaves it as it is until 'just resume $application'"
   exit
 fi
 
-# Without a refresh, ArgoCD would compare the Application again only at its next poll.
-kc -n argocd annotate application "$application" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
 log "Waiting for ArgoCD to put $application back as Git has it"
 wait_settled 600 "$application"
 log "Resumed $application"

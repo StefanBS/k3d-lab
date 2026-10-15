@@ -73,17 +73,6 @@ fail() {
   fails=$((fails + 1))
 }
 
-# retry <tries> <command>...: runs the command once a second until it succeeds, giving
-# up after that many tries.
-retry() {
-  local tries=$1
-  shift
-  until "$@"; do
-    ((--tries > 0)) || return 1
-    sleep 1
-  done
-}
-
 # shellcheck source=lib/wait.sh
 source "$LAB_ROOT/scripts/lib/wait.sh"
 
@@ -119,91 +108,19 @@ record_pressure() {
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
-# shellcheck source=lib/applications.sh
-source "$LAB_ROOT/scripts/lib/applications.sh"
-
-# wait_settled <seconds> [--at <commit>] [--group <group>] [--gone] [<name>...]: waits
-# until the Lab's Applications are Settled, as applications_unsettled takes the options,
-# with --at a commit of LAB_REPO. Gives up after that many seconds.
-wait_settled() {
-  local seconds=$1 late="these Applications aren't Settled" args=()
-  shift
-  while (($#)); do
-    case $1 in
-      --at)
-        args+=(--at "$LAB_REPO" "$2")
-        shift 2
-        ;;
-      --gone)
-        late="these Applications aren't gone"
-        args+=("$1")
-        shift
-        ;;
-      *)
-        args+=("$1")
-        shift
-        ;;
-    esac
-  done
-  wait_until_none "$seconds" "$late" applications_in_lab_unsettled "${args[@]}"
-}
-applications_in_lab_unsettled() { kc -n argocd get applications -o json | applications_unsettled "$@"; }
-
-# shellcheck source=lib/applicationsets.sh
-source "$LAB_ROOT/scripts/lib/applicationsets.sh"
-
-# wait_applicationsets <seconds> [<name>...]: waits until the Lab's ApplicationSets, or
-# only those named, exist and say ResourcesUpToDate, so every Application they generate
-# exists. Gives up after that many seconds.
-wait_applicationsets() {
-  local seconds=$1
-  shift
-  wait_until_none "$seconds" "these ApplicationSets haven't generated their Applications" \
-    applicationsets_in_lab_pending "$@"
-}
-applicationsets_in_lab_pending() { kc -n argocd get applicationsets -o json | applicationsets_pending "$@"; }
-
-# shellcheck source=lib/nodes.sh
-source "$LAB_ROOT/scripts/lib/nodes.sh"
-
-# wait_nodes_ready <seconds> [<kubectl get option>...]: waits until the Lab's nodes, or
-# those the options select, such as -l <label>, are Ready. Gives up after that many seconds.
-wait_nodes_ready() {
-  local seconds=$1
-  shift
-  wait_until_none "$seconds" "these nodes aren't Ready" nodes_in_lab_unready "$@"
-}
-nodes_in_lab_unready() { kc get nodes -o json "$@" | nodes_unready; }
-
 need_lab() { lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"; }
 
+# One module per Lab object: each reads, changes and waits for it through kc.
+# shellcheck source=lib/applications.sh
+source "$LAB_ROOT/scripts/lib/applications.sh"
+# shellcheck source=lib/applicationsets.sh
+source "$LAB_ROOT/scripts/lib/applicationsets.sh"
+# shellcheck source=lib/nodes.sh
+source "$LAB_ROOT/scripts/lib/nodes.sh"
 # shellcheck source=lib/root-application.sh
 source "$LAB_ROOT/scripts/lib/root-application.sh"
-
-# For the scripts that patch the root Application, which up.sh creates last.
-need_root_application() {
-  need_lab
-  kc -n argocd get application/root >/dev/null 2>&1 || die "the Lab has no root Application; run 'just down', then 'just up'"
-}
-# root_application_track <branch or tag>: makes it the Lab's Tracked revision.
-root_application_track() { root_application_change --revision "$1"; }
-# root_application_set_demos true|false: whether the Lab has its Demos.
-root_application_set_demos() { root_application_change --demos "$1"; }
-# root_application_change <root_application_patch option>...: patches the root
-# Application, with a hard refresh, so ArgoCD renders it again now rather than at its
-# next poll, also when the Tracked revision is the same branch at a new commit.
-root_application_change() {
-  local patch
-  patch=$(root_application_patch "$@") || die "no patch for the root Application from: $*"
-  jq '.metadata.annotations."argocd.argoproj.io/refresh" = "hard"' <<<"$patch" |
-    kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
-}
-# root_application_has_demos: prints true if the Lab has its Demos, false otherwise.
-root_application_has_demos() {
-  local root
-  root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
-  lab_has_demos <<<"$root"
-}
+# shellcheck source=lib/pauses.sh
+source "$LAB_ROOT/scripts/lib/pauses.sh"
 
 # pushed_commit <branch or tag>: prints the commit LAB_REPO has for it, the one ArgoCD
 # reads, and fails if LAB_REPO doesn't have it. verify runs the checks as they are here,

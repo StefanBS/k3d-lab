@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
-# Which of the Lab's ApplicationSets haven't generated their Applications yet
-# (scripts/lib/applicationsets.sh), without a Lab: applicationsets_pending, with the
-# Lab's ApplicationSets on stdin.
+# Waiting for the Lab's ApplicationSets to generate their Applications, and refreshing
+# them (scripts/lib/applicationsets.sh), without a Lab: kc answers for the Lab.
 
 setup() {
   # shellcheck source=../lib/applicationsets.sh
   source "$BATS_TEST_DIRNAME/../lib/applicationsets.sh"
+  load lab
 }
 
 # applicationset <name> [<ResourcesUpToDate status> [<reason>]]: an ApplicationSet as
@@ -16,8 +16,8 @@ applicationset() {
       {"type": "ResourcesUpToDate", "status": strenv(S), "reason": strenv(R)}]) // .'
 }
 
-# expect <output> [<name>...] -- <ApplicationSet>...: applicationsets_pending's output for
-# those names, and a list of those ApplicationSets.
+# expect <pending> [<name>...] -- <ApplicationSet>...: what wait_applicationsets says is
+# still pending for those names, while the Lab lists those ApplicationSets.
 expect() {
   local want=$1 got names=()
   shift
@@ -26,7 +26,8 @@ expect() {
     shift
   done
   shift
-  got=$(printf '%s\n' "$@" | jq -s '{"items": .}' | applicationsets_pending "${names[@]}")
+  printf '%s\n' "$@" | jq -s '{"items": .}' | kc_answers -n argocd get applicationsets -o json
+  got=$(still_pending wait_applicationsets "${names[@]}")
   [[ $got == "$want" ]] || {
     echo "want: $want"
     echo "got:  $got"
@@ -54,7 +55,29 @@ demos: not ResourcesUpToDate" platform workloads demos -- \
   expect "no ApplicationSets yet" --
 }
 
-@test "no ApplicationSets to read, as when the request failed: fails" {
-  run applicationsets_pending platform <<<""
-  [[ $status -ne 0 ]]
+@test "the request failed: pending, not passed" {
+  [[ $(still_pending wait_applicationsets platform) == "the Lab's API isn't answering" ]]
+}
+
+# What the controller still has to take, as refresh_applicationsets asks for it.
+REFRESHES=(-n argocd get applicationsets
+  -o 'jsonpath={.items[*].metadata.annotations.argocd\.argoproj\.io/application-set-refresh}')
+ASK=(-n argocd annotate applicationsets --all argocd.argoproj.io/application-set-refresh=true --overwrite)
+
+@test "refresh: asks every ApplicationSet, and passes once the controller has taken them all" {
+  kc_succeeds "${ASK[@]}"
+  kc_succeeds "${REFRESHES[@]}"
+  run refresh_applicationsets 300
+  [[ $status -eq 0 ]]
+  [[ $(head -n 1 "$KC_CALLS") == "${ASK[*]}" ]]
+}
+
+@test "refresh: a refresh never taken, or a request that fails, gives up" {
+  kc_succeeds "${ASK[@]}"
+  kc_answers "${REFRESHES[@]}" <<<"true true"
+  run refresh_applicationsets 120
+  [[ $status -eq 1 && $output == "error: the ApplicationSets haven't refreshed after 2 minutes" ]]
+  rm "$KC_ANSWERS/$(kc_key "${REFRESHES[@]}")"
+  run refresh_applicationsets 120
+  [[ $status -eq 1 && $output == "error: the ApplicationSets haven't refreshed after 2 minutes" ]]
 }

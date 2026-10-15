@@ -1,6 +1,6 @@
-# The root Application: its manifest, the patches that change it, and what it says.
-# Sourced by lib.sh, whose wrappers apply and read it, and on its own by scripts/tests/,
-# so it sets no shell options and runs nothing when sourced.
+# The root Application: its manifest, changing it, and what it says. Sourced by lib.sh,
+# and on its own by scripts/tests/, so it sets no shell options and runs nothing when
+# sourced.
 # shellcheck shell=bash
 
 # root_application_patch [--revision <branch or tag>] [--demos true|false]: prints the
@@ -83,4 +83,29 @@ EOF
 lab_has_demos() {
   # input fails when there's nothing to read, where a plain filter would print nothing.
   jq -rn 'input | .spec.source.helm.valuesObject.demos == true'
+}
+
+# For the scripts that patch the root Application, which up.sh creates last.
+need_root_application() {
+  need_lab
+  kc -n argocd get application/root >/dev/null 2>&1 || die "the Lab has no root Application; run 'just down', then 'just up'"
+}
+# root_application_track <branch or tag>: makes it the Lab's Tracked revision.
+root_application_track() { root_application_change --revision "$1"; }
+# root_application_set_demos true|false: whether the Lab has its Demos.
+root_application_set_demos() { root_application_change --demos "$1"; }
+# root_application_change <root_application_patch option>...: patches the root
+# Application, with a hard refresh, so ArgoCD renders it again now rather than at its
+# next poll, also when the Tracked revision is the same branch at a new commit.
+root_application_change() {
+  local patch
+  patch=$(root_application_patch "$@") || die "no patch for the root Application from: $*"
+  jq '.metadata.annotations."argocd.argoproj.io/refresh" = "hard"' <<<"$patch" |
+    kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
+}
+# root_application_has_demos: prints true if the Lab has its Demos, false otherwise.
+root_application_has_demos() {
+  local root
+  root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
+  lab_has_demos <<<"$root"
 }
