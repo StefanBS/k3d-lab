@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# How the Lab runs below (scripts/below.sh): the config it records with, the arguments
+# How the Lab runs below (scripts/lib/below.sh): the config it records with, the arguments
 # of its recorder, and how verify reads back the minute before k3s stalled.
 
 setup() {
-  # shellcheck source=../below.sh
-  source "$BATS_TEST_DIRNAME/../below.sh"
+  # shellcheck source=../lib/below.sh
+  source "$BATS_TEST_DIRNAME/../lib/below.sh"
 }
 
 @test "config: the store and its log in the Lab's directory, since below takes them from no flag" {

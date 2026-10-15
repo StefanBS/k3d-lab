@@ -9,12 +9,12 @@
 # (run-diagnostics.sh).
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=host.sh
-source "$(dirname "$0")/host.sh"
-# shellcheck source=pause-state.sh
-source "$(dirname "$0")/pause-state.sh"
-# shellcheck source=run-diagnostics.sh
-source "$(dirname "$0")/run-diagnostics.sh"
+# shellcheck source=lib/host.sh
+source "$(dirname "$0")/lib/host.sh"
+# shellcheck source=lib/pauses.sh
+source "$(dirname "$0")/lib/pauses.sh"
+# shellcheck source=lib/run-diagnostics.sh
+source "$(dirname "$0")/lib/run-diagnostics.sh"
 
 # The checks that call the Lab from the Host trust only the Lab CA.
 export LAB_CA_CERT

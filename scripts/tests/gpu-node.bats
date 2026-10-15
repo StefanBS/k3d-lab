@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# What scripts/gpu-node.sh reads from a command's output, without a GPU Node: each
+# What scripts/remote/gpu-node.sh reads from a command's output, without a GPU Node: each
 # command is a stub that answers as the real one would. The script is sourced in a bash
 # of its own, since it sets the shell options it runs under, pipefail among them.
 
@@ -33,7 +33,7 @@ STUB
 
 # gpu_node <function> <argument>...: runs one of the script's functions.
 gpu_node() {
-  run bash -c 'source "$1"; shift; "$@"' gpu-node "$BATS_TEST_DIRNAME/../gpu-node.sh" "$@"
+  run bash -c 'source "$1"; shift; "$@"' gpu-node "$BATS_TEST_DIRNAME/../remote/gpu-node.sh" "$@"
 }
 
 @test "a table with Cilium's rules, the first of them early: restored without them (#163)" {

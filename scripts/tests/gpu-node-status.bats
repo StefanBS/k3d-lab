@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# The Lab line of 'just gpu status' (scripts/gpu-node-state.sh), without a Lab or a GPU
-# Node: gpu_node_lab_view <Lab exists> <Node object> <agent line>.
+# The Lab line of 'just gpu status' (scripts/lib/gpu-node-status.sh), without a Lab or a
+# GPU Node: gpu_node_lab_view <Lab exists> <Node object> <agent line>.
 
 setup() {
-  # shellcheck source=../gpu-node-state.sh
-  source "$BATS_TEST_DIRNAME/../gpu-node-state.sh"
+  # shellcheck source=../lib/gpu-node-status.sh
+  source "$BATS_TEST_DIRNAME/../lib/gpu-node-status.sh"
 }
 
 # expect <line> <arguments>...: gpu_node_lab_view prints that line for those arguments.

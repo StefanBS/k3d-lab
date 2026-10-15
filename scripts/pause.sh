@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Pauses one Application, so changes made by hand to it stay for an experiment that has
 # no business in Git, and resumes it, so ArgoCD puts Git back. The pause is a deny sync
-# window on its project (pause-state.sh), which the root Application leaves alone.
+# window on its project (lib/pauses.sh), which the root Application leaves alone.
 # Usage: pause.sh pause|resume <Application>
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=pause-state.sh
-source "$(dirname "$0")/pause-state.sh"
+# shellcheck source=lib/pauses.sh
+source "$(dirname "$0")/lib/pauses.sh"
 
 (($# == 2)) && [[ $1 == pause || $1 == resume ]] || die "usage: just pause|resume <Workload or Platform component>"
 action=$1 application=$2

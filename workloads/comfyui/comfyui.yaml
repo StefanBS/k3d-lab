@@ -112,8 +112,8 @@ spec:
               subPath: comfyui/rocm/libhsa-runtime64.so.1
               readOnly: true
       volumes:
-        # The GPU Node's model directory, MODEL_DIR in scripts/gpu-node.sh: weights,
-        # install, saved workflows and output, in comfyui/.
+        # The GPU Node's model directory, MODEL_DIR in scripts/remote/gpu-node.sh:
+        # weights, install, saved workflows and output, in comfyui/.
         - name: models
           hostPath:
             path: /var/lib/k3d-lab/models

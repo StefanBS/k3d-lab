@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# Which of the Lab's nodes aren't Ready yet (scripts/nodes-state.sh), without a Lab:
+# Which of the Lab's nodes aren't Ready yet (scripts/lib/nodes.sh), without a Lab:
 # nodes_unready, with the Lab's nodes on stdin.
 
 setup() {
-  # shellcheck source=../nodes-state.sh
-  source "$BATS_TEST_DIRNAME/../nodes-state.sh"
+  # shellcheck source=../lib/nodes.sh
+  source "$BATS_TEST_DIRNAME/../lib/nodes.sh"
 }
 
 # node <name> [<Ready status>]: a node as kubectl lists it, with that Ready condition, or

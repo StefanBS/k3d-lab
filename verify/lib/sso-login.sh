@@ -18,8 +18,8 @@
 set -euo pipefail
 # shellcheck source=checks.sh
 source "$(dirname "$0")/checks.sh"
-# shellcheck source=../../scripts/sso-state.sh
-source "$(dirname "$0")/../../scripts/sso-state.sh"
+# shellcheck source=../../scripts/lib/sso.sh
+source "$(dirname "$0")/../../scripts/lib/sso.sh"
 
 sso=https://sso.lab.localhost
 argocd=https://argocd.lab.localhost

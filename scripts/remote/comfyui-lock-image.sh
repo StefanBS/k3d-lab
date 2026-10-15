@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The image's half of `just comfyui lock` (scripts/comfyui-lock.sh, ADR 0007). Runs
 # inside ComfyUI's ROCm PyTorch image on the GPU Node, never on the Host: the Host sends
-# it over stdin after scripts/gpu-node.sh, whose run subcommand starts the image, and
-# the current lock after it.
+# it over stdin after scripts/remote/gpu-node.sh, whose run subcommand starts the image,
+# and the current lock after it.
 #   bash -s -- <ComfyUI commit> <the current lock's line count>
 # Installs the current lock with --no-deps, as setup.sh does, then ComfyUI's own
 # requirements.txt at that commit over it, which changes only what that commit needs

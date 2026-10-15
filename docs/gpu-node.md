@@ -1,6 +1,6 @@
 # The GPU Node
 
-The GPU Node is a gaming PC on the LAN that the Lab borrows now and then ([ADR 0002](adr/0002-gpu-node-joins-over-routed-docker-bridge.md)). It joins as a k3s Agent, labelled `k3d-lab/gpu=amd` and tainted `amd.com/gpu:NoSchedule`, so only GPU Workloads run there. The Host runs its side of each step over SSH as the `k3dlab` user, by sending it `scripts/gpu-node.sh` ([ADR 0005](adr/0005-gpu-node-lifecycle-is-bash-over-ssh.md)).
+The GPU Node is a gaming PC on the LAN that the Lab borrows now and then ([ADR 0002](adr/0002-gpu-node-joins-over-routed-docker-bridge.md)). It joins as a k3s Agent, labelled `k3d-lab/gpu=amd` and tainted `amd.com/gpu:NoSchedule`, so only GPU Workloads run there. The Host runs its side of each step over SSH as the `k3dlab` user, by sending it `scripts/remote/gpu-node.sh` ([ADR 0005](adr/0005-gpu-node-lifecycle-is-bash-over-ssh.md)).
 
 Once, after `just host wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` in `.env`, run `just gpu wizard`. It generates the Host's key, `~/.ssh/k3d-lab_ed25519`, prints the two commands that create the `k3dlab` user on the GPU Node, and then tests the login.
 

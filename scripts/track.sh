@@ -7,10 +7,10 @@
 # (run-diagnostics.sh).
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=pause-state.sh
-source "$(dirname "$0")/pause-state.sh"
-# shellcheck source=run-diagnostics.sh
-source "$(dirname "$0")/run-diagnostics.sh"
+# shellcheck source=lib/pauses.sh
+source "$(dirname "$0")/lib/pauses.sh"
+# shellcheck source=lib/run-diagnostics.sh
+source "$(dirname "$0")/lib/run-diagnostics.sh"
 
 usage="usage: just track [<branch or tag>] [--debug]"
 revision=''

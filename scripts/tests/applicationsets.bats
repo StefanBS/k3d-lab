@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
 # Which of the Lab's ApplicationSets haven't generated their Applications yet
-# (scripts/applicationsets-state.sh), without a Lab: applicationsets_pending, with the
+# (scripts/lib/applicationsets.sh), without a Lab: applicationsets_pending, with the
 # Lab's ApplicationSets on stdin.
 
 setup() {
-  # shellcheck source=../applicationsets-state.sh
-  source "$BATS_TEST_DIRNAME/../applicationsets-state.sh"
+  # shellcheck source=../lib/applicationsets.sh
+  source "$BATS_TEST_DIRNAME/../lib/applicationsets.sh"
 }
 
 # applicationset <name> [<ResourcesUpToDate status> [<reason>]]: an ApplicationSet as

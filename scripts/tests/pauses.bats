@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# Which Applications 'just pause' has paused (scripts/pause-state.sh), without a Lab:
+# Which Applications 'just pause' has paused (scripts/lib/pauses.sh), without a Lab:
 # each function reads the Lab's AppProjects on stdin.
 
 setup() {
-  # shellcheck source=../pause-state.sh
-  source "$BATS_TEST_DIRNAME/../pause-state.sh"
+  # shellcheck source=../lib/pauses.sh
+  source "$BATS_TEST_DIRNAME/../lib/pauses.sh"
 }
 
 # The deny window 'just pause comfyui' adds, as ArgoCD lists it.

@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
 # The root Application's manifest, its patches, and what it says
-# (scripts/root-application-state.sh), without a Lab.
+# (scripts/lib/root-application.sh), without a Lab.
 
 setup() {
-  # shellcheck source=../root-application-state.sh
-  source "$BATS_TEST_DIRNAME/../root-application-state.sh"
+  # shellcheck source=../lib/root-application.sh
+  source "$BATS_TEST_DIRNAME/../lib/root-application.sh"
 }
 
 @test "--revision sets the root Application's revision and its chart's, and nothing else" {

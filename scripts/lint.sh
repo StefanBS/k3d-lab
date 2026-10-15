@@ -346,6 +346,28 @@ else
   fail "shellcheck found problems (above)"
 fi
 
+# A script's folder says how it runs (CODING_STANDARDS.md): run, sourced after lib.sh, or
+# sent to another machine.
+lint_script_folders() {
+  local file before=$fails
+  while IFS= read -r -d '' file; do
+    case $file in
+      scripts/lib.sh) ;;
+      scripts/lib/*.sh)
+        [[ ! -x $file ]] || fail "$file is sourced, so it isn't executable"
+        if grep -qE '^\s*set -' "$file"; then fail "$file is sourced, so it sets no shell options"; fi
+        ;;
+      scripts/remote/*.sh)
+        if grep -qE '^\s*(source|\.)\s' "$file"; then fail "$file runs on another machine, so it sources nothing"; fi
+        ;;
+      scripts/*/*) fail "$file isn't in scripts/, scripts/lib/ or scripts/remote/" ;;
+      *) [[ -x $file ]] || fail "$file is run, so it's executable" ;;
+    esac
+  done < <(git ls-files -z --cached --others --exclude-standard 'scripts/*.sh' ':!scripts/tests/*')
+  ((fails > before)) || ok "every script is in the folder for how it runs"
+}
+lint_script_folders
+
 # The scripts' logic that needs no Lab, such as the GPU Node's state.
 log "Script tests"
 if bats scripts/tests; then

@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
-# Whether the Host is short on memory (scripts/host-memory.sh), from /proc/meminfo text
-# rather than the Host's own: host_memory_short < meminfo prints the numbers, and
+# Whether the Host is short on memory (scripts/lib/host-memory.sh), from /proc/meminfo
+# text rather than the Host's own: host_memory_short < meminfo prints the numbers, and
 # succeeds when the Host is short.
 
 setup() {
-  # shellcheck source=../host-memory.sh
-  source "$BATS_TEST_DIRNAME/../host-memory.sh"
+  # shellcheck source=../lib/host-memory.sh
+  source "$BATS_TEST_DIRNAME/../lib/host-memory.sh"
 }
 
 # meminfo <MemAvailable kB> <SwapTotal kB> <SwapFree kB>: /proc/meminfo with those values.

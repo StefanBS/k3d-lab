@@ -5,8 +5,8 @@
 # Usage: gpu.sh join [eviction=<size>] | leave [purge] | status | ssh [<command>...]
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=gpu-node-state.sh
-source "$(dirname "$0")/gpu-node-state.sh"
+# shellcheck source=lib/gpu-node-status.sh
+source "$(dirname "$0")/lib/gpu-node-status.sh"
 
 # Runs gpu-node.sh as root on the GPU Node: run_on_gpu_node <stdin> <subcommand> [<VAR=value>...]
 # The script goes over stdin, then the first argument, which only join reads: so the
@@ -20,7 +20,7 @@ run_on_gpu_node() {
   if [[ $subcommand == status ]] && ca_hash=$(lab_ca_hash 2>/dev/null) && [[ -n $ca_hash ]]; then
     vars+=(LAB_CA_HASH="$ca_hash")
   fi
-  { cat "$LAB_ROOT/scripts/gpu-node.sh" && printf '%s\n' "$input"; } |
+  { cat "$LAB_ROOT/scripts/remote/gpu-node.sh" && printf '%s\n' "$input"; } |
     gpu_ssh "sudo env $(printf '%q ' "${vars[@]}")bash -s -- $subcommand"
 }
 

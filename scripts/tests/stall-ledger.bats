@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
-# A stall probe's ledger row (scripts/stall-ledger.sh), from log text rather than the
+# A stall probe's ledger row (scripts/lib/stall-ledger.sh), from log text rather than the
 # Server's own: stall_ledger_row <time> <label> <burst MiB> <API writes> <max latency>
 # < logs prints the row, whose last column is the verdict.
 
 setup() {
-  # shellcheck source=../stall-ledger.sh
-  source "$BATS_TEST_DIRNAME/../stall-ledger.sh"
+  # shellcheck source=../lib/stall-ledger.sh
+  source "$BATS_TEST_DIRNAME/../lib/stall-ledger.sh"
 }
 
 # slow <duration>: a slow SQL line as k3s logs it, the duration after the statement.

@@ -3,10 +3,10 @@
 # then each UI with its Break-glass login, if it has one: those are new with every Lab.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=host.sh
-source "$(dirname "$0")/host.sh"
-# shellcheck source=secret-store.sh
-source "$(dirname "$0")/secret-store.sh"
+# shellcheck source=lib/host.sh
+source "$(dirname "$0")/lib/host.sh"
+# shellcheck source=lib/secret-store.sh
+source "$(dirname "$0")/lib/secret-store.sh"
 
 need_lab
 

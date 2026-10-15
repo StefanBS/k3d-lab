@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
-# Whether k3s on the Server restarted (scripts/server-restarts.sh), from log text rather
-# than the Server's own: server_restarts < logs prints when it started and its last
+# Whether k3s on the Server restarted (scripts/lib/server-restarts.sh), from log text
+# rather than the Server's own: server_restarts < logs prints when it started and its last
 # fatal error, and succeeds when there was either.
 
 setup() {
-  # shellcheck source=../server-restarts.sh
-  source "$BATS_TEST_DIRNAME/../server-restarts.sh"
+  # shellcheck source=../lib/server-restarts.sh
+  source "$BATS_TEST_DIRNAME/../lib/server-restarts.sh"
 }
 
 # The lines k3s logged around a restart in #113.

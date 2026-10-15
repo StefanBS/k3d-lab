@@ -1,13 +1,12 @@
 #!/usr/bin/env bats
-# What scripts/run-diagnostics.sh says about the Server once work has ended, from k3s
+# What scripts/lib/run-diagnostics.sh says about the Server once work has ended, from k3s
 # logs and below's CSV rather than the Server's own: diagnose_server's policy, how it
 # shows the Pressure, and which disk is under Docker's data root.
 
 setup() {
-  # shellcheck source=../run-diagnostics.sh
-  source "$BATS_TEST_DIRNAME/../run-diagnostics.sh"
-  # lib.sh's, which the module's callers source first.
-  warn() { printf 'WARN  %s\n' "$1"; }
+  # shellcheck source=../lib/run-diagnostics.sh
+  source "$BATS_TEST_DIRNAME/../lib/run-diagnostics.sh"
+  load lab
   LAB_BELOW_DIR=/home/me/.local/state/k3d-lab/below
   LAB_BELOW_CONFIG=$LAB_BELOW_DIR/below.conf
   # k3s and below's dumps give their times in UTC, whatever the Host's time zone.
