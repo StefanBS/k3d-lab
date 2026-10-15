@@ -3,5 +3,3 @@ chart: argo-cd
 repoURL: https://argoproj.github.io/argo-helm
 version: 10.10.3
 namespace: argocd
-# Other components need its CRDs or webhooks before they sync (gitops/values.yaml).
-wave: controllers

@@ -102,6 +102,18 @@ lint_platform_waves() {
   ((empty > 0)) || ok "every Wave has a Platform component"
 }
 
+# A component in a Wave renders no HTTPRoute: ArgoCD calls one Progressing until the
+# Gateway accepts it, and the Gateway is installed after every Wave, since it needs the
+# Waves' cert-manager and Cilium. Its Wave would never be Healthy. Reads the component
+# that render_component rendered last.
+lint_wave_routes() {
+  local dir=$1
+  [[ $(yq 'has("wave")' "$dir/component.yaml") == true ]] || return 0
+  if [[ -n $(yq -N 'select(.kind == "HTTPRoute") | .metadata.name' "$manifests") ]]; then
+    fail "$dir is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed"
+  fi
+}
+
 # Renders a component into $manifests the way ArgoCD does: its pinned chart and values,
 # or its kustomization.
 render_component() {
@@ -382,6 +394,7 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
   if [[ $dir == platform/* ]]; then
     platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
+    lint_wave_routes "$dir"
   fi
   # A render that failed left $manifests empty.
   add_admitted "$dir"
