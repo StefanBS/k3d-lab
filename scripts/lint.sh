@@ -21,38 +21,17 @@ enforced_policies=$(mktemp --suffix=.yaml)
 admitted=$(mktemp --suffix=.yaml)
 trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies" "$admitted"' EXIT
 
-# The ApplicationSets template these fields into each component's Application.
-lint_component_folder() {
-  local dir=$1 key only keys=(namespace) file=kustomization.yaml
-  if component_has_chart "$dir"; then
-    keys+=(repoURL version)
-    file=values.yaml
+# report_problems <OK line> <command>...: a FAIL for each problem the command prints, one
+# per line, or the OK line when it prints none.
+report_problems() {
+  local passed=$1 problems problem
+  shift
+  problems=$("$@")
+  if [[ -z $problems ]]; then
+    ok "$passed"
+    return
   fi
-  for key in "${keys[@]}"; do
-    # -e: fails when the key is missing or null.
-    yq -e ".$key" "$dir/component.yaml" >/dev/null 2>&1 || fail "$dir/component.yaml: '$key' is missing"
-  done
-  [[ -f $dir/$file ]] || fail "$dir/$file is missing"
-  # Optional, and only a Platform component's: the Wave its ApplicationSet installs it
-  # in, one that gitops/values.yaml lists.
-  if [[ $(yq 'has("wave")' "$dir/component.yaml") == true ]]; then
-    if [[ $dir != platform/* ]]; then
-      fail "$dir/component.yaml: only a Platform component sets 'wave'"
-    elif ! yq '.platformWaves[]' gitops/values.yaml | grep -qxF -- "$(yq '.wave' "$dir/component.yaml")"; then
-      fail "$dir/component.yaml: 'wave' isn't one of gitops/values.yaml's platformWaves"
-    fi
-  fi
-  # Optional, and only a Workload's: the workloads ApplicationSet labels its namespace by
-  # `isolation`, and leaves a `role: demo` out of a Lab that wasn't asked for its Demos.
-  for only in isolation=strict role=demo; do
-    key=${only%=*}
-    [[ $(yq "has(\"$key\")" "$dir/component.yaml") == true ]] || continue
-    if [[ $dir != workloads/* ]]; then
-      fail "$dir/component.yaml: only a Workload sets '$key'"
-    elif [[ $(yq ".$key" "$dir/component.yaml") != "${only#*=}" ]]; then
-      fail "$dir/component.yaml: '$key' can only be '${only#*=}'"
-    fi
-  done
+  while IFS= read -r problem; do fail "$problem"; done <<<"$problems"
 }
 
 # The gitops chart can't read component.yaml, so it lists the Platform's namespaces
@@ -403,16 +382,12 @@ read_policies
 lint_policy_fixtures
 
 log "Components"
+report_problems "every component folder is what the ApplicationSets expect" components_problems
 mapfile -t components < <(component_dirs)
-((${#components[@]})) || fail "no component folders found"
-# Each folder's name is its Application's name, and those share one namespace.
-duplicates=$(printf '%s\n' "${components[@]##*/}" | sort | uniq -d)
-[[ -z $duplicates ]] || fail "component names used twice: $(paste -sd' ' <<<"$duplicates")"
 write_application_chart
 # What the Platform's renders create or install into, for lint_platform_namespaces.
 platform_rendered_namespaces=
 for dir in "${components[@]}"; do
-  lint_component_folder "$dir"
   lint_rendering "$dir" render_component "$dir"
   if [[ $dir == platform/* ]]; then
     platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
@@ -434,21 +409,8 @@ lint_demos_selector
 # Every fact the scripts read from the Platform's values, so a renamed value fails
 # here rather than in the middle of `just up`.
 log "Platform facts"
-unresolved=0
-for name in $(printf '%s\n' "${!PLATFORM_FACTS[@]}" | sort); do
-  if ! value=$(platform_fact "$name" 2>&1); then
-    fail "${value#error: }"
-    unresolved=$((unresolved + 1))
-  elif [[ -n ${PLATFORM_PINNED_FACTS[$name]:-} ]]; then
-    constant=${PLATFORM_PINNED_FACTS[$name]}
-    if [[ $value == "${!constant}" ]]; then
-      ok "Platform fact '$name' is $constant (${!constant})"
-    else
-      fail "Platform fact '$name' is '$value', not $constant (${!constant})"
-    fi
-  fi
-done
-((unresolved > 0)) || ok "every Platform fact resolves (${#PLATFORM_FACTS[@]})"
+report_problems "every Platform fact resolves, and the pinned ones match their constants (${#PLATFORM_FACTS[@]})" \
+  platform_facts_problems
 
 # Chainsaw only checks each file against its schema. The step templates have none, so
 # a broken one shows up when `just verify` loads the checks that use it.
