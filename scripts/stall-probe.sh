@@ -7,8 +7,8 @@
 # STALL_PROBE_DIR is where the burst goes; it must be on that filesystem.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=stall-ledger.sh
-source "$(dirname "$0")/stall-ledger.sh"
+# shellcheck source=lib/stall-ledger.sh
+source "$(dirname "$0")/lib/stall-ledger.sh"
 
 label=${1:-}
 burst_mib=${2:-8192}

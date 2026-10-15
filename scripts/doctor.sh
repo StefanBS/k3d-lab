@@ -3,12 +3,12 @@
 
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=host.sh
-source "$(dirname "$0")/host.sh"
-# shellcheck source=secret-store.sh
-source "$(dirname "$0")/secret-store.sh"
-# shellcheck source=host-memory.sh
-source "$(dirname "$0")/host-memory.sh"
+# shellcheck source=lib/host.sh
+source "$(dirname "$0")/lib/host.sh"
+# shellcheck source=lib/secret-store.sh
+source "$(dirname "$0")/lib/secret-store.sh"
+# shellcheck source=lib/host-memory.sh
+source "$(dirname "$0")/lib/host-memory.sh"
 
 # The variable names a .env-style file assigns, sorted.
 env_keys() {

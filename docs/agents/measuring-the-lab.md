@@ -23,7 +23,7 @@ What each number really counts, learned the hard way on #113. Check a measuremen
 
 ## Replaying a run
 
-While `verify`, `up --debug` or `track --debug` runs, below records every cgroup's pressure, memory, major faults and disk I/O, and the Host's disks and swap, every 2s, into `~/.local/state/k3d-lab/below/` (`scripts/below.sh`). It keeps a week. Read it with that store's config, which the run writes:
+While `verify`, `up --debug` or `track --debug` runs, below records every cgroup's pressure, memory, major faults and disk I/O, and the Host's disks and swap, every 2s, into `~/.local/state/k3d-lab/below/` (`scripts/lib/below.sh`). It keeps a week. Read it with that store's config, which the run writes:
 
 ```bash
 TZ=UTC below --config ~/.local/state/k3d-lab/below/below.conf replay -t '2026-10-09 10:20:00'

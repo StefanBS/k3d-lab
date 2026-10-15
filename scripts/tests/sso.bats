@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# Which OIDC clients need a secret in the Secret Store (scripts/sso-state.sh), from Dex's
+# Which OIDC clients need a secret in the Secret Store (scripts/lib/sso.sh), from Dex's
 # config, without a Lab or a Secret Store.
 
 setup() {
-  # shellcheck source=../sso-state.sh
-  source "$BATS_TEST_DIRNAME/../sso-state.sh"
+  # shellcheck source=../lib/sso.sh
+  source "$BATS_TEST_DIRNAME/../lib/sso.sh"
 }
 
 @test "a client with secretEnv needs a secret" {

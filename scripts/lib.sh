@@ -84,8 +84,8 @@ retry() {
   done
 }
 
-# shellcheck source=wait.sh
-source "$LAB_ROOT/scripts/wait.sh"
+# shellcheck source=lib/wait.sh
+source "$LAB_ROOT/scripts/lib/wait.sh"
 
 # What the scripts record about the Lab, outside the repo.
 LAB_STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/k3d-lab
@@ -119,8 +119,8 @@ record_pressure() {
 kc() { kubectl --context "$LAB_CONTEXT" "$@"; }
 
 lab_exists() { k3d cluster get "$LAB_NAME" >/dev/null 2>&1; }
-# shellcheck source=applications-state.sh
-source "$LAB_ROOT/scripts/applications-state.sh"
+# shellcheck source=lib/applications.sh
+source "$LAB_ROOT/scripts/lib/applications.sh"
 
 # wait_settled <seconds> [--at <commit>] [--group <group>] [--gone] [<name>...]: waits
 # until the Lab's Applications are Settled, as applications_unsettled takes the options,
@@ -149,8 +149,8 @@ wait_settled() {
 }
 applications_in_lab_unsettled() { kc -n argocd get applications -o json | applications_unsettled "$@"; }
 
-# shellcheck source=applicationsets-state.sh
-source "$LAB_ROOT/scripts/applicationsets-state.sh"
+# shellcheck source=lib/applicationsets.sh
+source "$LAB_ROOT/scripts/lib/applicationsets.sh"
 
 # wait_applicationsets <seconds> [<name>...]: waits until the Lab's ApplicationSets, or
 # only those named, exist and say ResourcesUpToDate, so every Application they generate
@@ -163,8 +163,8 @@ wait_applicationsets() {
 }
 applicationsets_in_lab_pending() { kc -n argocd get applicationsets -o json | applicationsets_pending "$@"; }
 
-# shellcheck source=nodes-state.sh
-source "$LAB_ROOT/scripts/nodes-state.sh"
+# shellcheck source=lib/nodes.sh
+source "$LAB_ROOT/scripts/lib/nodes.sh"
 
 # wait_nodes_ready <seconds> [<kubectl get option>...]: waits until the Lab's nodes, or
 # those the options select, such as -l <label>, are Ready. Gives up after that many seconds.
@@ -177,8 +177,8 @@ nodes_in_lab_unready() { kc get nodes -o json "$@" | nodes_unready; }
 
 need_lab() { lab_exists || die "no Lab named '$LAB_NAME'; run 'just up'"; }
 
-# shellcheck source=root-application-state.sh
-source "$LAB_ROOT/scripts/root-application-state.sh"
+# shellcheck source=lib/root-application.sh
+source "$LAB_ROOT/scripts/lib/root-application.sh"
 
 # For the scripts that patch the root Application, which up.sh creates last.
 need_root_application() {

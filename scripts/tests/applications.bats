@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# Which of the Lab's Applications aren't Settled yet (scripts/applications-state.sh),
+# Which of the Lab's Applications aren't Settled yet (scripts/lib/applications.sh),
 # without a Lab: applications_unsettled, with the Lab's Applications on stdin.
 
 setup() {
-  # shellcheck source=../applications-state.sh
-  source "$BATS_TEST_DIRNAME/../applications-state.sh"
+  # shellcheck source=../lib/applications.sh
+  source "$BATS_TEST_DIRNAME/../lib/applications.sh"
 }
 
 repo=https://github.com/StefanBS/k3d-lab.git

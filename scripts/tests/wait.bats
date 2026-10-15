@@ -1,17 +1,11 @@
 #!/usr/bin/env bats
-# How the scripts wait for the Lab (scripts/wait.sh), without a Lab: wait_until_none with
-# a scripted command, and how it logs what's pending.
+# How the scripts wait for the Lab (scripts/lib/wait.sh), without a Lab: wait_until_none
+# with a scripted command, and how it logs what's pending.
 
 setup() {
-  # shellcheck source=../wait.sh
-  source "$BATS_TEST_DIRNAME/../wait.sh"
-  # lib.sh's, as the scripts have them. Each sleep moves the clock on instead of waiting.
-  log() { printf '==> %s\n' "$*"; }
-  die() {
-    printf 'error: %s\n' "$*"
-    exit 1
-  }
-  sleep() { SECONDS=$((SECONDS + $1)); }
+  # shellcheck source=../lib/wait.sh
+  source "$BATS_TEST_DIRNAME/../lib/wait.sh"
+  load lab
   answers=$BATS_TEST_TMPDIR/answers
 }
 

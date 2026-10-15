@@ -16,7 +16,7 @@ pubkey=$(<"$GPU_NODE_SSH_KEY.pub")
 cat <<EOF
 Create the k3dlab user on the GPU Node. From here, as your own user there, who can sudo:
 
-  scp $LAB_ROOT/scripts/gpu-node.sh <you>@$GPU_NODE_IP:
+  scp $LAB_ROOT/scripts/remote/gpu-node.sh <you>@$GPU_NODE_IP:
   ssh -t <you>@$GPU_NODE_IP sudo bash gpu-node.sh setup '$pubkey'
 
 It's safe to run again: it replaces k3dlab's key with this one.

@@ -11,10 +11,10 @@ if [[ $EUID -eq 0 && -z ${SUDO_USER:-} ]]; then
 fi
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
-# shellcheck source=host.sh
-source "$(dirname "$0")/host.sh"
-# shellcheck source=secret-store.sh
-source "$(dirname "$0")/secret-store.sh"
+# shellcheck source=lib/host.sh
+source "$(dirname "$0")/lib/host.sh"
+# shellcheck source=lib/secret-store.sh
+source "$(dirname "$0")/lib/secret-store.sh"
 
 if [[ $EUID -eq 0 ]]; then
   fix_host_steps root
