@@ -8,6 +8,16 @@ configs:
     # defaults that CRD schemas fill in, such as Gateway API's parentRefs group and
     # kind, keep Applications OutOfSync forever.
     controller.diff.server.side: true
+    # Only so that an Application's health reaches its ApplicationSet's status as it
+    # changes: otherwise it waits for the next refresh, minutes later, and so does the
+    # next Wave (gitops/values.yaml). No ApplicationSet sets a RollingSync
+    # strategy, which would turn every Application's automated sync off.
+    applicationsetcontroller.enable.progressive.syncs: true
+    # Ends a sync stuck waiting on a Wave that never gets Healthy, such as the root
+    # Application's on a branch that breaks a controller: until it ends, the root syncs
+    # no other revision, so `just track` couldn't move off that branch. Longer than a
+    # new Lab's whole Platform takes.
+    controller.sync.timeout.seconds: 1800
   # Single sign-on with the Lab login, through Dex at https://sso.lab.localhost
   # (ADR 0013). ArgoCD's own admin stays, as the Break-glass login.
   cm:
@@ -22,6 +32,53 @@ configs:
       requestedScopes: [openid, profile, email]
       # Also the tokens Verify's check sso-login gets, with its own client.
       allowedAudiences: [argocd, verify]
+    # The root Application's sync waits for each Wave's ApplicationSet to be
+    # Healthy before the next (gitops/values.yaml). ArgoCD's own check says Healthy once
+    # the Applications exist, so this one also waits for every one of them to be
+    # Healthy. An ApplicationSet's first status can list none of the Applications it
+    # just created, so one that lists none isn't Healthy either. A Degraded Application
+    # keeps its Wave Progressing: it retries until it's Healthy (gitops/).
+    # Tested by scripts/tests/applicationset-health.bats.
+    resource.customizations.health.argoproj.io_ApplicationSet: |
+      local function condition(type)
+        for _, c in ipairs(obj.status and obj.status.conditions or {}) do
+          if c.type == type then return c end
+        end
+      end
+      local function is(type, status)
+        local c = condition(type)
+        return c ~= nil and c.status == status, c and c.message or ""
+      end
+      local hs = {}
+      local yes, message = is("ErrorOccurred", "True")
+      if not yes then yes, message = is("ResourcesUpToDate", "False") end
+      if yes then
+        hs.status = "Degraded"
+        hs.message = message
+        return hs
+      end
+      if not is("ResourcesUpToDate", "True") then
+        hs.status = "Progressing"
+        hs.message = "Waiting for the Applications to be generated"
+        return hs
+      end
+      local resources = obj.status.resources or {}
+      if #resources == 0 then
+        hs.status = "Progressing"
+        hs.message = "Waiting for the Applications to be listed"
+        return hs
+      end
+      for _, r in ipairs(resources) do
+        local health = r.health and r.health.status or ""
+        if health ~= "Healthy" then
+          hs.status = "Progressing"
+          hs.message = "Waiting for " .. r.name .. ", which is " .. (health ~= "" and health or "Unknown")
+          return hs
+        end
+      end
+      hs.status = "Healthy"
+      hs.message = "Every Application is Healthy"
+      return hs
   rbac:
     # Dex gives a static user no groups, so the admin role goes to the Lab login's email.
     scopes: "[email]"

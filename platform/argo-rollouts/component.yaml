@@ -3,3 +3,5 @@ chart: argo-rollouts
 repoURL: https://argoproj.github.io/argo-helm
 version: 2.43.7
 namespace: argo-rollouts
+# Other components need its CRDs or webhooks before they sync (gitops/values.yaml).
+wave: controllers

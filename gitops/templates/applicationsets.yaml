@@ -3,15 +3,29 @@ One ApplicationSet per group: an Application for every <group>/<component>/ fold
 It installs the chart its component.yaml names, with the values.yaml beside it, or,
 when component.yaml names no chart, the folder's kustomization.yaml. Each group's
 Applications run in the ArgoCD project of the same name (appprojects.yaml).
+The Platform is split by the Wave its components set, one ApplicationSet per Wave in
+platformWaves' order and a last one, `platform`, for the components that set none. The
+root Application applies them in that order, then the Workloads': each sync wave waits
+for the one before it to be Healthy, which an ApplicationSet is once its Applications
+are (platform/argocd/values.yaml).
 The `{{`...`}}` parts are left for the ApplicationSet's own templating.
 */}}
-{{- range $group := list "platform" "workloads" }}
+{{- $appsets := list }}
+{{- range $wave := .Values.platformWaves }}
+{{- $appsets = append $appsets (dict "name" (printf "platform-%s" $wave) "group" "platform" "waves" (list $wave) "operator" "In") }}
+{{- end }}
+{{- $appsets = append $appsets (dict "name" "platform" "group" "platform" "waves" .Values.platformWaves "operator" "NotIn") }}
+{{- $appsets = append $appsets (dict "name" "workloads" "group" "workloads") }}
+{{- range $i, $appset := $appsets }}
+{{- $group := $appset.group }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: {{ $group }}
+  name: {{ $appset.name }}
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "{{ $i }}"
 spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
@@ -21,7 +35,15 @@ spec:
         revision: {{ $.Values.revision }}
         files:
           - path: {{ $group }}/*/component.yaml
-      {{- if and (eq $group "workloads") (not $.Values.demos) }}
+      {{- if and $appset.waves (eq $group "platform") }}
+      # The components of this Wave. NotIn also selects a missing key, so the last
+      # ApplicationSet gets every component that sets no Wave.
+      selector:
+        matchExpressions:
+          - key: wave
+            operator: {{ $appset.operator }}
+            values: [{{ join ", " $appset.waves }}]
+      {{- else if and (eq $group "workloads") (not $.Values.demos) }}
       # A Demo is left out of a Lab that wasn't asked for its Demos. A Workload that sets
       # no `role` matches: NotIn also selects a missing key.
       selector:
@@ -52,10 +74,11 @@ spec:
           - ServerSideApply=true
           # A sync keeps the ignored differences below (ignoreDifferences) as they are live.
           - RespectIgnoreDifferences=true
-        # Applications sync in no particular order, Platform and Workloads alike. One
-        # that needs another's CRDs or webhook fails until they're up, so it retries
-        # forever: once retries run out, ArgoCD never syncs the same commit again by
-        # itself. A short cap keeps a new Lab from waiting minutes after they're up.
+        # The Waves order a new Lab's Applications, but not a sync after that: each
+        # syncs a new commit by itself. One that needs another's CRDs or webhook fails
+        # until they're up, so it retries forever: once retries run out, ArgoCD never
+        # syncs the same commit again by itself. A short cap keeps it from waiting
+        # minutes after they're up.
         retry:
           limit: -1
           backoff:
