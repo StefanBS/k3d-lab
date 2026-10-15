@@ -1,6 +1,6 @@
-# Which of the Lab's Applications aren't Settled yet. Sourced by lib.sh, whose
-# wait_settled waits on it, and on its own by scripts/tests/, so it sets no shell options
-# and runs nothing when sourced.
+# The Lab's Applications: waiting for them to be Settled, and refreshing them. Sourced by
+# lib.sh, and on its own by scripts/tests/, so it sets no shell options and runs nothing
+# when sourced.
 # shellcheck shell=bash
 
 # applications_unsettled [--at <repo> <commit>] [--group <group>] [--gone] [<name>...]:
@@ -68,4 +68,40 @@ applications_unsettled() {
       else "\($name): \(why)"
       end
     end' --args "$@"
+}
+
+# wait_settled <seconds> [--at <commit>] [--group <group>] [--gone] [<name>...]: waits
+# until the Lab's Applications are Settled, as applications_unsettled takes the options,
+# with --at a commit of LAB_REPO. Gives up after that many seconds.
+wait_settled() {
+  local seconds=$1 late="these Applications aren't Settled" args=()
+  shift
+  while (($#)); do
+    case $1 in
+      --at)
+        args+=(--at "$LAB_REPO" "$2")
+        shift 2
+        ;;
+      --gone)
+        late="these Applications aren't gone"
+        args+=("$1")
+        shift
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+  wait_until_none "$seconds" "$late" applications_in_lab_unsettled "${args[@]}"
+}
+applications_in_lab_unsettled() { kc -n argocd get applications -o json | applications_unsettled "$@"; }
+
+# refresh_applications [<name>...]: has ArgoCD compare the Lab's Applications, or only
+# those named, with Git now rather than at its next poll, as when a sync left their spec
+# unchanged.
+refresh_applications() {
+  local which=(--all)
+  (($# == 0)) || which=("$@")
+  kc -n argocd annotate applications "${which[@]}" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
 }

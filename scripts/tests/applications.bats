@@ -1,13 +1,14 @@
 #!/usr/bin/env bats
-# Which of the Lab's Applications aren't Settled yet (scripts/lib/applications.sh),
-# without a Lab: applications_unsettled, with the Lab's Applications on stdin.
+# Waiting for the Lab's Applications to be Settled, and refreshing them
+# (scripts/lib/applications.sh), without a Lab: kc answers for the Lab.
 
 setup() {
   # shellcheck source=../lib/applications.sh
   source "$BATS_TEST_DIRNAME/../lib/applications.sh"
+  load lab
+  repo=$LAB_REPO
 }
 
-repo=https://github.com/StefanBS/k3d-lab.git
 commit=58f6f579d5fc05783fa2f7db28fd3c72d7e15ecb
 
 # application <name> <sync> <health> <revisions> <repoURLs> [<compared to>] [<group>]: an
@@ -33,8 +34,8 @@ application() {
 # settled <name>: an Application that's Synced and Healthy at the commit.
 settled() { application "$1" Synced Healthy "$commit" "$repo"; }
 
-# expect <output> <options>... -- <Application>...: applications_unsettled's output with
-# those options, for a list of those Applications.
+# expect <pending> <option>... -- <Application>...: what wait_settled says is still pending
+# with those options, while the Lab lists those Applications.
 expect() {
   local want=$1 got options=()
   shift
@@ -43,7 +44,8 @@ expect() {
     shift
   done
   shift
-  got=$(printf '%s\n' "$@" | jq -s '{"items": .}' | applications_unsettled "${options[@]}")
+  printf '%s\n' "$@" | jq -s '{"items": .}' | kc_answers -n argocd get applications -o json
+  got=$(still_pending wait_settled "${options[@]}")
   [[ $got == "$want" ]] || {
     echo "want: $want"
     echo "got:  $got"
@@ -52,13 +54,13 @@ expect() {
 }
 
 @test "every Application synced and healthy at the commit: none unsettled" {
-  expect "" --at "$repo" "$commit" -- \
+  expect "" --at "$commit" -- \
     "$(settled root)" \
     "$(application cilium Synced Healthy "1.20.2,$commit" "https://helm.cilium.io,$repo")"
 }
 
 @test "synced at another commit of the repo: unsettled" {
-  expect "cilium: synced at 0123456" --at "$repo" "$commit" -- \
+  expect "cilium: synced at 0123456" --at "$commit" -- \
     "$(settled root)" \
     "$(application cilium Synced Healthy "1.20.2,0123456789" "https://helm.cilium.io,$repo")"
 }
@@ -71,16 +73,16 @@ cilium: Synced, Progressing" -- \
 }
 
 @test "never compared, as when the branch it tracked is gone: unsettled" {
-  expect "root: Unknown, Healthy" --at "$repo" "$commit" -- "$(application root Unknown Healthy "" "$repo")"
+  expect "root: Unknown, Healthy" --at "$commit" -- "$(application root Unknown Healthy "" "$repo")"
 }
 
 @test "synced, but at no revision of the repo: unsettled" {
-  expect "cilium: synced at no revision" --at "$repo" "$commit" -- \
+  expect "cilium: synced at no revision" --at "$commit" -- \
     "$(application cilium Synced Healthy "1.20.2" "https://helm.cilium.io,$repo")"
 }
 
 @test "synced at the commit, but compared before it tracked the branch: unsettled" {
-  expect "cilium: compared with main" --at "$repo" "$commit" -- \
+  expect "cilium: compared with main" --at "$commit" -- \
     "$(application cilium Synced Healthy "1.20.2,$commit" "https://helm.cilium.io,$repo" main)"
 }
 
@@ -122,7 +124,33 @@ third-demo: not generated yet" rollouts-demo other-demo third-demo -- \
   expect "" --gone rollouts-demo -- "$(settled root)"
 }
 
-@test "no Applications to read, as when the request failed: fails" {
-  run applications_unsettled --gone rollouts-demo <<<""
+@test "the request failed: pending, not passed, also when waiting for Applications to go" {
+  [[ $(still_pending wait_settled --gone rollouts-demo) == "the Lab's API isn't answering" ]]
+  [[ $(still_pending wait_settled) == "the Lab's API isn't answering" ]]
+}
+
+@test "still unsettled, or not gone, at the deadline: gives up, saying which" {
+  settled rollouts-demo | jq -s '{"items": .}' | kc_answers -n argocd get applications -o json
+  run wait_settled 60 --gone rollouts-demo
+  [[ $status -eq 1 ]]
+  [[ ${lines[-2]} == "error: these Applications aren't gone after 1 minutes:" ]]
+  [[ ${lines[-1]} == "rollouts-demo: still there" ]]
+  application root OutOfSync Healthy "$commit" "$repo" | jq -s '{"items": .}' |
+    kc_answers -n argocd get applications -o json
+  run wait_settled 0 root
+  [[ $status -eq 1 && ${lines[-2]} == "error: these Applications aren't Settled after 0 minutes:" ]]
+}
+
+@test "refresh: every Application without names, only those named with them" {
+  kc_succeeds -n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overwrite
+  kc_succeeds -n argocd annotate applications comfyui cilium argocd.argoproj.io/refresh=hard --overwrite
+  refresh_applications
+  refresh_applications comfyui cilium
+  [[ $(cat "$KC_CALLS") == "-n argocd annotate applications --all argocd.argoproj.io/refresh=hard --overwrite
+-n argocd annotate applications comfyui cilium argocd.argoproj.io/refresh=hard --overwrite" ]]
+}
+
+@test "refresh: a request that fails fails" {
+  run refresh_applications comfyui
   [[ $status -ne 0 ]]
 }
