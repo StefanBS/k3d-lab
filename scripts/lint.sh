@@ -33,6 +33,15 @@ lint_component_folder() {
     yq -e ".$key" "$dir/component.yaml" >/dev/null 2>&1 || fail "$dir/component.yaml: '$key' is missing"
   done
   [[ -f $dir/$file ]] || fail "$dir/$file is missing"
+  # Optional, and only a Platform component's: the Wave its ApplicationSet installs it
+  # in, one that gitops/values.yaml lists.
+  if [[ $(yq 'has("wave")' "$dir/component.yaml") == true ]]; then
+    if [[ $dir != platform/* ]]; then
+      fail "$dir/component.yaml: only a Platform component sets 'wave'"
+    elif ! yq '.platformWaves[]' gitops/values.yaml | grep -qxF -- "$(yq '.wave' "$dir/component.yaml")"; then
+      fail "$dir/component.yaml: 'wave' isn't one of gitops/values.yaml's platformWaves"
+    fi
+  fi
   # Optional, and only a Workload's: the workloads ApplicationSet labels its namespace by
   # `isolation`, and leaves a `role: demo` out of a Lab that wasn't asked for its Demos.
   for only in isolation=strict role=demo; do
@@ -68,6 +77,40 @@ lint_platform_namespaces() {
     ok "gitops/values.yaml lists the Platform's namespaces"
   else
     fail "gitops/values.yaml's platformNamespaces aren't the Platform's namespaces:"$'\n'"$(diff <(echo "$listed") <(echo "$actual"))"
+  fi
+}
+
+# Each Wave gitops/values.yaml lists has a Platform component: the root Application's sync
+# would wait forever for an ApplicationSet with none to be Healthy
+# (platform/argocd/values.yaml). So would it for the Platform's last one, which gets the
+# components that set no Wave.
+lint_platform_waves() {
+  local wave waves empty=0
+  # A component that sets no Wave prints an empty line.
+  waves=$(for dir in "${components[@]}"; do
+    if [[ $dir == platform/* ]]; then yq '.wave // ""' "$dir/component.yaml"; fi
+  done)
+  for wave in $(yq '.platformWaves[]' gitops/values.yaml); do
+    grep -qxF -- "$wave" <<<"$waves" && continue
+    fail "no Platform component is in the Wave $wave (gitops/values.yaml)"
+    empty=$((empty + 1))
+  done
+  if ! grep -qx '' <<<"$waves"; then
+    fail "every Platform component sets a Wave, which leaves the Platform's last ApplicationSet with none"
+    empty=$((empty + 1))
+  fi
+  ((empty > 0)) || ok "every Wave has a Platform component"
+}
+
+# A component in a Wave renders no HTTPRoute: ArgoCD calls one Progressing until the
+# Gateway accepts it, and the Gateway is installed after every Wave, since it needs the
+# Waves' cert-manager and Cilium. Its Wave would never be Healthy. Reads the component
+# that render_component rendered last.
+lint_wave_routes() {
+  local dir=$1
+  [[ $(yq 'has("wave")' "$dir/component.yaml") == true ]] || return 0
+  if [[ -n $(yq -N 'select(.kind == "HTTPRoute") | .metadata.name' "$manifests") ]]; then
+    fail "$dir is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed"
   fi
 }
 
@@ -125,14 +168,15 @@ lint_same_namespace_source() {
 }
 
 # The chart render_application renders, written once: the ApplicationSets don't change
-# between components.
+# between components, and a group's waves share one template.
 write_application_chart() {
   local group appsets appset
   printf 'apiVersion: v2\nname: application\nversion: 0.1.0\n' >"$application_chart/Chart.yaml"
   mkdir "$application_chart/templates"
   appsets=$(helm template gitops gitops --show-only templates/applicationsets.yaml)
-  for group in $(yq -N '.metadata.name' <<<"$appsets"); do
-    appset=$(GROUP=$group yq 'select(.metadata.name == strenv(GROUP)) | .spec' <<<"$appsets")
+  for group in $(yq -N '.spec.template.metadata.labels["k3d-lab/group"]' <<<"$appsets" | sort -u); do
+    appset=$(GROUP=$group yq 'select(.spec.template.metadata.labels["k3d-lab/group"] == strenv(GROUP)) | .spec' <<<"$appsets" |
+      yq -N 'select(document_index == 0)')
     {
       echo '{{- with .Values }}'
       echo 'apiVersion: argoproj.io/v1alpha1'
@@ -151,9 +195,9 @@ render_gitops() {
 }
 
 # The workloads ApplicationSet leaves the Demos out, with a selector on its generator,
-# unless the Lab has its Demos. The platform one never selects.
+# unless the Lab has its Demos. The Platform's select only by Wave.
 lint_demos_selector() {
-  local selectors='[select(.kind == "ApplicationSet") | select(.spec.generators[0] | has("selector")) | .metadata.name] | join(" ")'
+  local selectors='[select(.kind == "ApplicationSet") | select(.spec.generators[0].selector.matchExpressions[]? | .key == "role") | .metadata.name] | unique | join(" ")'
   render_gitops
   if [[ $(yq ea "$selectors" "$manifests") != workloads ]]; then
     fail "the workloads ApplicationSet, and only it, should leave the Demos out by default"
@@ -350,6 +394,7 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
   if [[ $dir == platform/* ]]; then
     platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
+    lint_wave_routes "$dir"
   fi
   # A render that failed left $manifests empty.
   add_admitted "$dir"
@@ -357,6 +402,7 @@ for dir in "${components[@]}"; do
 done
 lint_admission
 lint_platform_namespaces
+lint_platform_waves
 lint_rendering "the same-namespace allow" render_same_namespace_allow
 lint_same_namespace_source workloads/rollouts-demo
 lint_rendering gitops render_gitops

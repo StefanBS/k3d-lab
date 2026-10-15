@@ -3,3 +3,5 @@ chart: prometheus-operator-crds
 repoURL: https://prometheus-community.github.io/helm-charts
 version: 32.0.1
 namespace: monitoring
+# Other components need its CRDs before they sync (gitops/values.yaml).
+wave: crds

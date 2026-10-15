@@ -3,3 +3,5 @@ chart: cilium
 repoURL: https://helm.cilium.io
 version: 1.20.2
 namespace: kube-system
+# Other components need its CRDs or webhooks before they sync (gitops/values.yaml).
+wave: controllers

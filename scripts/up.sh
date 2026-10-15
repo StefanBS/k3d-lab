@@ -153,13 +153,15 @@ root_application_manifest "$revision" "$demos" | kc apply -f - >/dev/null
 # The root Application can be Healthy before it has even created the ApplicationSets,
 # so they are waited for by name, rendered from the same chart. Once each says
 # ResourcesUpToDate, every Application exists to be waited for: the wait for them to be
-# Settled counts only those that ArgoCD lists.
+# Settled counts only those that ArgoCD lists. The root Application creates each
+# ApplicationSet once the Platform's waves before it are Healthy, so the last is created
+# near the end of the Platform's install: the wait is that long.
 log "Waiting for ArgoCD to sync the Lab"
 mapfile -t appsets < <(helm template gitops "$LAB_ROOT/gitops" --show-only templates/applicationsets.yaml |
   yq -N 'select(.kind == "ApplicationSet") | .metadata.name')
 # Without names, the wait would count whichever ApplicationSets are listed.
 ((${#appsets[@]})) || die "the gitops chart renders no ApplicationSets"
-wait_applicationsets 300 "${appsets[@]}"
+wait_applicationsets 900 "${appsets[@]}"
 wait_settled 900 --at "$commit"
 
 [[ -z $debug ]] || exec "$LAB_ROOT/scripts/verify.sh"

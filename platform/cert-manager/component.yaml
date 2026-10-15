@@ -3,3 +3,5 @@ chart: cert-manager
 repoURL: https://charts.jetstack.io
 version: v1.21.2
 namespace: cert-manager
+# Other components need its CRDs or webhooks before they sync (gitops/values.yaml).
+wave: controllers

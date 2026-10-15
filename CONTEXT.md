@@ -64,6 +64,10 @@ _Avoid_: Lab user, SSO user, admin
 A UI's own local admin login, new with every Lab, for when the Lab login can't be used.
 _Avoid_: admin password, local admin
 
+**Wave**:
+A group of Platform components that a new Lab installs together, after the Waves before it are Healthy, such as the controllers whose CRDs and webhooks the rest of the Platform uses.
+_Avoid_: stage, phase, tier
+
 **Workload**:
 Something deployed into the Lab as an experiment, running on top of the Platform.
 _Avoid_: application, app (clashes with ArgoCD's `Application`)
