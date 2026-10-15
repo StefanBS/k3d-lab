@@ -27,11 +27,17 @@ reportsController:
   # It scans what already runs, which it reads through Kubernetes' view role. That role
   # doesn't cover Gateway API's routes, and a policy on a kind it can't read is never
   # Ready.
+  # Argo Rollouts adds its own kinds to view, but only once it's installed, alongside
+  # the policies, after the Waves (ADR 0014). A policy that Kyverno found it couldn't
+  # read for stayed not Ready for 15 minutes after the role was there. Granted here,
+  # they're in place before any policy, and need no CRD.
   rbac:
     clusterRole:
       extraResources:
         - apiGroups: [gateway.networking.k8s.io]
           resources: [httproutes]
+        - apiGroups: [argoproj.io]
+          resources: [rollouts]
   # Modest requests for a Host short on RAM.
   resources:
     requests: {cpu: 10m, memory: 64Mi}

@@ -18,5 +18,6 @@ A new Lab synced every Application at once. One that needed another's CRDs or we
 - Only a new Lab, or a root sync, waits on the Waves. Once the ApplicationSets exist, each Application syncs a new commit by itself. A component that starts needing new CRDs still retries until they're up.
 - `just track` waits for the root Application to be Settled, which now takes until every Application is Healthy.
 - A component in a Wave can't serve a UI through the Gateway: ArgoCD calls its HTTPRoute Progressing until the Gateway, installed after the Waves, accepts it, so its Wave would never be Healthy. Lint fails on one. That's why ArgoCD and Argo Rollouts, whose CRDs nothing in the Platform uses, are in no Wave.
+- Components installed together, in a Wave or after them, still race. An admission policy on a Platform component's kind, such as Argo Rollouts' `Rollout`, gets the reports controller's read rule in `platform/kyverno/values.yaml`: Kyverno found it couldn't read Rollouts before Argo Rollouts added them to `view`, and the policy stayed not Ready.
 - A Wave that lists no component would never be Healthy, so lint fails on one. So does a `wave` that `gitops/values.yaml` doesn't list, which no ApplicationSet would select.
 - `up` waits up to 15 minutes, not 5, for the ApplicationSets to exist: the last appears near the end of the Platform's install.
