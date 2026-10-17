@@ -2,7 +2,7 @@
 # Usage: sso-login.sh
 # Checks single sign-on from the Host, as a browser on it would use it (ADR 0013), with
 # the Lab login's password from the Secret Store:
-#   - Every instance of Dex has the same signing keys, so they share their state.
+#   - Dex serves the signing keys in its storage, so a restart keeps them.
 #   - Dex gives the Lab login a token for its password, and refuses a wrong one.
 #   - ArgoCD's API takes that token, as its admin.
 #   - The Rollouts dashboard and Hubble UI send a request without a session to Dex, and
@@ -90,23 +90,17 @@ expect_sent_to_dex() {
 
 password=$("$(dirname "$0")/../../scripts/secret-store.sh" bao kv get -mount=lab -field=password platform/sso/login </dev/null)
 
-# Dex's instances share their state: each one's signing keys are the others'. With a
-# state of its own each would have made its own keys, and a UI would refuse a token that
-# another instance signed. Asked of each pod through the Lab's API, since the Gateway
-# picks one itself. The sign-ins below then reach either instance with each request.
-# Only of the pods that are Ready and staying: while Dex is replaced, one more is
-# starting or going. A request that fails counts as an instance that gave no keys.
-dex_pods=$(kubectl -n sso get pods -l app=dex -o json | jq -r '.items[]
-  | select(.metadata.deletionTimestamp == null)
-  | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))
-  | .metadata.name') || dex_pods=""
-if verdict=$(for pod in $dex_pods; do
-  kids=$(kubectl get --raw "/api/v1/namespaces/sso/pods/$pod:5556/proxy/keys" | jq -c '[.keys[].kid] | sort') || kids=""
-  printf '%s\n' "$kids"
-done | sso_keys_shared); then
-  ok "Dex's $verdict instances have the same signing keys"
+# Dex keeps its state in the Lab's API: the signing keys it serves are the ones in its
+# storage. With a state of its own it would have made its own keys, and a restart would
+# make new ones, which no UI that signed in before trusts. Its keys are one custom
+# resource, which Dex names. A request that fails counts as no keys.
+served=$(lab_curl "$sso/keys" | jq -c '[.keys[].kid] | sort') || served=""
+stored=$(kubectl -n sso get signingkeies.dex.coreos.com openid-connect-keys -o json \
+  | jq -c '[.signingKeyPub.kid, .verificationKeys[]?.publicKey.kid] | map(select(. != null)) | sort') || stored=""
+if verdict=$(printf '%s\n%s\n' "$served" "$stored" | sso_keys_stored); then
+  ok "Dex serves the $verdict signing keys in its storage"
 else
-  fail "Dex's instances don't share their signing keys: $verdict"
+  fail "Dex doesn't serve the signing keys in its storage: $verdict"
 fi
 
 # The password grant.

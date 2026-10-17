@@ -80,9 +80,10 @@ kind: Deployment
 metadata:
   name: dex
 spec:
-  # Two, which share their state (config.yaml's `storage`): a sign-in's requests can
-  # each reach either, and one can restart while the other signs in.
-  replicas: 2
+  # One replica, so a Lab on a small Host runs one Dex. Its state is in the Lab's API
+  # (config.yaml's `storage`), so a restart keeps the signing keys and the sessions, and
+  # more replicas would share it: only sign-ins during a restart fail.
+  replicas: 1
   selector:
     matchLabels: {app: dex}
   template:
@@ -90,13 +91,6 @@ spec:
       labels: {app: dex}
     spec:
       serviceAccountName: dex
-      # On different nodes when two can take them, so one node's restart leaves a Dex.
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels: {app: dex}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001

@@ -7,7 +7,7 @@ spec:
     The Lab login opens every UI of the Platform (ADR 0013). From a client pod on every
     Ready node, Dex answers at https://sso.lab.localhost, the name the UIs that sign in
     through it call it by. From the Host, with the Lab login's password from the Secret
-    Store: Dex's two instances have the same signing keys, Dex gives a token for the Lab
+    Store: Dex serves the signing keys in its storage, Dex gives a token for the Lab
     login and refuses a wrong password, ArgoCD's API takes that token, the Rollouts
     dashboard and Hubble UI send a request without a session to Dex and one sign-in
     opens both, Grafana signs the Lab login in as an Admin, that sign-in opens ArgoCD
@@ -24,7 +24,7 @@ spec:
                 name: dex
                 namespace: sso
               status:
-                availableReplicas: 2
+                availableReplicas: 1
         - assert:
             resource:
               apiVersion: apps/v1

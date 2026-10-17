@@ -1,5 +1,5 @@
 # Which secrets single sign-on keeps in the Secret Store (ADR 0013), which of them it
-# still lacks, and whether Dex's instances share their signing keys. Sourced by
+# still lacks, and whether Dex serves the signing keys in its storage. Sourced by
 # secret-store.sh and verify/lib/sso-login.sh, and on its own by scripts/tests/, so it
 # sets no shell options and runs nothing when sourced.
 # shellcheck shell=bash
@@ -60,22 +60,21 @@ sso_secret_version() {
   jq -rn '[inputs][0].data.metadata.version // 0'
 }
 
-# sso_keys_shared: reads one line for each ready instance of Dex: the ids of its signing
-# keys as a sorted JSON array, or an empty line if it gave none. Prints how many
-# instances there are, if they are at least two and all have the same keys: with a state
-# of its own, each would have made its own. Otherwise prints what is wrong, and fails.
-sso_keys_shared() {
+# sso_keys_stored: reads two lines: the ids of the signing keys Dex serves, then the ids
+# of those in its storage, each as a sorted JSON array, or an empty line if there were
+# none. Prints how many keys there are, if Dex serves exactly the stored ones: a Dex with
+# a state of its own would have made its own, and lost them with each restart. Otherwise
+# prints what is wrong, and fails.
+sso_keys_stored() {
   local verdict
   verdict=$(jq -Rrs '
     (split("\n") | if .[-1] == "" then .[:-1] else . end) as $answers
-    | ($answers | length) as $instances
-    | ($answers | map(select(test("^\\[\"") | not)) | length) as $silent
-    | ($answers | unique | length) as $sets
-    | if $instances == 1 then "1 instance is ready, not two"
-      elif $instances < 2 then "\($instances) instances are ready, not two"
-      elif $silent > 0 then "\($silent) of \($instances) instances gave no signing keys"
-      elif $sets > 1 then "\($instances) instances have \($sets) different sets of signing keys"
-      else $instances end')
+    | ($answers[0] // "") as $served
+    | ($answers[1] // "") as $stored
+    | if ($served | test("^\\[\"") | not) then "Dex serves no signing keys"
+      elif ($stored | test("^\\[\"") | not) then "Dex'"'"'s storage holds no signing keys"
+      elif $served != $stored then "Dex serves \($served), not the keys in its storage, \($stored)"
+      else $served | fromjson | length end')
   echo "$verdict"
   [[ $verdict =~ ^[0-9]+$ ]]
 }
