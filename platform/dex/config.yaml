@@ -4,10 +4,10 @@
 # new one gets its secret in the Secret Store at the next `just host setup`. It still
 # needs that secret in Dex's environment, from the ExternalSecret in dex.yaml.
 issuer: https://sso.lab.localhost
-# Every instance of Dex shares its signing keys, the logins in progress and the sessions
-# with the others, as custom resources in its own namespace. In memory, each would have
-# its own, and a sign-in that reached two of them would fail. Nothing of it outlives the
-# Lab. Dex creates the CRDs itself as it starts, the way it's meant to be run: a new Dex
+# Dex keeps its signing keys, the logins in progress and the sessions as custom resources
+# in its own namespace, so a restarted Dex still has them, and so would a second
+# replica. In memory, a restart would make new keys and forget every session, and two
+# replicas would each have their own. Nothing of it outlives the Lab. Dex creates the CRDs itself as it starts, the way it's meant to be run: a new Dex
 # that keeps one more kind of thing then needs nothing changed here.
 storage:
   type: kubernetes
@@ -21,8 +21,7 @@ enablePasswordDB: true
 # One sign-in for every UI: Dex remembers the browser that signed in, with its cookie
 # dex_session, and answers the next UI's login without showing its form. Experimental in
 # Dex 2.46, behind the feature flag DEX_SESSIONS_ENABLED (dex.yaml). The sessions are in
-# the storage like everything else, so every instance knows them, and so does a
-# restarted one.
+# the storage like everything else, so a restarted Dex still knows them.
 sessions:
   # By default no client's sign-in counts for another.
   ssoSharedWithDefault: all

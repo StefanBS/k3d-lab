@@ -122,32 +122,37 @@ secret() {
   [[ $status -ne 0 ]]
 }
 
-@test "two instances of Dex with the same signing keys: says how many" {
-  run sso_keys_shared <<<$'["a","b"]\n["a","b"]'
+@test "Dex serves the keys in its storage: says how many" {
+  run sso_keys_stored <<<$'["a","b"]\n["a","b"]'
   [[ $status -eq 0 && $output == 2 ]]
 }
 
-@test "two instances with keys of their own: fails, and says so" {
-  run sso_keys_shared <<<$'["a"]\n["b"]'
-  [[ $status -ne 0 && $output == "2 instances have 2 different sets of signing keys" ]]
+@test "Dex serves keys of its own: fails, and says so" {
+  run sso_keys_stored <<<$'["a"]\n["b"]'
+  [[ $status -ne 0 && $output == 'Dex serves ["a"], not the keys in its storage, ["b"]' ]]
 }
 
-@test "one instance didn't answer: fails, rather than passing on the other's keys" {
-  run sso_keys_shared <<<$'["a"]\n'
-  [[ $status -ne 0 && $output == "1 of 2 instances gave no signing keys" ]]
+@test "Dex didn't answer: fails, rather than passing on the stored keys" {
+  run sso_keys_stored <<<$'\n["a"]'
+  [[ $status -ne 0 && $output == "Dex serves no signing keys" ]]
 }
 
-@test "an instance with no keys yet: fails" {
-  run sso_keys_shared <<<$'[]\n[]'
-  [[ $status -ne 0 && $output == "2 of 2 instances gave no signing keys" ]]
+@test "the storage holds no keys: fails, rather than passing on the served ones" {
+  run sso_keys_stored <<<$'["a"]\n'
+  [[ $status -ne 0 && $output == "Dex's storage holds no signing keys" ]]
 }
 
-@test "one instance alone: fails, since nothing shows its keys are shared" {
-  run sso_keys_shared <<<'["a"]'
-  [[ $status -ne 0 && $output == "1 instance is ready, not two" ]]
+@test "the storage's answer is missing: fails" {
+  run sso_keys_stored <<<'["a"]'
+  [[ $status -ne 0 && $output == "Dex's storage holds no signing keys" ]]
 }
 
-@test "no instance at all: fails" {
-  run sso_keys_shared </dev/null
-  [[ $status -ne 0 && $output == "0 instances are ready, not two" ]]
+@test "Dex with no keys yet: fails" {
+  run sso_keys_stored <<<$'[]\n[]'
+  [[ $status -ne 0 && $output == "Dex serves no signing keys" ]]
+}
+
+@test "no answer at all: fails" {
+  run sso_keys_stored </dev/null
+  [[ $status -ne 0 && $output == "Dex serves no signing keys" ]]
 }
