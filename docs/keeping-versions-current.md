@@ -13,4 +13,4 @@ Groups name their dependencies in `renovate.json5`, so a new component joins one
 
 Renovate is a GitHub app, so enabling it is a step you do yourself, once: install the [Renovate app](https://github.com/apps/renovate) on your account with access to this repo only. With `renovate.json5` already on `main`, it skips its onboarding PR and opens the Dependency Dashboard and the update PRs straight away.
 
-Some updates need more than a merge: the Argo Rollouts Gateway API plugin needs its new `sha256`, and the Secret Store reaches the new image only when you re-run `just host setup`. Their PRs say so.
+Some updates need more than a merge: the Argo Rollouts Gateway API plugin needs its new `sha256`, and the Secret Store reaches the new image only when you re-run `just host setup`. Their PRs say so. A bump to a tool in `mise.toml` needs `mise install` after you pull it; until then every recipe warns which tools are missing, and `just doctor` fails on them.
