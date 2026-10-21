@@ -46,14 +46,15 @@ applicationsets_in_lab_pending() { kc -n argocd get applicationsets -o json | ap
 # seconds. wait_applicationsets then waits for what they generate.
 refresh_applicationsets() {
   kc -n argocd annotate applicationsets --all argocd.argoproj.io/application-set-refresh=true --overwrite >/dev/null
-  retry "$1" applicationsets_refreshed ||
-    die "the ApplicationSets haven't refreshed after $(($1 / 60)) minutes"
+  wait_until_none "$1" "these ApplicationSets haven't refreshed" applicationsets_in_lab_unrefreshed
 }
-# True once the ApplicationSet controller has taken every refresh asked of it: it removes
-# the annotation when it has. A failed request is "not yet".
-applicationsets_refreshed() {
-  local pending
-  pending=$(kc -n argocd get applicationsets \
-    -o jsonpath='{.items[*].metadata.annotations.argocd\.argoproj\.io/application-set-refresh}' 2>/dev/null) &&
-    [[ -z $pending ]]
+
+# applicationsets_unrefreshed: reads the Lab's ApplicationSets (kubectl get
+# applicationsets -o json) on stdin, and prints "<name>: refresh not taken yet" for each
+# that still has a refresh asked of it: the controller removes the annotation once it has
+# taken it. Fails when there's nothing to read, as when the request failed.
+applicationsets_unrefreshed() {
+  jq -rn 'input.items[] | select(.metadata.annotations["argocd.argoproj.io/application-set-refresh"] != null) |
+    "\(.metadata.name): refresh not taken yet"'
 }
+applicationsets_in_lab_unrefreshed() { kc -n argocd get applicationsets -o json | applicationsets_unrefreshed; }

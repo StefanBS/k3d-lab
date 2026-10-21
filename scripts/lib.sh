@@ -121,6 +121,13 @@ source "$LAB_ROOT/scripts/lib/nodes.sh"
 source "$LAB_ROOT/scripts/lib/root-application.sh"
 # shellcheck source=lib/pauses.sh
 source "$LAB_ROOT/scripts/lib/pauses.sh"
+# shellcheck source=lib/daemonsets.sh
+source "$LAB_ROOT/scripts/lib/daemonsets.sh"
+# shellcheck source=lib/namespaces.sh
+source "$LAB_ROOT/scripts/lib/namespaces.sh"
+# What each run waits for once it has changed the Lab, through the modules above.
+# shellcheck source=lib/settling.sh
+source "$LAB_ROOT/scripts/lib/settling.sh"
 
 # pushed_commit <branch or tag>: prints the commit LAB_REPO has for it, the one ArgoCD
 # reads, and fails if LAB_REPO doesn't have it. verify runs the checks as they are here,

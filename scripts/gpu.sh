@@ -32,30 +32,15 @@ lab_ca_hash() {
   lab_exists && token=$(lab_token) && echo "${token%%::*}"
 }
 
-gpu_node_registered() { [[ -n $(gpu_node_in_lab) ]]; }
-
-# The Platform's Applications, as ArgoCD names them, separated by spaces.
-platform_applications() {
-  kc -n argocd get applications -l k3d-lab/group=platform -o jsonpath='{.items[*].metadata.name}'
-}
-
-# platform_daemonsets_ready <Platform Applications>: every DaemonSet of those
-# Applications has a Ready, up-to-date pod on each node it should run on. Once the GPU
-# Node is Ready, that means the Platform's networking, logs and metrics run there too.
-# GPU Workloads are DaemonSets as well (ADR 0006), but they start in their own time,
-# such as after pulling a large image, so a join never waits for them.
-platform_daemonsets_ready() {
-  # ArgoCD's tracking id starts with the DaemonSet's Application: <app>:apps/DaemonSet:...
-  kc get daemonsets -A -o jsonpath='{range .items[*]}{.status.desiredNumberScheduled} {.status.numberReady} {.status.updatedNumberScheduled} {.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}' |
-    awk -v apps="$1" '
-      BEGIN { for (i = split(apps, list, " "); i > 0; i--) platform[list[i]] = 1 }
-      { split($4, id, ":") }
-      (id[1] in platform) && ($1 != $2 || $1 != $3) { bad = 1 }
-      END { exit bad }'
+# Prints a line while the GPU Node has no Node object in the Lab.
+gpu_node_unregistered() {
+  local node
+  node=$(gpu_node_in_lab) || return 1
+  [[ -n $node ]] || echo "the GPU Node: not registered yet"
 }
 
 cmd_join() {
-  local eviction=20Gi arg why server_ip version token node apps
+  local eviction=20Gi arg why server_ip version token node
   for arg; do
     case $arg in
       eviction=?*) eviction=${arg#eviction=} ;;
@@ -81,16 +66,10 @@ cmd_join() {
     SERVER_VERSION="$version" EVICTION="$eviction" NODE_LABEL="$GPU_NODE_LABEL" NODE_TAINT="$GPU_NODE_TAINT"
 
   log "Waiting for the GPU Node to be Ready"
-  retry 120 gpu_node_registered || die "the GPU Node didn't register with the Lab; see 'journalctl -u k3s-agent' on it"
+  wait_until_none 120 "the GPU Node didn't register with the Lab; see 'journalctl -u k3s-agent' on it" \
+    gpu_node_unregistered
   wait_nodes_ready 180 -l "$GPU_NODE_LABEL_KEY"
-  log "Waiting for the Platform's DaemonSets to run on it"
-  # The DaemonSet controller counts the new node a moment after it's Ready.
-  sleep 2
-  apps=$(platform_applications)
-  retry 180 platform_daemonsets_ready "$apps" || die "the Platform's DaemonSets aren't all Ready on the GPU Node; see 'kubectl --context $LAB_CONTEXT get pods -A -o wide'"
-  # ArgoCD sees a DaemonSet Healthy again a few seconds after its pods are. Only the
-  # Platform's: a GPU Workload's Application is Healthy once its pod runs, in its own time.
-  wait_settled 180 --group platform
+  settle_join
   node=$(gpu_node_in_lab)
   log "The GPU Node is Joined as ${node%% *}"
 }

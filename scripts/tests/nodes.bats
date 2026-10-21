@@ -60,5 +60,5 @@ k3d-lab-agent-0: NotReady" "$(node k3d-lab-server-0 False)" "$(node k3d-lab-agen
   node gpu False | jq -s '{"items": .}' | kc_answers get nodes -o json
   run wait_nodes_ready 30
   [[ $status -eq 1 ]]
-  [[ ${lines[-2]} == "error: these nodes aren't Ready after 0 minutes:" && ${lines[-1]} == "gpu: NotReady" ]]
+  [[ ${lines[-2]} == "error: these nodes aren't Ready after 30 seconds:" && ${lines[-1]} == "gpu: NotReady" ]]
 }

@@ -17,6 +17,5 @@ if [[ $action == pause ]]; then
   exit
 fi
 
-log "Waiting for ArgoCD to put $application back as Git has it"
-wait_settled 600 "$application"
+settle_resume "$application"
 log "Resumed $application"

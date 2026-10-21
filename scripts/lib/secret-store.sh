@@ -214,7 +214,8 @@ fix_secret_store_runs_current_config() {
   systemctl --user daemon-reload
   systemctl --user restart "$SECRET_STORE_UNIT"
   # Answers once it's listening, sealed or not.
-  retry 30 secret_store_answers || die "the Secret Store doesn't answer; see: journalctl --user -u $SECRET_STORE_UNIT"
+  wait_until_none 30 "the Secret Store doesn't answer; see: journalctl --user -u $SECRET_STORE_UNIT" \
+    secret_store_unanswered
 }
 
 # bao_status: `bao status` in the container, as JSON. Exits 0 if unsealed, 2 if sealed
@@ -227,6 +228,9 @@ secret_store_answers() {
   bao_status >/dev/null || status=$?
   ((status != 1))
 }
+# For wait_until_none, which waits until they print nothing.
+secret_store_unanswered() { secret_store_answers || echo "the Secret Store: not answering"; }
+secret_store_sealed() { secret_store_unsealed || echo "the Secret Store: sealed"; }
 
 # Once ever. The root token never leaves the Host; secret_store_bao uses it.
 secret_store_initialised() { [[ $(bao_status | yq -p json -o yaml '.initialized') == true ]]; }
@@ -242,7 +246,7 @@ fix_secret_store_initialised() {
 secret_store_unsealed() { bao_status >/dev/null; }
 # It unseals itself with the static seal; this only waits for it.
 fix_secret_store_unsealed() {
-  retry 30 secret_store_unsealed || die "the Secret Store is sealed; see: journalctl --user -u $SECRET_STORE_UNIT"
+  wait_until_none 30 "the Secret Store is sealed; see: journalctl --user -u $SECRET_STORE_UNIT" secret_store_sealed
 }
 
 # bao_enabled <secrets|auth> <path>: whether that secrets engine or auth method is
@@ -389,6 +393,7 @@ secret_store_backup() {
 }
 secret_store_restart() {
   systemctl --user start "$SECRET_STORE_UNIT"
-  retry 30 secret_store_unsealed || die "the Secret Store didn't come back unsealed; see: journalctl --user -u $SECRET_STORE_UNIT"
+  wait_until_none 30 "the Secret Store didn't come back unsealed; see: journalctl --user -u $SECRET_STORE_UNIT" \
+    secret_store_sealed
   log "The Secret Store is running again"
 }

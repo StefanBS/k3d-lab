@@ -133,7 +133,7 @@ third-demo: not generated yet" rollouts-demo other-demo third-demo -- \
   settled rollouts-demo | jq -s '{"items": .}' | kc_answers -n argocd get applications -o json
   run wait_settled 60 --gone rollouts-demo
   [[ $status -eq 1 ]]
-  [[ ${lines[-2]} == "error: these Applications aren't gone after 1 minutes:" ]]
+  [[ ${lines[-2]} == "error: these Applications aren't gone after 1 minute:" ]]
   [[ ${lines[-1]} == "rollouts-demo: still there" ]]
   application root OutOfSync Healthy "$commit" "$repo" | jq -s '{"items": .}' |
     kc_answers -n argocd get applications -o json
