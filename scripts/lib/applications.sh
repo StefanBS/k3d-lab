@@ -97,6 +97,14 @@ wait_settled() {
 }
 applications_in_lab_unsettled() { kc -n argocd get applications -o json | applications_unsettled "$@"; }
 
+# applications_in_group <group>: prints the names of that group's Applications, platform
+# or workloads, one per line. Fails when the request fails.
+applications_in_group() {
+  local listed
+  listed=$(kc -n argocd get applications -l "k3d-lab/group=$1" -o json) || return 1
+  jq -r '.items[].metadata.name' <<<"$listed"
+}
+
 # refresh_applications [<name>...]: has ArgoCD compare the Lab's Applications, or only
 # those named, with Git now rather than at its next poll, as when a sync left their spec
 # unchanged.

@@ -1,5 +1,5 @@
 # What each run waits for after it changes the Lab, and in what order: one function per
-# Change, which owns its deadlines. The run scripts say only what they changed. Sourced by
+# change, which owns its deadlines. The run scripts say only what they changed. Sourced by
 # lib.sh, and on its own by scripts/tests/, so it sets no shell options and runs nothing
 # when sourced.
 # shellcheck shell=bash
@@ -16,7 +16,7 @@ settle_new_lab() {
   mapfile -t appsets < <(gitops_applicationsets)
   # Without names, the wait would count whichever ApplicationSets are listed.
   ((${#appsets[@]})) || die "the gitops chart renders no ApplicationSets"
-  _settle_none_paused
+  need_none_paused
   log "Waiting for ArgoCD to sync the Lab at ${commit:0:7}"
   wait_applicationsets 900 "${appsets[@]}"
   wait_settled 900 --at "$commit"
@@ -36,7 +36,7 @@ settle_demos() {
   # Without names, the waits would count every Application.
   ((${#dirs[@]})) || die "no Workload in workloads/ is a Demo (role: demo in its component.yaml)"
   names=("${dirs[@]##*/}")
-  _settle_none_paused "${names[@]}"
+  need_none_paused "${names[@]}"
   if [[ $1 == on ]]; then
     commit=$(tracked_commit)
     log "Waiting for the Demos to sync ${commit:0:7}: ${names[*]}"
@@ -50,7 +50,7 @@ settle_demos() {
   # on a Workload namespace that no Application has.
   for dir in "${dirs[@]}"; do namespaces+=("$(component_namespace "$dir")"); done
   log "Deleting the Demos' namespaces: ${namespaces[*]}"
-  delete_namespaces 300 "${namespaces[@]}"
+  wait_namespaces_deleted 300 "${namespaces[@]}"
 }
 
 # settle_join: once gpu.sh has the GPU Node Ready. The Platform's networking, logs and
@@ -59,12 +59,11 @@ settle_demos() {
 # neither their pods nor their Applications.
 settle_join() {
   local platform names commit
-  platform=$(kc -n argocd get applications -l k3d-lab/group=platform -o json) ||
-    die "can't read the Lab's Applications"
-  mapfile -t names < <(jq -r '.items[].metadata.name' <<<"$platform")
-  _settle_none_paused "${names[@]}"
+  platform=$(applications_in_group platform) || die "can't read the Lab's Applications"
+  mapfile -t names <<<"$platform"
+  need_none_paused "${names[@]}"
   commit=$(tracked_commit)
-  log "Waiting for the Platform's DaemonSets to run on it"
+  log "Waiting for the Platform's DaemonSets to run on the GPU Node"
   # The DaemonSet controller counts the new node a moment after it's Ready: until then,
   # each DaemonSet says it's Ready on every node it knows.
   sleep 2
@@ -78,17 +77,18 @@ settle_join() {
 # it with Git now, rather than at its next poll, then waits for it to be Settled.
 settle_resume() {
   local app=$1 commit
-  _settle_none_paused "$app"
+  need_none_paused "$app"
   commit=$(tracked_commit)
   refresh_applications "$app"
   log "Waiting for ArgoCD to put $app back as Git has it at ${commit:0:7}"
   wait_settled 600 --at "$commit" "$app"
 }
 
-# _settle_none_paused [<Application>...]: fails, naming them, if any of those
-# Applications, or any at all without names, is paused: ArgoCD never syncs it, so a wait
-# for it would only time out.
-_settle_none_paused() {
+# need_none_paused [<Application>...]: fails, naming them, if any of those Applications,
+# or any at all without names, is paused: ArgoCD never syncs it, so a wait for it would
+# only time out. Each settle_* checks first; track and demos also check before they change
+# the Lab, so a paused Application leaves it as it was.
+need_none_paused() {
   local paused
   paused=$(paused_applications) || die "can't read the Lab's AppProjects"
   if (($#)); then paused=$(grep -xF -f <(printf '%s\n' "$@") <<<"$paused" || true); fi
@@ -101,7 +101,7 @@ _settle_none_paused() {
 # root sync (ADR 0014), which takes until every Application is Healthy.
 settle_track() {
   local commit=$1
-  _settle_none_paused
+  need_none_paused
   log "Waiting for the root Application to sync ${commit:0:7}"
   wait_settled 900 --at "$commit" root
   # When only the Tracked revision's commit changed, the root's sync left the

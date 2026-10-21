@@ -12,6 +12,7 @@ need_root_application
 # The Demos, as this checkout has them, like the checks that verify runs.
 mapfile -t demo_components < <(demo_dirs)
 ((${#demo_components[@]})) || die "no Workload in workloads/ is a Demo (role: demo in its component.yaml)"
+need_none_paused "${demo_components[@]##*/}"
 
 log "Turning the Lab's Demos $1: ${demo_components[*]##*/}"
 root_application_set_demos "$demos"

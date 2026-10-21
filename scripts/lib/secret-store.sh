@@ -230,7 +230,7 @@ secret_store_answers() {
 }
 # For wait_until_none, which waits until they print nothing.
 secret_store_unanswered() { secret_store_answers || echo "the Secret Store: not answering"; }
-secret_store_sealed() { secret_store_unsealed || echo "the Secret Store: sealed"; }
+secret_store_sealed() { secret_store_unsealed || echo "the Secret Store: sealed, or not answering"; }
 
 # Once ever. The root token never leaves the Host; secret_store_bao uses it.
 secret_store_initialised() { [[ $(bao_status | yq -p json -o yaml '.initialized') == true ]]; }

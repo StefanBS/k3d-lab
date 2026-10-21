@@ -32,6 +32,7 @@ done
 
 need_root_application
 commit=$(pushed_commit "$revision")
+need_none_paused
 start_run_clock
 trap 'report_run track "$debug"' EXIT
 
