@@ -68,3 +68,11 @@ c: OutOfSync, Healthy"
   run wait_summary <<<"the Lab's API isn't answering"
   [[ $output == "the Lab's API isn't answering" ]]
 }
+
+@test "a deadline under a minute, or of one, says so in the words it's given in" {
+  answers "a: OutOfSync, Healthy"
+  run wait_until_none 30 "late" pending
+  [[ $status -eq 1 && $output == *"error: late after 30 seconds:"* ]]
+  run wait_until_none 60 "late" pending
+  [[ $status -eq 1 && $output == *"error: late after 1 minute:"* ]]
+}

@@ -32,26 +32,13 @@ done
 
 need_root_application
 commit=$(pushed_commit "$revision")
-# A paused Application never syncs the new commit, so the wait below would only time out.
-paused=$(paused_applications | paste -sd' ') || die "can't read the Lab's AppProjects"
-[[ -z $paused ]] || die "paused, so they'd never sync $revision: $paused; 'just resume <name>' each first"
+need_none_paused
 start_run_clock
 trap 'report_run track "$debug"' EXIT
 
 log "Pointing the Lab at $revision (${commit:0:7})"
 root_application_track "$revision"
 
-log "Waiting for the root Application to sync $revision"
-wait_settled 900 --at "$commit" root
-# The ApplicationSets read the branch's components again, as up.sh waits for them to:
-# when only its commit changed, their own spec didn't, so they'd wait for their next
-# poll to generate a new component's Application.
-log "Waiting for the ApplicationSets to generate the Applications"
-refresh_applicationsets 300
-wait_applicationsets 300
-# Likewise, an Application whose spec the root's sync didn't change waits for a refresh.
-refresh_applications
-log "Waiting for every Application to sync $revision"
-wait_settled 900 --at "$commit"
+settle_track "$commit"
 
 [[ -z $debug ]] || exec "$LAB_ROOT/scripts/verify.sh"

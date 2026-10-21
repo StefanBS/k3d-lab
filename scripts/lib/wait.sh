@@ -17,7 +17,7 @@ wait_until_none() {
       log "Still waiting: $(wait_summary <<<"$pending")"
       last=$pending
     fi
-    ((SECONDS < deadline)) || die "$late after $((seconds / 60)) minutes:"$'\n'"$pending"
+    ((SECONDS < deadline)) || die "$late after $(wait_duration "$seconds"):"$'\n'"$pending"
     sleep 5
   done
 }
@@ -43,13 +43,13 @@ wait_summary() {
     }'
 }
 
-# retry <tries> <command>...: runs the command once a second until it succeeds, giving
-# up after that many tries.
-retry() {
-  local tries=$1
-  shift
-  until "$@"; do
-    ((--tries > 0)) || return 1
-    sleep 1
-  done
+# wait_duration <seconds>: how long that is, as wait_until_none says it gave up after.
+wait_duration() {
+  if (($1 % 60)); then
+    echo "$1 seconds"
+  elif (($1 == 60)); then
+    echo "1 minute"
+  else
+    echo "$(($1 / 60)) minutes"
+  fi
 }

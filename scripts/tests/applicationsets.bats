@@ -59,25 +59,31 @@ demos: not ResourcesUpToDate" platform workloads demos -- \
   [[ $(still_pending wait_applicationsets platform) == "the Lab's API isn't answering" ]]
 }
 
-# What the controller still has to take, as refresh_applicationsets asks for it.
-REFRESHES=(-n argocd get applicationsets
-  -o 'jsonpath={.items[*].metadata.annotations.argocd\.argoproj\.io/application-set-refresh}')
 ASK=(-n argocd annotate applicationsets --all argocd.argoproj.io/application-set-refresh=true --overwrite)
+
+# refreshes <name>...: while the Lab lists those ApplicationSets, each with a refresh the
+# controller hasn't taken yet, beside one that has none.
+refreshes() {
+  jq -n '{items: ($ARGS.positional | map({metadata: {name: ., annotations: {"argocd.argoproj.io/application-set-refresh": "true"}}})
+    + [{metadata: {name: "taken"}}])}' --args "$@" | kc_answers -n argocd get applicationsets -o json
+}
 
 @test "refresh: asks every ApplicationSet, and passes once the controller has taken them all" {
   kc_succeeds "${ASK[@]}"
-  kc_succeeds "${REFRESHES[@]}"
+  refreshes
   run refresh_applicationsets 300
   [[ $status -eq 0 ]]
   [[ $(head -n 1 "$KC_CALLS") == "${ASK[*]}" ]]
 }
 
-@test "refresh: a refresh never taken, or a request that fails, gives up" {
+@test "refresh: a refresh never taken gives up, naming its ApplicationSet" {
   kc_succeeds "${ASK[@]}"
-  kc_answers "${REFRESHES[@]}" <<<"true true"
-  run refresh_applicationsets 120
-  [[ $status -eq 1 && $output == "error: the ApplicationSets haven't refreshed after 2 minutes" ]]
-  rm "$KC_ANSWERS/$(kc_key "${REFRESHES[@]}")"
-  run refresh_applicationsets 120
-  [[ $status -eq 1 && $output == "error: the ApplicationSets haven't refreshed after 2 minutes" ]]
+  refreshes platform workloads
+  [[ $(still_pending refresh_applicationsets) == "platform: refresh not taken yet
+workloads: refresh not taken yet" ]]
+}
+
+@test "refresh: a request that fails is pending, not passed" {
+  kc_succeeds "${ASK[@]}"
+  [[ $(still_pending refresh_applicationsets) == "the Lab's API isn't answering" ]]
 }

@@ -21,13 +21,9 @@ paused_applications() {
 # there already.
 pause_application() { _pause_patch "$1" pause_windows; }
 
-# resume_application <name>: removes the Application's pause from its project, and has
-# ArgoCD compare it with Git now, rather than at its next poll. wait_settled then waits
-# for ArgoCD to put Git back.
-resume_application() {
-  _pause_patch "$1" resume_windows
-  refresh_applications "$1"
-}
+# resume_application <name>: removes the Application's pause from its project.
+# settle_resume then has ArgoCD put Git back.
+resume_application() { _pause_patch "$1" resume_windows; }
 
 # _pause_patch <application> pause_windows|resume_windows: sets its project's sync windows
 # to what the function makes of them. The resourceVersion makes the patch fail, rather

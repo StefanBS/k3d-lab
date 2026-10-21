@@ -6,8 +6,6 @@ setup() {
   # shellcheck source=../lib/pauses.sh
   source "$BATS_TEST_DIRNAME/../lib/pauses.sh"
   load lab
-  # pauses.sh's caller has it from applications.sh.
-  refresh_applications() { kc -n argocd annotate applications "$@" argocd.argoproj.io/refresh=hard --overwrite >/dev/null; }
 }
 
 # The deny window 'just pause comfyui' adds, as ArgoCD lists it.
@@ -60,7 +58,6 @@ cilium" "$(paused_applications)"
 other='{"kind": "allow", "schedule": "0 22 * * *", "duration": "1h", "applications": ["*"]}'
 
 PATCH=(-n argocd patch appproject workloads --type merge --patch-file /dev/stdin)
-REFRESH=(-n argocd annotate applications comfyui argocd.argoproj.io/refresh=hard --overwrite)
 
 # windows <pause|resume> <syncWindows>: the sync windows that pausing or resuming comfyui
 # sets on its project, which has those, compacted.
@@ -68,7 +65,6 @@ windows() {
   kc_answers -n argocd get application comfyui -o 'jsonpath={.spec.project}' <<<workloads
   project "$2" | kc_answers -n argocd get appproject workloads -o json
   kc_succeeds "${PATCH[@]}"
-  kc_succeeds "${REFRESH[@]}"
   "$1_application" comfyui
   kc_stdin "${PATCH[@]}" | jq -c .spec.syncWindows
 }
@@ -87,10 +83,9 @@ windows() {
   expect '"42"' "$(kc_stdin "${PATCH[@]}" | jq .metadata.resourceVersion)"
 }
 
-@test "resume removes only that Application's pause, and refreshes it" {
+@test "resume removes only that Application's pause" {
   expect "$(jq -c -n "[$other, ${comfyui_paused/comfyui/cilium}]")" \
     "$(windows resume "[$other, $comfyui_paused, ${comfyui_paused/comfyui/cilium}]")"
-  grep -qxF -- "${REFRESH[*]}" "$KC_CALLS"
 }
 
 @test "resuming what isn't paused changes nothing" {

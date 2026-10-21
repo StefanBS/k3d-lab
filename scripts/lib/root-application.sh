@@ -109,3 +109,11 @@ root_application_has_demos() {
   root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
   lab_has_demos <<<"$root"
 }
+# tracked_commit: prints the commit LAB_REPO has now for the root Application's Tracked
+# revision, the one every Application is Settled at. Fails as pushed_commit does.
+tracked_commit() {
+  local revision
+  revision=$(kc -n argocd get application/root -o 'jsonpath={.spec.source.targetRevision}') ||
+    die "can't read the Lab's root Application"
+  pushed_commit "$revision"
+}
