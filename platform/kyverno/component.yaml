@@ -1,7 +1,7 @@
 # Where this Platform component's chart comes from.
 chart: kyverno
 repoURL: https://kyverno.github.io/kyverno/
-version: 3.9.1
+version: 3.9.2
 namespace: kyverno
 # Other components need its CRDs or webhooks before they sync (gitops/values.yaml).
 wave: controllers

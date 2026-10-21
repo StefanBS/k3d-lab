@@ -21,7 +21,7 @@ kubeconform = "0.8.0"
 # Tests the admission policies (platform/kyverno-policies/) without a Lab, at the
 # version platform/kyverno/ installs. Named by its aqua package, like chainsaw, so
 # Renovate can look its releases up.
-"aqua:kyverno/kyverno" = "1.19.1"
+"aqua:kyverno/kyverno" = "1.19.2"
 # Tests the health checks ArgoCD's values add (platform/argocd/values.yaml) without a
 # Lab, at the ArgoCD version platform/argocd/'s chart installs.
 "aqua:argoproj/argo-cd" = "3.5.5"
