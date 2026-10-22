@@ -12,4 +12,4 @@ configMapGenerator:
       - config.yaml
 images:
   - name: ghcr.io/dexidp/dex
-    newTag: v2.46.0
+    newTag: v2.46.1
