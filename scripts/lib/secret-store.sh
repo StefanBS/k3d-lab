@@ -25,7 +25,7 @@ SECRET_STORE_TLS_KEY=$SECRET_STORE_DIR/tls.key
 SECRET_STORE_CA_CERT=$SECRET_STORE_DIR/ca.crt
 # From ghcr.io: pulling from quay.io failed on the Host.
 # renovate: datasource=docker depName=ghcr.io/openbao/openbao
-SECRET_STORE_IMAGE=ghcr.io/openbao/openbao:2.7.1
+SECRET_STORE_IMAGE=ghcr.io/openbao/openbao:2.7.2
 SECRET_STORE_UNIT=k3d-lab-secret-store
 SECRET_STORE_QUADLET=$LAB_OWNER_HOME/.config/containers/systemd/$SECRET_STORE_UNIT.container
 SECRET_STORE_PORT=8200
