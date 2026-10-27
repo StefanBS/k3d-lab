@@ -1,7 +1,7 @@
 # Where this Platform component's chart comes from.
 chart: external-secrets
 repoURL: https://charts.external-secrets.io
-version: 2.13.0
+version: 2.14.0
 namespace: external-secrets
 # Other components need its CRDs or webhooks before they sync (gitops/values.yaml).
 wave: controllers
