@@ -1,6 +1,7 @@
 # What verify's checks read from Git instead of copying it: the Platform facts, the
 # namespaces they name, and the labels verify.sh selects them by. verify.sh exports them
-# to the checks, and lint finds the copies left in verify/. Sourced by verify.sh and
+# to the checks, and lint finds the copies left in verify/. Lint also finds the Demos'
+# checks that lack the label verify.sh deselects them by. Sourced by verify.sh and
 # lint.sh, and on its own by scripts/tests/, so it sets no shell options and runs nothing
 # when sourced. Every path is under LAB_ROOT.
 # shellcheck shell=bash
@@ -89,6 +90,24 @@ _verify_label_copies() {
     grep -qxF -- "${hit%:*}" <<<"$labels" ||
       echo "${hit%:*} copies the GPU Node's label key $GPU_NODE_LABEL_KEY; read \$VERIFY_GPU_NODE_LABEL_KEY"
   done < <(cd "$LAB_ROOT" && grep -rnoF -- "$GPU_NODE_LABEL_KEY" verify)
+}
+
+# demo_checks_problems: prints each check that names a Demo's namespace, itself or in a
+# script it runs from verify/lib/, but isn't labelled DEMO_LABEL_KEY, one per line, or
+# nothing. Such a check fails on a Lab without its Demos, where verify deselects only the
+# labelled ones.
+demo_checks_problems() {
+  local dir namespace test files
+  for dir in $(demo_dirs); do
+    namespace=$(component_namespace "$dir")
+    for test in "$LAB_ROOT"/verify/*/chainsaw-test.yaml; do
+      mapfile -t files < <(grep -o '\.\./lib/[A-Za-z0-9._-]*' "$test" | sort -u)
+      files=("${files[@]/#..\//$LAB_ROOT/verify/}")
+      grep -qw -- "$namespace" "$test" "${files[@]}" || continue
+      [[ $(KEY=$DEMO_LABEL_KEY yq '.metadata.labels | has(strenv(KEY))' "$test") == true ]] && continue
+      echo "${test#"$LAB_ROOT"/} names the Demo's namespace $namespace, but isn't labelled $DEMO_LABEL_KEY"
+    done
+  done
 }
 
 # verify_namespace_variable <key>: the variable verify.sh exports that key of
