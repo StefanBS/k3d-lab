@@ -1,6 +1,6 @@
 # What to say about the Server once work on the Lab has ended: diagnose_server. Sourced
-# after lib.sh by up.sh, track.sh and verify.sh, and on its own by scripts/tests/, so it
-# sets no shell options and runs nothing when sourced.
+# after lib.sh, which gives it below.sh, by up.sh, track.sh and verify.sh, and on its own
+# by scripts/tests/, so it sets no shell options and runs nothing when sourced.
 # A Debugging run hands two variables over to the verify it ends with, through the
 # environment, since `just verify` takes no such argument:
 # - LAB_RUN_SINCE (start_run_clock): from when the run's work counts, as Docker's --since

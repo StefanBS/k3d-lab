@@ -1,6 +1,5 @@
 # Reaching the GPU Node from the Host, over ssh as k3dlab (ADR 0005). Sourced by lib.sh,
-# and on its own by scripts/tests/, so it sets no shell options and runs nothing when
-# sourced.
+# so it sets no shell options and runs nothing when sourced.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the variables here are used by the scripts that source this file
 

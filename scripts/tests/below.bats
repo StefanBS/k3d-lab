@@ -22,10 +22,10 @@ with_below() {
   chmod +x "$LAB_ROOT/scripts/below-recorder.sh"
 }
 
-@test "recording: starts the recorder, tied to this script's PID, and says it records" {
+@test "recording: starts the recorder, tied to this script's PID, and marks this run recording" {
   with_below
   record_pressure
-  wait
+  wait "$!"
   [[ $(cat "$STARTED") == "$$" ]]
   [[ $LAB_BELOW_RECORDING == 1 ]]
 }
