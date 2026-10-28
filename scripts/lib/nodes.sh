@@ -21,7 +21,8 @@ NODE_READY_JQ='def ready: ([.status.conditions[]? | select(.type == "Ready")][0]
 # gpu_node_object: the GPU Node's Node object in the Lab, as "<name> Ready" or "<name>
 # NotReady", or nothing when there's none. The Lab alone can't say Joined or Left: after a
 # reboot the GPU Node is Left, and its Node object stays NotReady until the next join.
-# Fails, saying why on stderr, when the request does or there's more than one.
+# Fails, saying why on stderr, when the request does, or with status 2 when there's more
+# than one.
 gpu_node_object() {
   local listed names
   listed=$(kc get nodes -o json -l "$GPU_NODE_LABEL_KEY") || {
@@ -31,9 +32,43 @@ gpu_node_object() {
   names=$(jq -r '.items | select(length > 1) | map(.metadata.name) | join(", ")' <<<"$listed")
   if [[ -n $names ]]; then
     echo "the Lab has more than one Node object labelled $GPU_NODE_LABEL_KEY: $names; 'just gpu leave' deletes them" >&2
-    return 1
+    return 2
   fi
   jq -r "$NODE_READY_JQ"'.items[] | "\(.metadata.name) \(if ready then "Ready" else "NotReady" end)"' <<<"$listed"
+}
+
+# gpu_node_unregistered: for join's wait, prints a line while the GPU Node has no Node
+# object in the Lab, or more than one. A wait drops a failed check's stderr, which is
+# kubectl's while k3s restarts, so this check says when there's more than one itself.
+# Otherwise join would wait that out as an API that isn't answering.
+gpu_node_unregistered() {
+  local node why status=0
+  node=$(gpu_node_object 2>/dev/null) || status=$?
+  case $status in
+    0) [[ -n $node ]] || echo "the GPU Node: not registered yet" ;;
+    2)
+      status=0
+      why=$(gpu_node_object 2>&1 >/dev/null) || status=$?
+      ((status == 2)) || return 1
+      echo "the GPU Node: $why"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# gpu_node_replaced_objects: the names of the Node objects labelled as the GPU Node that
+# a join replaces, one each line. There's only one GPU Node, so a second Node object is
+# one from an earlier hostname. When there's more than one, the join deletes those that
+# aren't Ready, and the GPU Node's agent registers its own again when it starts. A single
+# Node object is kept, even NotReady: an agent that's already running wouldn't register
+# it again. Fails, saying why on stderr, when the request does.
+gpu_node_replaced_objects() {
+  local listed
+  listed=$(kc get nodes -o json -l "$GPU_NODE_LABEL_KEY") || {
+    echo "can't read the GPU Node's Node objects from the Lab" >&2
+    return 1
+  }
+  jq -r "$NODE_READY_JQ"'.items | select(length > 1)[] | select(ready | not) | .metadata.name' <<<"$listed"
 }
 
 # nodes_unready: reads the Lab's nodes (kubectl get nodes -o json) on stdin, and prints

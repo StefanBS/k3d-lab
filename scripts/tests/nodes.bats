@@ -98,6 +98,59 @@ gpu_nodes() { printf '%s\n' "$@" | jq -s '{"items": .}' | kc_answers get nodes -
 @test "two Node objects labelled as the GPU Node, as after its hostname changed: fails, naming both" {
   gpu_nodes "$(node gpu True)" "$(node gpu-old False)"
   run gpu_node_object
-  [[ $status -eq 1 ]]
+  [[ $status -eq 2 ]]
   [[ $output == "the Lab has more than one Node object labelled k3d-lab/gpu: gpu, gpu-old; 'just gpu leave' deletes them" ]]
+}
+
+@test "replaced by a join: of two Node objects labelled as the GPU Node, the one not Ready" {
+  gpu_nodes "$(node gpu True)" "$(node gpu-old False)"
+  run gpu_node_replaced_objects
+  [[ $status -eq 0 ]]
+  [[ $output == "gpu-old" ]]
+}
+
+@test "replaced by a join: two Node objects labelled as the GPU Node, neither Ready, as before a join: both" {
+  gpu_nodes "$(node gpu False)" "$(node gpu-old Unknown)"
+  run gpu_node_replaced_objects
+  [[ $status -eq 0 ]]
+  [[ $output == "gpu
+gpu-old" ]]
+}
+
+@test "replaced by a join: one Node object labelled as the GPU Node, Ready or not, or none: nothing" {
+  for listed in "$(node gpu True)" "$(node gpu False)" ""; do
+    if [[ -n $listed ]]; then gpu_nodes "$listed"; else gpu_nodes; fi
+    run gpu_node_replaced_objects
+    [[ $status -eq 0 ]]
+    [[ -z $output ]]
+  done
+}
+
+@test "replaced by a join: the request failed: fails, saying so" {
+  run gpu_node_replaced_objects
+  [[ $status -eq 1 ]]
+  [[ $output == "can't read the GPU Node's Node objects from the Lab" ]]
+}
+
+@test "join's wait for the GPU Node to register: two Node objects labelled as it, pending, naming both" {
+  gpu_nodes "$(node gpu True)" "$(node gpu-old False)"
+  run gpu_node_unregistered
+  [[ $status -eq 0 ]]
+  [[ $output == "the GPU Node: the Lab has more than one Node object labelled k3d-lab/gpu: gpu, gpu-old; 'just gpu leave' deletes them" ]]
+}
+
+@test "join's wait for the GPU Node to register: no Node object labelled as it, pending; one, Ready or not: nothing" {
+  gpu_nodes
+  run gpu_node_unregistered
+  [[ $status -eq 0 && $output == "the GPU Node: not registered yet" ]]
+  for ready in True False; do
+    gpu_nodes "$(node gpu "$ready")"
+    run gpu_node_unregistered
+    [[ $status -eq 0 && -z $output ]]
+  done
+}
+
+@test "join's wait for the GPU Node to register: the request failed: fails, as a wait waits out" {
+  run gpu_node_unregistered
+  [[ $status -eq 1 ]]
 }
