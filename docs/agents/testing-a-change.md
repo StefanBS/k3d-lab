@@ -31,9 +31,10 @@ For a change to what `up` or `track` print when k3s restarts or a wait times out
 
 For a new lint rule: prove it fails on what it forbids.
 
-A rule that judges only Git's files, such as one about component.yaml in `components_problems` (`scripts/lib/components.sh`), is proven by its failing fixture in `scripts/tests/`, which `just lint` runs. A rule that needs a render is proven by hand:
+A rule is proven by its failing fixture in `scripts/tests/`, which `just lint` runs. That holds for one that judges only Git's files, such as one about component.yaml in `components_problems` (`scripts/lib/components.sh`), and for one that needs a render: lint renders with helm or kustomize, and a function in `scripts/lib/renders.sh` judges the render, so its fixture is a hand-written render, such as an HTTPRoute in a Wave's component.
 
-- **Commit first.** `git restore <file>` discards every uncommitted edit to the file, not only the one made to break it.
-- **Break one thing, run lint, restore:** `echo 'wave: controllers' >>platform/hubble/component.yaml; just lint; git restore platform/hubble/component.yaml`. Hubble renders an HTTPRoute, so it prints `FAIL  platform/hubble is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed` and fails.
+Breaking the Lab's own files shows a rule wired into lint. **Commit first:** `git restore <file>` discards every uncommitted edit to the file, not only the one made to break it.
+
+A component in a Wave that renders an HTTPRoute: `echo 'wave: controllers' >>platform/hubble/component.yaml; just lint; git restore platform/hubble/component.yaml` prints `FAIL  platform/hubble is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed`, and fails.
 
 A Platform fact renamed in `PLATFORM_FACTS` (`scripts/lib/platform-facts.sh`) leaves verify's checks reading a variable `verify.sh` no longer exports. Lint finds it without a Lab: `sed -i 's/\[hubble.host\]/[hubble.name]/' scripts/lib/platform-facts.sh; just lint; git restore scripts/lib/platform-facts.sh` prints `FAIL  verify/hubble-healthy/chainsaw-test.yaml:<line> reads PLATFORM_FACT_HUBBLE_HOST, which verify.sh doesn't export`, and the same for `verify/lib/sso-login.sh`, and fails.

@@ -5,6 +5,8 @@
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=lib/verify-facts.sh
 source "$(dirname "$0")/lib/verify-facts.sh"
+# shellcheck source=lib/renders.sh
+source "$(dirname "$0")/lib/renders.sh"
 cd "$LAB_ROOT" || exit
 
 # The Kubernetes version the Lab runs, from its k3s image: v1.36.4-k3s1 is 1.36.4.
@@ -21,7 +23,9 @@ application_chart=$(mktemp -d)
 enforced_policies=$(mktemp --suffix=.yaml)
 # Every component's render, as Kyverno admits it (add_admitted).
 admitted=$(mktemp --suffix=.yaml)
-trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies" "$admitted"' EXIT
+# The renders that the rules in scripts/lib/renders.sh judge, kept from $manifests.
+renders=$(mktemp -d)
+trap 'rm -rf "$manifests" "$application_chart" "$enforced_policies" "$admitted" "$renders"' EXIT
 
 # report_problems <OK line> <command>...: a FAIL for each problem the command prints, one
 # per line, or the OK line when it prints none.
@@ -36,38 +40,11 @@ report_problems() {
   while IFS= read -r problem; do fail "$problem"; done <<<"$problems"
 }
 
-# The gitops chart can't read component.yaml, so it lists the Platform's namespaces
-# itself, for the workloads project to refuse. components_problems checks each Platform
-# component's own is listed; this checks the rest: each other namespace a Platform
-# component's render creates or installs into, such as Cilium's cilium-secrets, is
-# listed, and every listed one is a Platform component's.
-# Usage: lint_platform_namespaces <the Platform's rendered namespaces, one per line>
-lint_platform_namespaces() {
-  local dir namespace listed own before=$fails
-  listed=$(yq '.platformNamespaces[]' gitops/values.yaml)
-  own=$(for dir in "${components[@]}"; do
-    if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
-  done)
-  while read -r namespace; do
-    grep -qxF -- "$namespace" <<<"$own"$'\n'"$listed" ||
-      fail "gitops/values.yaml: platformNamespaces doesn't list $namespace, which a Platform component's render creates or installs into"
-  done < <(grep . <<<"$1" | sort -u)
-  for namespace in $listed; do
-    grep -qxF -- "$namespace" <<<"$own"$'\n'"$1" ||
-      fail "gitops/values.yaml: platformNamespaces lists $namespace, which no Platform component creates or installs into"
-  done
-  ((fails > before)) || ok "gitops/values.yaml lists the Platform's namespaces"
-}
-
-# A component in a Wave renders no HTTPRoute: ArgoCD calls one Progressing until the
-# Gateway accepts it, and the Gateway is installed after every Wave, since it needs the
-# Waves' cert-manager and Cilium. Its Wave would never be Healthy.
-# Usage: lint_wave_routes <component folder> <its render>
-lint_wave_routes() {
-  [[ -n $(component_wave "$1") ]] || return 0
-  if [[ -n $(yq -N 'select(.kind == "HTTPRoute") | .metadata.name' "$2") ]]; then
-    fail "$1 is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed"
-  fi
+# copy_render <name>: copies the render in $manifests, for a rule in
+# scripts/lib/renders.sh, and prints the file it's copied to.
+copy_render() {
+  cp "$manifests" "$renders/$1.yaml"
+  echo "$renders/$1.yaml"
 }
 
 # Renders a component into $manifests the way ArgoCD does: its pinned chart and values,
@@ -80,13 +57,6 @@ render_component() {
   fi
   mapfile -t args < <(component_helm_args "$1")
   helm template "${1##*/}" "${args[@]}" --include-crds --kube-version "$k8s_version" >"$manifests"
-}
-
-# The namespaces the render in $manifests creates, or names for a resource. One that
-# names none is installed into its component's namespace.
-rendered_namespaces() {
-  yq -N 'select(.kind == "Namespace") | .metadata.name, (select(.kind != "Namespace") | .metadata.namespace // "")' \
-    "$manifests" | grep . || true
 }
 
 # Renders a component's Application into $manifests the way its ApplicationSet does:
@@ -104,23 +74,6 @@ render_application() {
   # shellcheck disable=SC2016 # $doc is yq's, not the shell's.
   helm template application "$application_chart" --show-only "templates/${1%%/*}.yaml" |
     yq ea '. as $doc ireduce ({}; . * $doc)' >"$manifests"
-}
-
-# A Workload's Application gets the baseline's same-namespace allow as a source, unless
-# it's `isolation: strict`. No Workload is yet, so one is rendered as if it were.
-lint_same_namespace_source() {
-  local dir=$1 source='.spec.sources[] | select(.path == "platform/workload-network-policy/same-namespace")'
-  render_application "$dir"
-  if [[ -z $(yq "$source" "$manifests") ]]; then
-    fail "$dir's Application doesn't get the same-namespace allow"
-    return
-  fi
-  render_application "$dir" '.isolation = "strict"'
-  if [[ -n $(yq "$source" "$manifests") ]]; then
-    fail "$dir's Application gets the same-namespace allow even when it's isolation: strict"
-    return
-  fi
-  ok "a Workload's Application gets the same-namespace allow, unless it's isolation: strict"
 }
 
 # The chart render_application renders, written once: the ApplicationSets don't change
@@ -148,23 +101,6 @@ write_application_chart() {
 # Renders what the root Application syncs into $manifests, given any values to set.
 render_gitops() {
   helm template gitops gitops --kube-version "$k8s_version" "$@" >"$manifests"
-}
-
-# The workloads ApplicationSet leaves the Demos out, with a selector on its generator,
-# unless the Lab has its Demos. The Platform's select only by Wave.
-lint_demos_selector() {
-  local selectors='[select(.kind == "ApplicationSet") | select(.spec.generators[0].selector.matchExpressions[]? | .key == "role") | .metadata.name] | unique | join(" ")'
-  render_gitops
-  if [[ $(yq ea "$selectors" "$manifests") != workloads ]]; then
-    fail "the workloads ApplicationSet, and only it, should leave the Demos out by default"
-    return
-  fi
-  render_gitops --set demos=true
-  if [[ -n $(yq ea "$selectors" "$manifests") ]]; then
-    fail "an ApplicationSet leaves the Demos out even with demos: true"
-    return
-  fi
-  ok "the workloads ApplicationSet leaves the Demos out, unless the Lab has its Demos"
 }
 
 # The probes that verify's checks deploy are plain manifests: nothing to render. The
@@ -348,25 +284,31 @@ report_problems "every component folder, and gitops/values.yaml's lists of them,
   components_problems
 mapfile -t components < <(component_dirs)
 write_application_chart
-# What the Platform's renders create or install into, for lint_platform_namespaces.
-platform_rendered_namespaces=
+# Each Platform component's render, as <component folder>=<its render>.
+platform_renders=()
 for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
-  if [[ $dir == platform/* ]]; then
-    platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
-    lint_wave_routes "$dir" "$manifests"
-  fi
   # A render that failed left $manifests empty.
+  if [[ $dir == platform/* ]]; then platform_renders+=("$dir=$(copy_render "${dir//\//-}")"); fi
   add_admitted "$dir"
   lint_rendering "$dir's Application" render_application "$dir"
 done
 lint_admission
-lint_platform_namespaces "$platform_rendered_namespaces"
+report_problems "no Platform component in a Wave renders an HTTPRoute" wave_routes_problems "${platform_renders[@]}"
+report_problems "gitops/values.yaml lists the Platform's namespaces" \
+  platform_namespaces_problems "${platform_renders[@]}"
 lint_rendering "the same-namespace allow" render_same_namespace_allow
-lint_same_namespace_source workloads/rollouts-demo
+# No Workload is `isolation: strict` yet, so one is rendered as if it were.
+render_application workloads/rollouts-demo
+unisolated_application=$(copy_render application)
+render_application workloads/rollouts-demo '.isolation = "strict"'
+report_problems "a Workload's Application gets the same-namespace allow, unless it's isolation: strict" \
+  same_namespace_source_problems workloads/rollouts-demo "$unisolated_application" "$(copy_render strict-application)"
 lint_rendering gitops render_gitops
+gitops_without_demos=$(copy_render gitops)
 lint_rendering "gitops with the Demos" render_gitops --set demos=true
-lint_demos_selector
+report_problems "the workloads ApplicationSet leaves the Demos out, unless the Lab has its Demos" \
+  demos_selector_problems "$gitops_without_demos" "$(copy_render gitops-demos)"
 
 # Every fact the scripts read from the Platform's values, so a renamed value fails
 # here rather than in the middle of `just up`.
