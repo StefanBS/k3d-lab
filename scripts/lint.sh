@@ -167,24 +167,6 @@ lint_demos_selector() {
   ok "the workloads ApplicationSet leaves the Demos out, unless the Lab has its Demos"
 }
 
-# A check that names a Demo's namespace, itself or in a script it runs from verify/lib/,
-# fails on a Lab without its Demos, unless it carries the Demo label, which verify
-# deselects there.
-lint_demo_checks() {
-  local dir namespace test files unlabelled=0
-  for dir in $(demo_dirs); do
-    namespace=$(component_namespace "$dir")
-    for test in verify/*/chainsaw-test.yaml; do
-      mapfile -t files < <(grep -o '\.\./lib/[A-Za-z0-9._-]*' "$test" | sort -u | sed "s|^\.\./|verify/|")
-      grep -qw -- "$namespace" "$test" "${files[@]}" || continue
-      [[ $(KEY=$DEMO_LABEL_KEY yq '.metadata.labels | has(strenv(KEY))' "$test") == true ]] && continue
-      fail "$test names the Demo's namespace $namespace, but isn't labelled $DEMO_LABEL_KEY"
-      unlabelled=$((unlabelled + 1))
-    done
-  done
-  ((unlabelled > 0)) || ok "every check that names a Demo's namespace is labelled $DEMO_LABEL_KEY"
-}
-
 # The probes that verify's checks deploy are plain manifests: nothing to render. The
 # other YAML in verify/lib/ is Chainsaw's own, which `chainsaw lint` checks.
 render_probes() { yq 'select(.kind != "StepTemplate")' verify/lib/*.yaml >"$manifests"; }
@@ -409,7 +391,7 @@ for file in verify/*/chainsaw-test.yaml; do
   lint_chainsaw test "$file"
 done
 lint_rendering "verify's probes" render_probes
-lint_demo_checks
+report_problems "every check that names a Demo's namespace is labelled $DEMO_LABEL_KEY" demo_checks_problems
 # verify.sh exports these to the checks, so a copy would pass lint and fail only on a Lab.
 report_problems "verify's checks read every Platform fact, namespace and label verify.sh exports, and copy none" \
   verify_copies_problems

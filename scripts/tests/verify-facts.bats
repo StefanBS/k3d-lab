@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # What verify's checks read from Git instead of copying it (scripts/lib/verify-facts.sh),
 # from a repo of fixtures rather than the Lab's own: what verify.sh exports to them, and
-# what lint reports of the copies they still hold.
+# what lint reports of the copies they still hold, and of the Demos' unlabelled checks.
 
 setup() {
   for module in platform-facts components nodes verify-facts; do
@@ -14,6 +14,8 @@ setup() {
   printf 'host: web.lab.localhost\nurl: https://ui.lab.localhost\n' >"$LAB_ROOT/platform/web/values.yaml"
   printf 'namespace: web\n' >"$LAB_ROOT/platform/web/component.yaml"
   printf 'namespace: data\n' >"$LAB_ROOT/platform/db/component.yaml"
+  mkdir -p "$LAB_ROOT/workloads/shop"
+  printf 'namespace: shop\nrole: demo\n' >"$LAB_ROOT/workloads/shop/component.yaml"
   PLATFORM_FACTS=(
     [web.host]='platform/web/values.yaml|.host'
     [ui.url]='platform/web/values.yaml|.url'
@@ -38,7 +40,10 @@ YAML
 }
 
 # check <name> < <chainsaw-test.yaml>
-check() { cat >"$LAB_ROOT/verify/$1/chainsaw-test.yaml"; }
+check() {
+  mkdir -p "$LAB_ROOT/verify/$1"
+  cat >"$LAB_ROOT/verify/$1/chainsaw-test.yaml"
+}
 
 @test "every fact and namespace read from verify.sh, labelled as it selects: no problems" {
   run verify_copies_problems
@@ -124,4 +129,51 @@ SH
   [[ $output == "verify/lib/gpu.yaml:1 reads VERIFY_GPU_NODE_LABEL, which verify.sh doesn't export
 verify/lib/web.sh:1 reads PLATFORM_FACT_WEB_URL, which verify.sh doesn't export
 verify/lib/web.sh:2 reads VERIFY_NS_CACHE, which verify.sh doesn't export" ]]
+}
+
+@test "a check that names a Demo's namespace, unlabelled: names the check and namespace" {
+  check orders-healthy <<'YAML'
+metadata:
+  name: orders-healthy
+spec:
+  steps:
+    - try:
+        - script:
+            content: kubectl -n shop get pods
+YAML
+  run demo_checks_problems
+  [[ $status -eq 0 ]]
+  [[ $output == "verify/orders-healthy/chainsaw-test.yaml names the Demo's namespace shop, but isn't labelled k3d-lab/demo" ]]
+}
+
+@test "a check that names a Demo's namespace only in a verify/lib/ script it runs, unlabelled: names the check" {
+  printf 'kubectl -n shop get pods\n' >"$LAB_ROOT/verify/lib/orders.sh"
+  check orders-healthy <<'YAML'
+metadata:
+  name: orders-healthy
+spec:
+  steps:
+    - try:
+        - script:
+            content: ../lib/orders.sh
+YAML
+  run demo_checks_problems
+  [[ $status -eq 0 ]]
+  [[ $output == "verify/orders-healthy/chainsaw-test.yaml names the Demo's namespace shop, but isn't labelled k3d-lab/demo" ]]
+}
+
+@test "a check that names a Demo's namespace, labelled as a Demo's, and one that names none: no problems" {
+  check orders-healthy <<'YAML'
+metadata:
+  name: orders-healthy
+  labels:
+    k3d-lab/demo: shop
+spec:
+  steps:
+    - try:
+        - script:
+            content: kubectl -n shop get pods
+YAML
+  run demo_checks_problems
+  [[ $status -eq 0 && -z $output ]]
 }
