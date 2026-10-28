@@ -31,5 +31,7 @@ For a change to what `up` or `track` print when k3s restarts or a wait times out
 
 For a new lint rule: prove it fails on what it forbids.
 
+A rule that judges only Git's files, such as one about component.yaml in `components_problems` (`scripts/lib/components.sh`), is proven by its failing fixture in `scripts/tests/`, which `just lint` runs. A rule that needs a render is proven by hand:
+
 - **Commit first.** `git restore <file>` discards every uncommitted edit to the file, not only the one made to break it.
-- **Break one thing, run lint, restore:** `sed -i 's/^role: demo/role: other/' workloads/rollouts-demo/component.yaml; just lint; git restore workloads/rollouts-demo/component.yaml`. It prints `FAIL  workloads/rollouts-demo/component.yaml: 'role' can only be 'demo'` and fails.
+- **Break one thing, run lint, restore:** `echo 'wave: controllers' >>platform/hubble/component.yaml; just lint; git restore platform/hubble/component.yaml`. Hubble renders an HTTPRoute, so it prints `FAIL  platform/hubble is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed` and fails.

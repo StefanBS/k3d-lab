@@ -35,61 +35,36 @@ report_problems() {
 }
 
 # The gitops chart can't read component.yaml, so it lists the Platform's namespaces
-# itself, for the workloads project to refuse. Checks it lists exactly those: each
-# Platform component's own, and any other its render creates or installs into, such as
-# Cilium's cilium-secrets (rendered_namespaces).
+# itself, for the workloads project to refuse. components_problems checks each Platform
+# component's own is listed; this checks the rest: each other namespace a Platform
+# component's render creates or installs into, such as Cilium's cilium-secrets, is
+# listed, and every listed one is a Platform component's.
+# Usage: lint_platform_namespaces <the Platform's rendered namespaces, one per line>
 lint_platform_namespaces() {
-  local dir listed actual
-  listed=$(yq '.platformNamespaces[]' gitops/values.yaml | sort)
-  for dir in "${components[@]}"; do
-    if [[ $dir == workloads/* ]] && grep -qxF "$(component_namespace "$dir")" <<<"$listed"; then
-      fail "$dir's namespace is one of the Platform's (gitops/values.yaml)"
-    fi
-  done
-  actual=$({
-    for dir in "${components[@]}"; do
-      if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
-    done
-    printf '%s' "$platform_rendered_namespaces"
-  } | grep . | sort -u)
-  if [[ $listed == "$actual" ]]; then
-    ok "gitops/values.yaml lists the Platform's namespaces"
-  else
-    fail "gitops/values.yaml's platformNamespaces aren't the Platform's namespaces:"$'\n'"$(diff <(echo "$listed") <(echo "$actual"))"
-  fi
-}
-
-# Each Wave gitops/values.yaml lists has a Platform component: the root Application's sync
-# would wait forever for an ApplicationSet with none to be Healthy
-# (platform/argocd/values.yaml). So would it for the Platform's last one, which gets the
-# components that set no Wave.
-lint_platform_waves() {
-  local wave waves empty=0
-  # A component that sets no Wave prints an empty line.
-  waves=$(for dir in "${components[@]}"; do
-    if [[ $dir == platform/* ]]; then yq '.wave // ""' "$dir/component.yaml"; fi
+  local dir namespace listed own before=$fails
+  listed=$(yq '.platformNamespaces[]' gitops/values.yaml)
+  own=$(for dir in "${components[@]}"; do
+    if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
   done)
-  for wave in $(yq '.platformWaves[]' gitops/values.yaml); do
-    grep -qxF -- "$wave" <<<"$waves" && continue
-    fail "no Platform component is in the Wave $wave (gitops/values.yaml)"
-    empty=$((empty + 1))
+  while read -r namespace; do
+    grep -qxF -- "$namespace" <<<"$own"$'\n'"$listed" ||
+      fail "gitops/values.yaml: platformNamespaces doesn't list $namespace, which a Platform component's render creates or installs into"
+  done < <(grep . <<<"$1" | sort -u)
+  for namespace in $listed; do
+    grep -qxF -- "$namespace" <<<"$own"$'\n'"$1" ||
+      fail "gitops/values.yaml: platformNamespaces lists $namespace, which no Platform component creates or installs into"
   done
-  if ! grep -qx '' <<<"$waves"; then
-    fail "every Platform component sets a Wave, which leaves the Platform's last ApplicationSet with none"
-    empty=$((empty + 1))
-  fi
-  ((empty > 0)) || ok "every Wave has a Platform component"
+  ((fails > before)) || ok "gitops/values.yaml lists the Platform's namespaces"
 }
 
 # A component in a Wave renders no HTTPRoute: ArgoCD calls one Progressing until the
 # Gateway accepts it, and the Gateway is installed after every Wave, since it needs the
-# Waves' cert-manager and Cilium. Its Wave would never be Healthy. Reads the component
-# that render_component rendered last.
+# Waves' cert-manager and Cilium. Its Wave would never be Healthy.
+# Usage: lint_wave_routes <component folder> <its render>
 lint_wave_routes() {
-  local dir=$1
-  [[ $(yq 'has("wave")' "$dir/component.yaml") == true ]] || return 0
-  if [[ -n $(yq -N 'select(.kind == "HTTPRoute") | .metadata.name' "$manifests") ]]; then
-    fail "$dir is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed"
+  [[ -n $(component_wave "$1") ]] || return 0
+  if [[ -n $(yq -N 'select(.kind == "HTTPRoute") | .metadata.name' "$2") ]]; then
+    fail "$1 is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed"
   fi
 }
 
@@ -385,7 +360,8 @@ read_policies
 lint_policy_fixtures
 
 log "Components"
-report_problems "every component folder is what the ApplicationSets expect" components_problems
+report_problems "every component folder, and gitops/values.yaml's lists of them, is what the ApplicationSets expect" \
+  components_problems
 mapfile -t components < <(component_dirs)
 write_application_chart
 # What the Platform's renders create or install into, for lint_platform_namespaces.
@@ -394,15 +370,14 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
   if [[ $dir == platform/* ]]; then
     platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
-    lint_wave_routes "$dir"
+    lint_wave_routes "$dir" "$manifests"
   fi
   # A render that failed left $manifests empty.
   add_admitted "$dir"
   lint_rendering "$dir's Application" render_application "$dir"
 done
 lint_admission
-lint_platform_namespaces
-lint_platform_waves
+lint_platform_namespaces "$platform_rendered_namespaces"
 lint_rendering "the same-namespace allow" render_same_namespace_allow
 lint_same_namespace_source workloads/rollouts-demo
 lint_rendering gitops render_gitops
