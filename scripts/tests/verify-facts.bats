@@ -59,6 +59,17 @@ check() {
 verify/lib/web.sh:3 copies the Platform fact ui.url (ui.lab.localhost); read \$PLATFORM_FACT_UI_URL" ]]
 }
 
+@test "a fact's value as part of a longer name, such as an API group or a host under it: no copy" {
+  printf 'account: web\n' >>"$LAB_ROOT/platform/web/values.yaml"
+  PLATFORM_FACTS[web.account]='platform/web/values.yaml|.account'
+  printf 'apiVersion: web.io/v1\nkind: web-config\nhost: api.web.lab.localhost\n' >"$LAB_ROOT/verify/lib/web.yaml"
+  printf 'account: web\nname: (web)\n' >>"$LAB_ROOT/verify/lib/web.yaml"
+  run verify_copies_problems
+  [[ $status -eq 0 ]]
+  [[ $output == "verify/lib/web.yaml:4 copies the Platform fact web.account (web); read \$PLATFORM_FACT_WEB_ACCOUNT
+verify/lib/web.yaml:5 copies the Platform fact web.account (web); read \$PLATFORM_FACT_WEB_ACCOUNT" ]]
+}
+
 @test "a namespace verify.sh exports, as kubectl, YAML, a URL or a Service's name takes it: names the file, line and variable" {
   cat >"$LAB_ROOT/verify/lib/db.sh" <<'SH'
 kubectl -n data get pods

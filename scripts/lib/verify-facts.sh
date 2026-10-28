@@ -45,9 +45,11 @@ _verify_copies() {
     value=$(_platform_fact "$name") || continue # platform_facts_problems reports it.
     # A URL's host is a copy too, whatever its scheme.
     value=${value#*://}
+    # Only where it stands alone: a name, such as a ServiceAccount's, can also be part of
+    # a longer one, such as an API group's, or a host's under it.
     while IFS= read -r hit; do
       echo "$(cut -d: -f1,2 <<<"$hit") copies the Platform fact $name ($value); read \$$(platform_fact_variable "$name")"
-    done < <(cd "$LAB_ROOT" && grep -rnF -- "$value" verify)
+    done < <(cd "$LAB_ROOT" && grep -rnP -- "(?<![\w.-])\Q$value\E(?![\w-]|\.\w)" verify)
   done
   for name in "${!VERIFY_NAMESPACES[@]}"; do
     value=$(component_namespace "${VERIFY_NAMESPACES[$name]}")
