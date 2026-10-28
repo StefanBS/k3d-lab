@@ -39,24 +39,30 @@ gpu_node_object() {
 
 # gpu_node_unregistered: for join's wait, prints a line while the GPU Node has no Node
 # object in the Lab, or more than one. A wait drops a failed check's stderr, which is
-# kubectl's while k3s restarts, so more than one is said here, or join would wait it out
-# as an API that isn't answering.
+# kubectl's while k3s restarts, so this check says when there's more than one itself.
+# Otherwise join would wait that out as an API that isn't answering.
 gpu_node_unregistered() {
-  local node status=0
-  node=$(gpu_node_object 2>&1) || status=$?
+  local node why status=0
+  node=$(gpu_node_object 2>/dev/null) || status=$?
   case $status in
     0) [[ -n $node ]] || echo "the GPU Node: not registered yet" ;;
-    2) echo "the GPU Node: $node" ;;
+    2)
+      status=0
+      why=$(gpu_node_object 2>&1 >/dev/null) || status=$?
+      ((status == 2)) || return 1
+      echo "the GPU Node: $why"
+      ;;
     *) return 1 ;;
   esac
 }
 
-# gpu_node_stale_objects: the names of the Node objects labelled as the GPU Node that are
-# left over, one each line: there's only one GPU Node, so when there's more than one, those
-# that aren't Ready, as after its hostname changed. One Node object, even NotReady, is the
-# GPU Node's own: its agent, if it's running, wouldn't register it again. Fails, saying
-# why on stderr, when the request does.
-gpu_node_stale_objects() {
+# gpu_node_replaced_objects: the names of the Node objects labelled as the GPU Node that
+# a join replaces, one each line. There's only one GPU Node, so a second Node object is
+# one from an earlier hostname. When there's more than one, the join deletes those that
+# aren't Ready, and the GPU Node's agent registers its own again when it starts. A single
+# Node object is kept, even NotReady: an agent that's already running wouldn't register
+# it again. Fails, saying why on stderr, when the request does.
+gpu_node_replaced_objects() {
   local listed
   listed=$(kc get nodes -o json -l "$GPU_NODE_LABEL_KEY") || {
     echo "can't read the GPU Node's Node objects from the Lab" >&2
