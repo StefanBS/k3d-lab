@@ -66,15 +66,21 @@ args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" -
 # Chainsaw names each check chainsaw/<check>, and matches the regex against that.
 ((${#checks[@]} == 0)) || args+=(--include-test-regex "^chainsaw/($(IFS='|' && echo "${checks[*]}"))\$")
 
-# The GPU checks, labelled GPU_NODE_LABEL_KEY, run only while the GPU Node is Joined and Ready.
-# Left is its normal state, so that says nothing. Joined but NotReady means it's powered
-# off (ADR 0002): not a failure, but worth knowing.
+# The GPU checks, labelled GPU_NODE_LABEL_KEY, run only while the GPU Node's Node object
+# is Ready. No Node object means it's Left, its normal state, so that says nothing. A
+# NotReady one means it's powered off (ADR 0002), or Left since a reboot: not a failure,
+# but worth knowing.
 deselected=()
-gpu_node=$(gpu_node_in_lab)
-if [[ $gpu_node != *" True" ]]; then
-  [[ -z $gpu_node ]] || warn "the GPU Node ${gpu_node%% *} is Joined but NotReady; its checks are skipped"
-  deselected+=("!$GPU_NODE_LABEL_KEY")
-fi
+gpu_node=$(gpu_node_object) || die "can't read the GPU Node's Node object, so can't tell whether its checks run"
+read -r gpu_node ready <<<"$gpu_node"
+case $ready in
+  Ready) ;;
+  NotReady)
+    warn "the GPU Node's Node object $gpu_node is NotReady: it's off, or Left since a reboot; its checks are skipped"
+    deselected+=("!$GPU_NODE_LABEL_KEY")
+    ;;
+  *) deselected+=("!$GPU_NODE_LABEL_KEY") ;;
+esac
 # The Demos' checks, labelled DEMO_LABEL_KEY, run only while the Lab has its Demos, which
 # the root Application says. While it has them, a Demo that's missing fails its checks.
 demos=$(root_application_has_demos)

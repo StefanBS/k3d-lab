@@ -37,7 +37,7 @@ lab_ca_hash() {
 # Prints a line while the GPU Node has no Node object in the Lab.
 gpu_node_unregistered() {
   local node
-  node=$(gpu_node_in_lab) || return 1
+  node=$(gpu_node_object) || return 1
   [[ -n $node ]] || echo "the GPU Node: not registered yet"
 }
 
@@ -72,7 +72,7 @@ cmd_join() {
     gpu_node_unregistered
   wait_nodes_ready 180 -l "$GPU_NODE_LABEL_KEY"
   settle_join
-  node=$(gpu_node_in_lab)
+  node=$(gpu_node_object) || die "can't read the GPU Node's Node object"
   log "The GPU Node is Joined as ${node%% *}"
 }
 
@@ -84,14 +84,19 @@ cmd_leave() {
     *) die "unknown argument '$1'; usage: just gpu leave [purge]" ;;
   esac
   need_env GPU_NODE_IP GPU_NODE_SSH
+  # A Node object it can't read, or more than one, is still drained and deleted, by label.
   if lab_exists; then
-    node=$(gpu_node_in_lab)
-    node=${node%% *}
+    if node=$(gpu_node_object); then
+      node=${node:+the Node object ${node%% *}}
+    else
+      node="the Node objects labelled $GPU_NODE_LABEL_KEY"
+      warn "can't read the GPU Node's Node object; draining and deleting $node"
+    fi
   fi
 
   if ! gpu_node_reachable; then
     if [[ -n $node ]]; then
-      log "Deleting the GPU Node's Node object, $node"
+      log "Deleting $node"
       kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
       warn "can't reach the GPU Node as $GPU_NODE_SSH: the next 'just gpu join' cleans it up"
     else
@@ -110,7 +115,7 @@ cmd_leave() {
   run_on_gpu_node "" "$mode" || left=false
   # Only once the agent is stopped, or it would register again.
   if [[ -n $node ]]; then
-    log "Deleting the Node object $node"
+    log "Deleting $node"
     kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
   fi
   [[ $left == true ]] || die "the GPU Node didn't $mode cleanly (above)"
@@ -127,7 +132,7 @@ cmd_status() {
   fi
   if lab_exists; then
     lab=true
-    node=$(gpu_node_in_lab)
+    node=$(gpu_node_object) || die "can't read the GPU Node's Node object"
   fi
 
   gpu_node_lab_view "$lab" "$node" "${machine%%$'\n'*}"

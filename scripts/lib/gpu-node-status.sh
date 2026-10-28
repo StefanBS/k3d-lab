@@ -3,8 +3,8 @@
 # shellcheck shell=bash
 
 # gpu_node_lab_view <true|false> <Node object> <agent line>: the Lab line of 'just gpu
-# status', from whether a Lab exists, the GPU Node's Node object there (gpu_node_in_lab's
-# "<name> <Ready status>", or empty) and the first line of gpu-node.sh status (empty when
+# status', from whether a Lab exists, the GPU Node's Node object there (gpu_node_object's
+# "<name> Ready" or "<name> NotReady", or empty) and the first line of gpu-node.sh status (empty when
 # the GPU Node can't be reached). The agent decides Joined or Left, since the Ready
 # status lags a stopped agent by about 40s.
 gpu_node_lab_view() {
@@ -16,7 +16,7 @@ gpu_node_lab_view() {
     echo "Lab: the GPU Node is Left"
   elif [[ $agent == "agent: stopped" ]]; then
     echo "Lab: the GPU Node's agent is stopped, as after a reboot, so it's Left; its Node object $name stays until 'just gpu join'"
-  elif [[ $ready == True ]]; then
+  elif [[ $ready == Ready ]]; then
     echo "Lab: the GPU Node is Joined as $name, Ready"
   elif [[ -n $agent ]]; then
     echo "Lab: the GPU Node is Joined as $name, NotReady, though its agent is running"

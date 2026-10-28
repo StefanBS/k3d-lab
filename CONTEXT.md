@@ -23,7 +23,7 @@ The GPU Node's state when it's registered with the current Lab and lending its G
 _Avoid_: online, active, attached
 
 **Left**:
-The GPU Node's state when it's not registered with the current Lab, so its GPU belongs entirely to its owner. It's the state after every reboot, until the next join.
+The GPU Node's state when it's not registered with the current Lab, so its GPU belongs entirely to its owner. It's the state after every reboot, until the next join. The Lab alone can't always tell: after a reboot, its record of the GPU Node stays, NotReady, as it does while a Joined GPU Node is powered off.
 _Avoid_: offline, detached, removed
 
 **Stale install**:

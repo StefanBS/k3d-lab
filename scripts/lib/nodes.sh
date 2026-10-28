@@ -15,11 +15,23 @@ GPU_NODE_LABEL_KEY=k3d-lab/gpu
 GPU_NODE_LABEL=$GPU_NODE_LABEL_KEY=amd
 GPU_NODE_TAINT=amd.com/gpu:NoSchedule
 
-# The GPU Node's Node object in the Lab, if it's Joined: its name and Ready status.
-gpu_node_in_lab() {
-  kc get nodes -l "$GPU_NODE_LABEL_KEY" \
-    -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
+# gpu_node_object: the GPU Node's Node object in the Lab, as "<name> Ready" or "<name>
+# NotReady", or nothing when there's none. The Lab alone can't say Joined or Left: after a
+# reboot the GPU Node is Left, and its Node object stays NotReady until the next join.
+# Fails when the request does, and, saying so on stderr, when there's more than one.
+gpu_node_object() {
+  local listed names
+  listed=$(kc get nodes -o json -l "$GPU_NODE_LABEL_KEY") || return 1
+  names=$(jq -r '.items | select(length > 1) | map(.metadata.name) | join(", ")' <<<"$listed")
+  if [[ -n $names ]]; then
+    echo "the Lab has more than one Node object labelled $GPU_NODE_LABEL_KEY: $names; 'just gpu leave' deletes them" >&2
+    return 1
+  fi
+  jq -r "$NODE_READY"'.items[] | "\(.metadata.name) \(if ready then "Ready" else "NotReady" end)"' <<<"$listed"
 }
+
+# A jq function: whether the node is Ready, which only a Ready condition that's True says.
+NODE_READY='def ready: ([.status.conditions[]? | select(.type == "Ready")][0].status) == "True"; '
 
 # nodes_unready: reads the Lab's nodes (kubectl get nodes -o json) on stdin, and prints
 # "<name>: NotReady" for each whose Ready condition isn't True, which kubectl also shows
@@ -27,10 +39,10 @@ gpu_node_in_lab() {
 # nothing is waited out, not passed. Fails when there's nothing to read, as when the
 # request failed.
 nodes_unready() {
-  jq -rn '[input.items[]] as $listed |
+  jq -rn "$NODE_READY"'[input.items[]] as $listed |
     if ($listed | length) == 0 then "no nodes yet"
     else
-      $listed[] | select(([.status.conditions[]? | select(.type == "Ready")][0].status) != "True") |
+      $listed[] | select(ready | not) |
       "\(.metadata.name): NotReady"
     end'
 }

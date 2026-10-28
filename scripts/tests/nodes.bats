@@ -63,10 +63,40 @@ k3d-lab-agent-0: NotReady" "$(node k3d-lab-server-0 False)" "$(node k3d-lab-agen
   [[ ${lines[-2]} == "error: these nodes aren't Ready after 30 seconds:" && ${lines[-1]} == "gpu: NotReady" ]]
 }
 
-@test "the GPU Node in the Lab: its name and Ready status, found by its label" {
-  kc_answers get nodes -l k3d-lab/gpu \
-    -o 'jsonpath={range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' <<<"gpu True"
-  run gpu_node_in_lab
+# gpu_nodes <node>...: the Lab lists those nodes under the GPU Node's label.
+gpu_nodes() { printf '%s\n' "$@" | jq -s '{"items": .}' | kc_answers get nodes -o json -l k3d-lab/gpu; }
+
+@test "the GPU Node's Node object Ready: its name and Ready" {
+  gpu_nodes "$(node gpu True)"
+  run gpu_node_object
   [[ $status -eq 0 ]]
-  [[ $output == "gpu True" ]]
+  [[ $output == "gpu Ready" ]]
+}
+
+@test "the GPU Node's Node object not Ready, Unknown, or just registered: NotReady" {
+  for ready in False Unknown ""; do
+    gpu_nodes "$(node gpu "$ready")"
+    run gpu_node_object
+    [[ $status -eq 0 ]]
+    [[ $output == "gpu NotReady" ]]
+  done
+}
+
+@test "no GPU Node's Node object, as while it's Left: nothing" {
+  gpu_nodes
+  run gpu_node_object
+  [[ $status -eq 0 ]]
+  [[ -z $output ]]
+}
+
+@test "the request failed: fails, not Left" {
+  run gpu_node_object
+  [[ $status -eq 1 ]]
+}
+
+@test "two GPU Node's Node objects, as after its hostname changed: fails, naming both" {
+  gpu_nodes "$(node gpu True)" "$(node gpu-old False)"
+  run gpu_node_object
+  [[ $status -eq 1 ]]
+  [[ $output == "the Lab has more than one Node object labelled k3d-lab/gpu: gpu, gpu-old; 'just gpu leave' deletes them" ]]
 }
