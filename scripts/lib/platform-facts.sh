@@ -1,6 +1,7 @@
-# Platform facts: what the scripts need from the Platform's values, read by name. Sourced
-# by lib.sh, and on its own by scripts/tests/, so it sets no shell options and runs
-# nothing when sourced. Every path is under LAB_ROOT.
+# Platform facts: what the scripts, and verify's checks, need from the values of the
+# Platform and the Workloads, read by name. Sourced by lib.sh, and on its own by
+# scripts/tests/, so it sets no shell options and runs nothing when sourced. Every path
+# is under LAB_ROOT.
 # shellcheck shell=bash
 
 # Each fact's file, and the yq expression that reads it there. Callers ask by name, so
@@ -13,6 +14,8 @@ declare -gA PLATFORM_FACTS=(
   [grafana.admin-secret]='platform/grafana/values.yaml|.admin.existingSecret'
   [rollouts.host]='platform/argo-rollouts/values.yaml|.dashboard.httproute.hostnames[0]'
   [hubble.host]='platform/hubble/hubble.yaml|select(.kind == "HTTPRoute") | .spec.hostnames[0]'
+  # Where the UIs send a browser to sign in: Dex's issuer.
+  [sso.url]='platform/dex/config.yaml|.issuer'
   # The Lab login, which signs in by its email.
   [sso.login]='platform/dex/config.yaml|.staticPasswords[0].email'
   # What pods resolve Dex's name to: the Server, where the Gateway listens.
@@ -23,6 +26,8 @@ declare -gA PLATFORM_FACTS=(
   [eso.gateway-ip]='platform/external-secrets/values.yaml|.hostAliases[] | select(.hostnames[] == "host.k3d.internal") | .ip'
   # Where Cilium reaches the Kubernetes API, before it can resolve anything.
   [cilium.server-ip]='platform/cilium/values.yaml|.k8sServiceHost'
+  [comfyui.host]='workloads/comfyui/comfyui.yaml|select(.kind == "HTTPRoute") | .spec.hostnames[0]'
+  [rollouts-demo.host]='workloads/rollouts-demo/rollout.yaml|select(.kind == "HTTPRoute") | .spec.hostnames[0]'
 )
 # The facts that Git can't read from here, so they repeat a constant of lib/lab.sh: each
 # fact's constant, by name. lint checks they match.

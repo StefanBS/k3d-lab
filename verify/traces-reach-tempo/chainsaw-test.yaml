@@ -14,7 +14,7 @@ spec:
         - script:
             content: >-
               ../lib/on-ready-nodes.sh "$NAMESPACE" app=client
-              -- sh -c "$(cat ../lib/send-trace.sh)" send-trace "$NAMESPACE"
+              -- sh -c "$(cat ../lib/send-trace.sh)" send-trace "$NAMESPACE" "$VERIFY_NS_MONITORING"
         - script:
             content: ../lib/tempo-has-traces.sh "$NAMESPACE"
         - script:

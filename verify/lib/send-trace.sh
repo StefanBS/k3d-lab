@@ -1,5 +1,5 @@
 #!/bin/sh
-# Usage: sh -c "$(cat send-trace.sh)" send-trace <namespace>
+# Usage: sh -c "$(cat send-trace.sh)" send-trace <namespace> <Alloy's namespace>
 # Runs in a probe client pod (busybox, not the Host): sends Alloy one trace over OTLP
 # HTTP, as a call from the service <namespace>-client to the service <namespace>-web.
 # Its ID is the MD5 of <namespace>/<node>, so tempo-has-traces.sh finds it without
@@ -9,7 +9,7 @@
 # Run by traces-reach-tempo, through on-ready-nodes.sh.
 set -eu
 
-namespace=$1
+namespace=$1 alloy_namespace=$2
 trace=$(printf '%s/%s' "$namespace" "$NODE_NAME" | md5sum | cut -c1-32)
 client_span=$(echo "$trace" | cut -c1-16)
 web_span=$(echo "$trace" | cut -c17-32)
@@ -37,7 +37,7 @@ $(resource_spans "$namespace-web" "$web_span" "$client_span" 2)
 # Tempo keeps both copies: tempo-has-traces.sh allows for that.
 for attempt in 1 2 3; do
   wget -qO- -T 5 --header 'Content-Type: application/json' --post-data "$body" \
-    http://alloy.monitoring.svc:4318/v1/traces && exit 0
+    "http://alloy.$alloy_namespace.svc:4318/v1/traces" && exit 0
   [ "$attempt" = 3 ] || sleep 2
 done
 exit 1

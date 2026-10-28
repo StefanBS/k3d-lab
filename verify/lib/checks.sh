@@ -41,9 +41,9 @@ node_pod() {
 
 # Usage: monitoring_get <service>:<port> <path>
 # Prints what a Service in the monitoring namespace answers at the path, through the
-# API server's proxy to it.
+# API server's proxy to it. verify.sh exports that namespace as VERIFY_NS_MONITORING.
 monitoring_get() {
-  kubectl get --raw "/api/v1/namespaces/monitoring/services/$1/proxy/$2"
+  kubectl get --raw "/api/v1/namespaces/$VERIFY_NS_MONITORING/services/$1/proxy/$2"
 }
 
 # Usage: uri_encode <text>

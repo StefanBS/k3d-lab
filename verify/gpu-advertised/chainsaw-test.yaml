@@ -16,9 +16,7 @@ spec:
             resource:
               apiVersion: v1
               kind: Node
-              metadata:
-                labels:
-                  k3d-lab/gpu: amd
+              (lookup(metadata.labels, env('VERIFY_GPU_NODE_LABEL_KEY'))): (env('VERIFY_GPU_NODE_LABEL_VALUE'))
               status:
                 allocatable:
                   amd.com/gpu: "1"

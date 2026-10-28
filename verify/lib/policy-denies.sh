@@ -21,7 +21,7 @@ namespace=$1
 mapfile -t workload_namespaces < <(kubectl get namespaces -l 'k3d-lab/group=workloads,!k3d-lab/verify' \
   -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
 # The Platform labels exactly the namespaces of the Workloads' Applications.
-expected=$(kubectl -n argocd get applications -l k3d-lab/group=workloads \
+expected=$(kubectl -n "$VERIFY_NS_ARGOCD" get applications -l k3d-lab/group=workloads \
   -o jsonpath='{range .items[*]}{.spec.destination.namespace}{"\n"}{end}' | sort -u)
 labelled=$(printf '%s\n' "${workload_namespaces[@]}" | sort)
 if [[ -z $expected || $labelled != "$expected" ]]; then

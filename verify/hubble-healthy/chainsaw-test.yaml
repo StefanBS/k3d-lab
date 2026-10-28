@@ -5,8 +5,8 @@ metadata:
 spec:
   description: >-
     Hubble Relay is up and returns flows from every Ready node, the GPU Node included
-    when Joined. From the Host, Hubble UI's address, https://hubble.lab.localhost,
-    answers with a certificate from the Lab CA.
+    when Joined. From the Host, Hubble UI's address answers with a certificate from the
+    Lab CA.
   steps:
     - try:
         - assert:
@@ -23,7 +23,7 @@ spec:
         # The answer is a redirect to Dex, which this doesn't follow: sso-login signs in,
         # and gets the page.
         - script:
-            content: ../lib/host-curl.sh -o /dev/null https://hubble.lab.localhost/
+            content: ../lib/host-curl.sh -o /dev/null "https://$PLATFORM_FACT_HUBBLE_HOST/"
       catch:
         - script:
             content: kubectl -n kube-system get pods -l 'k8s-app in (hubble-relay, hubble-ui)' -o wide

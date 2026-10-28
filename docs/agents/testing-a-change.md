@@ -35,3 +35,5 @@ A rule that judges only Git's files, such as one about component.yaml in `compon
 
 - **Commit first.** `git restore <file>` discards every uncommitted edit to the file, not only the one made to break it.
 - **Break one thing, run lint, restore:** `echo 'wave: controllers' >>platform/hubble/component.yaml; just lint; git restore platform/hubble/component.yaml`. Hubble renders an HTTPRoute, so it prints `FAIL  platform/hubble is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed` and fails.
+
+A Platform fact renamed in `PLATFORM_FACTS` (`scripts/lib/platform-facts.sh`) leaves verify's checks reading a variable `verify.sh` no longer exports. Lint finds it without a Lab: `sed -i 's/\[hubble.host\]/[hubble.name]/' scripts/lib/platform-facts.sh; just lint; git restore scripts/lib/platform-facts.sh` prints `FAIL  verify/hubble-healthy/chainsaw-test.yaml:<line> reads PLATFORM_FACT_HUBBLE_HOST, which verify.sh doesn't export`, and the same for `verify/lib/sso-login.sh`, and fails.

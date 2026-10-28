@@ -5,13 +5,13 @@ metadata:
 spec:
   description: >-
     The Lab login opens every UI of the Platform (ADR 0013). From a client pod on every
-    Ready node, Dex answers at https://sso.lab.localhost, the name the UIs that sign in
-    through it call it by. From the Host, with the Lab login's password from the Secret
-    Store: Dex serves the signing keys in its storage, Dex gives a token for the Lab
-    login and refuses a wrong password, ArgoCD's API takes that token, the Rollouts
-    dashboard and Hubble UI send a request without a session to Dex and one sign-in
-    opens both, Grafana signs the Lab login in as an Admin, that sign-in opens ArgoCD
-    and Hubble UI without Dex asking again, and ArgoCD's and Grafana's Break-glass logins still work.
+    Ready node, Dex answers at its address, the name the UIs that sign in through it
+    call it by. From the Host, with the Lab login's password from the Secret Store: Dex
+    serves the signing keys in its storage, Dex gives a token for the Lab login and
+    refuses a wrong password, ArgoCD's API takes that token, the Rollouts dashboard and
+    Hubble UI send a request without a session to Dex and one sign-in opens both,
+    Grafana signs the Lab login in as an Admin, that sign-in opens ArgoCD and Hubble UI
+    without Dex asking again, and ArgoCD's and Grafana's Break-glass logins still work.
   steps:
     - use:
         template: ../lib/deploy-probes.yaml
@@ -22,7 +22,7 @@ spec:
               kind: Deployment
               metadata:
                 name: dex
-                namespace: sso
+                namespace: (env('VERIFY_NS_SSO'))
               status:
                 availableReplicas: 1
         - assert:
@@ -31,7 +31,7 @@ spec:
               kind: Deployment
               metadata:
                 name: oauth2-proxy
-                namespace: sso
+                namespace: (env('VERIFY_NS_SSO'))
               status:
                 availableReplicas: 1
         # CoreDNS picks its entry for the name up by itself, but only a minute or so
@@ -42,16 +42,16 @@ spec:
             content: >-
               ../lib/on-ready-nodes.sh "$NAMESPACE" app=client
               -- sh -c 'for attempt in $(seq 6); do
-              wget -qO /dev/null -T 5 https://sso.lab.localhost/.well-known/openid-configuration && exit 0;
-              sleep 5; done; echo "no answer from https://sso.lab.localhost"; exit 1'
+              wget -qO /dev/null -T 5 "$1/.well-known/openid-configuration" && exit 0;
+              sleep 5; done; echo "no answer from $1"; exit 1' sso-probe "$PLATFORM_FACT_SSO_URL"
         - script:
             content: ../lib/sso-login.sh
       catch:
         - script:
-            content: kubectl -n sso get pods -o wide
+            content: kubectl -n "$VERIFY_NS_SSO" get pods -o wide
         - script:
-            content: kubectl -n sso logs deploy/oauth2-proxy --tail 20
+            content: kubectl -n "$VERIFY_NS_SSO" logs deploy/oauth2-proxy --tail 20
         - script:
-            content: kubectl -n sso logs -l app=dex --prefix --tail 20
+            content: kubectl -n "$VERIFY_NS_SSO" logs -l app=dex --prefix --tail 20
         - script:
             content: kubectl -n kube-system get configmap coredns-custom -o yaml | yq .data

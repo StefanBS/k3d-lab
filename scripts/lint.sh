@@ -3,6 +3,8 @@
 # Every check runs, even after one fails; the script fails if any did.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=lib/verify-facts.sh
+source "$(dirname "$0")/lib/verify-facts.sh"
 cd "$LAB_ROOT" || exit
 
 # The Kubernetes version the Lab runs, from its k3s image: v1.36.4-k3s1 is 1.36.4.
@@ -408,6 +410,9 @@ for file in verify/*/chainsaw-test.yaml; do
 done
 lint_rendering "verify's probes" render_probes
 lint_demo_checks
+# verify.sh exports these to the checks, so a copy would pass lint and fail only on a Lab.
+report_problems "verify's checks read every Platform fact, namespace and label verify.sh exports, and copy none" \
+  verify_copies_problems
 
 ((fails == 0)) || die "lint found $fails problem(s)"
 log "Lint passed"

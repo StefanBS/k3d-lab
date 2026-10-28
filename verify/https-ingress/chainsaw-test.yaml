@@ -4,9 +4,9 @@ metadata:
   name: https-ingress
 spec:
   description: >-
-    From the Host, the ArgoCD UI answers at https://argocd.lab.localhost with a
-    certificate from the Lab CA, which the Host trusts, and plain HTTP redirects to
-    HTTPS. The Gateway listens on the Host's ports 80 and 443 through k3d.
+    From the Host, the ArgoCD UI answers at its address with a certificate from the Lab
+    CA, which the Host trusts, and plain HTTP redirects to HTTPS. The Gateway listens on
+    the Host's ports 80 and 443 through k3d.
   steps:
     - try:
         # ArgoCD can call the Gateway Healthy before Envoy serves it.
@@ -19,15 +19,15 @@ spec:
                 namespace: gateway
               (status.conditions[?type == 'Programmed'] | [0].status): 'True'
         - script:
-            content: ../lib/host-curl.sh -o /dev/null https://argocd.lab.localhost/
+            content: ../lib/host-curl.sh -o /dev/null "https://$PLATFORM_FACT_ARGOCD_HOST/"
         # What a browser on the Host sees: its own trust store, with nothing imported
         # for this Lab.
         - script:
-            content: curl -sS --fail -o /dev/null https://argocd.lab.localhost/
+            content: curl -sS --fail -o /dev/null "https://$PLATFORM_FACT_ARGOCD_HOST/"
         # Cilium's Envoy spells out the default port, :443, which browsers treat as the same URL.
         - script:
             content: |
               out=$(curl -sS --retry 5 --retry-all-errors --retry-delay 2 \
-                -o /dev/null -w '%{http_code} %{redirect_url}' http://argocd.lab.localhost/)
+                -o /dev/null -w '%{http_code} %{redirect_url}' "http://$PLATFORM_FACT_ARGOCD_HOST/")
               echo "$out"
-              echo "$out" | grep -Eqx '301 https://argocd\.lab\.localhost(:443)?/'
+              echo "$out" | grep -qxF -e "301 https://$PLATFORM_FACT_ARGOCD_HOST/" -e "301 https://$PLATFORM_FACT_ARGOCD_HOST:443/"

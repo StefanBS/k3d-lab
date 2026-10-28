@@ -13,12 +13,12 @@ spec:
             resource:
               apiVersion: v1
               kind: Node
-              (metadata.labels."k3d-lab/gpu" == null): true
+              (contains(keys(metadata.labels), env('VERIFY_GPU_NODE_LABEL_KEY'))): false
         - error:
             resource:
               apiVersion: v1
               kind: Node
-              (metadata.labels."k3d-lab/gpu" == null): true
+              (contains(keys(metadata.labels), env('VERIFY_GPU_NODE_LABEL_KEY'))): false
               (status.conditions[?type == 'Ready'] | [0].status != 'True'): true
       catch:
         - script:

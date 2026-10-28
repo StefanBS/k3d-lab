@@ -10,7 +10,8 @@
 #   - Grafana signs the Lab login in through Dex, as an Admin.
 #   - That sign-in opens ArgoCD and Hubble UI too, without Dex asking again.
 #   - ArgoCD's and Grafana's Break-glass logins still work.
-# Every request trusts only the Lab CA (verify.sh exports LAB_CA_CERT). No secret is
+# Every request trusts only the Lab CA. verify.sh exports LAB_CA_CERT, and the Platform
+# facts and namespaces this reads (scripts/lib/verify-facts.sh). No secret is
 # passed as an argument, where the Host's process list would show it: each goes to curl
 # on stdin, or from a file in a directory that's deleted afterwards.
 # Run by sso-login, whose script steps point kubectl at the Lab through a context named
@@ -21,12 +22,12 @@ source "$(dirname "$0")/checks.sh"
 # shellcheck source=../../scripts/lib/sso.sh
 source "$(dirname "$0")/../../scripts/lib/sso.sh"
 
-sso=https://sso.lab.localhost
-argocd=https://argocd.lab.localhost
-grafana=https://grafana.lab.localhost
-rollouts=https://rollouts.lab.localhost
-hubble=https://hubble.lab.localhost
-login=lab@lab.localhost
+sso=$PLATFORM_FACT_SSO_URL
+argocd=https://$PLATFORM_FACT_ARGOCD_HOST
+grafana=$PLATFORM_FACT_GRAFANA_URL
+rollouts=https://$PLATFORM_FACT_ROLLOUTS_HOST
+hubble=https://$PLATFORM_FACT_HUBBLE_HOST
+login=$PLATFORM_FACT_SSO_LOGIN
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -88,14 +89,14 @@ expect_sent_to_dex() {
   fi
 }
 
-password=$("$(dirname "$0")/../../scripts/secret-store.sh" bao kv get -mount=lab -field=password platform/sso/login </dev/null)
+password=$("$(dirname "$0")/../../scripts/secret-store.sh" bao kv get -mount=lab -field=password "$SSO_LOGIN_SECRET" </dev/null)
 
 # Dex keeps its state in the Lab's API: the signing keys it serves are the ones in its
 # storage. With a state of its own it would have made its own keys, and a restart would
 # make new ones, which no UI that signed in before trusts. Its keys are one custom
 # resource, which Dex names. A request that fails counts as no keys.
 served=$(lab_curl "$sso/keys" | jq -c '[.keys[].kid] | sort') || served=""
-stored=$(kubectl -n sso get signingkeies.dex.coreos.com openid-connect-keys -o json \
+stored=$(kubectl -n "$VERIFY_NS_SSO" get signingkeies.dex.coreos.com openid-connect-keys -o json \
   | jq -c '[.signingKeyPub.kid, .verificationKeys[]?.publicKey.kid] | map(select(. != null)) | sort') || stored=""
 if verdict=$(printf '%s\n%s\n' "$served" "$stored" | sso_keys_stored); then
   ok "Dex serves the $verdict signing keys in its storage"
@@ -177,7 +178,7 @@ else
 fi
 
 # The Break-glass logins, which need neither Dex nor oauth2-proxy.
-status=$(kubectl -n argocd get secret argocd-initial-admin-secret -o json |
+status=$(kubectl -n "$VERIFY_NS_ARGOCD" get secret argocd-initial-admin-secret -o json |
   jq '{"username": "admin", "password": (.data.password | @base64d)}' |
   lab_curl -o "$tmp/session" -w '%{http_code}' -H 'Content-Type: application/json' -d @- "$argocd/api/v1/session")
 if [[ $status == 200 ]] && jq -e 'has("token")' "$tmp/session" >/dev/null 2>&1; then
@@ -185,7 +186,7 @@ if [[ $status == 200 ]] && jq -e 'has("token")' "$tmp/session" >/dev/null 2>&1; 
 else
   fail "ArgoCD's Break-glass login doesn't work: HTTP $status"
 fi
-status=$(kubectl -n monitoring get secret grafana-admin -o json |
+status=$(kubectl -n "$VERIFY_NS_MONITORING" get secret "$PLATFORM_FACT_GRAFANA_ADMIN_SECRET" -o json |
   jq '.data | {"user": (.["admin-user"] | @base64d), "password": (.["admin-password"] | @base64d)}' |
   lab_curl -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d @- "$grafana/login")
 if [[ $status == 200 ]]; then
