@@ -4,15 +4,19 @@
 # when sourced. Every path but a render's is under LAB_ROOT.
 # shellcheck shell=bash
 
-# wave_routes_problems <component folder> <its render>: a component in a Wave renders no
-# HTTPRoute. ArgoCD calls one Progressing until the Gateway accepts it, and the Gateway is
-# installed after every Wave, since it needs the Waves' cert-manager and Cilium. Its Wave
-# would never be Healthy.
+# wave_routes_problems <component folder>=<its render>...: a component in a Wave renders
+# no HTTPRoute. ArgoCD calls one Progressing until the Gateway accepts it, and the Gateway
+# is installed after every Wave, since it needs the Waves' cert-manager and Cilium. Its
+# Wave would never be Healthy.
 wave_routes_problems() {
-  [[ -n $(component_wave "$1") ]] || return 0
-  if [[ -n $(yq -N 'select(.kind == "HTTPRoute") | .metadata.name' "$2") ]]; then
-    echo "$1 is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed"
-  fi
+  local pair dir
+  for pair; do
+    dir=${pair%%=*}
+    [[ -n $(component_wave "$dir") ]] || continue
+    if [[ -n $(yq -N 'select(.kind == "HTTPRoute") | .metadata.name' "${pair#*=}") ]]; then
+      echo "$dir is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed"
+    fi
+  done
 }
 
 # platform_namespaces_problems <component folder>=<its render>...: given every Platform

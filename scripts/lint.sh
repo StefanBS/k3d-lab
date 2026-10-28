@@ -40,9 +40,9 @@ report_problems() {
   while IFS= read -r problem; do fail "$problem"; done <<<"$problems"
 }
 
-# keep_render <name>: keeps the render in $manifests, for a rule in scripts/lib/renders.sh,
-# and prints the file it's kept in.
-keep_render() {
+# copy_render <name>: copies the render in $manifests, for a rule in
+# scripts/lib/renders.sh, and prints the file it's copied to.
+copy_render() {
   cp "$manifests" "$renders/$1.yaml"
   echo "$renders/$1.yaml"
 }
@@ -289,30 +289,26 @@ platform_renders=()
 for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
   # A render that failed left $manifests empty.
-  if [[ $dir == platform/* ]]; then platform_renders+=("$dir=$(keep_render "${dir//\//-}")"); fi
+  if [[ $dir == platform/* ]]; then platform_renders+=("$dir=$(copy_render "${dir//\//-}")"); fi
   add_admitted "$dir"
   lint_rendering "$dir's Application" render_application "$dir"
 done
 lint_admission
-platform_wave_routes_problems() {
-  local pair
-  for pair in "${platform_renders[@]}"; do wave_routes_problems "${pair%%=*}" "${pair#*=}"; done
-}
-report_problems "no Platform component in a Wave renders an HTTPRoute" platform_wave_routes_problems
+report_problems "no Platform component in a Wave renders an HTTPRoute" wave_routes_problems "${platform_renders[@]}"
 report_problems "gitops/values.yaml lists the Platform's namespaces" \
   platform_namespaces_problems "${platform_renders[@]}"
 lint_rendering "the same-namespace allow" render_same_namespace_allow
 # No Workload is `isolation: strict` yet, so one is rendered as if it were.
 render_application workloads/rollouts-demo
-default_application=$(keep_render application)
+unisolated_application=$(copy_render application)
 render_application workloads/rollouts-demo '.isolation = "strict"'
 report_problems "a Workload's Application gets the same-namespace allow, unless it's isolation: strict" \
-  same_namespace_source_problems workloads/rollouts-demo "$default_application" "$(keep_render strict-application)"
+  same_namespace_source_problems workloads/rollouts-demo "$unisolated_application" "$(copy_render strict-application)"
 lint_rendering gitops render_gitops
-default_gitops=$(keep_render gitops)
+gitops_without_demos=$(copy_render gitops)
 lint_rendering "gitops with the Demos" render_gitops --set demos=true
 report_problems "the workloads ApplicationSet leaves the Demos out, unless the Lab has its Demos" \
-  demos_selector_problems "$default_gitops" "$(keep_render gitops-demos)"
+  demos_selector_problems "$gitops_without_demos" "$(copy_render gitops-demos)"
 
 # Every fact the scripts read from the Platform's values, so a renamed value fails
 # here rather than in the middle of `just up`.

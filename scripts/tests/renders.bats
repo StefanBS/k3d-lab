@@ -42,7 +42,8 @@ YAML
 
 @test "a component in a Wave whose render has an HTTPRoute: names the component" {
   printf 'namespace: kube-system\nwave: controllers\n' | component platform/hubble
-  run wave_routes_problems platform/hubble "$(routed hubble)"
+  printf 'namespace: kube-system\n' | component platform/gateway
+  run wave_routes_problems "platform/gateway=$(routed gateway)" "platform/hubble=$(routed hubble)"
   [[ $status -eq 0 ]]
   [[ $output == "platform/hubble is in a Wave, but renders an HTTPRoute, which can't be Healthy before the Gateway is installed" ]]
 }
@@ -50,9 +51,8 @@ YAML
 @test "a component in no Wave with an HTTPRoute, or in a Wave without one: no problems" {
   printf 'namespace: kube-system\n' | component platform/hubble
   printf 'namespace: kube-system\nwave: controllers\n' | component platform/cilium
-  run wave_routes_problems platform/hubble "$(routed hubble)"
-  [[ $status -eq 0 && -z $output ]]
-  run wave_routes_problems platform/cilium "$(printf 'kind: Service\nmetadata:\n  name: hubble-relay\n' | render cilium)"
+  run wave_routes_problems "platform/hubble=$(routed hubble)" \
+    "platform/cilium=$(printf 'kind: Service\nmetadata:\n  name: hubble-relay\n' | render cilium)"
   [[ $status -eq 0 && -z $output ]]
 }
 
@@ -106,12 +106,12 @@ application() {
 }
 
 @test "a Workload's Application without the same-namespace allow, or with it when strict: names the folder" {
-  run same_namespace_source_problems workloads/shop "$(application default workloads/shop)" \
+  run same_namespace_source_problems workloads/shop "$(application unisolated workloads/shop)" \
     "$(application strict workloads/shop)"
   [[ $status -eq 0 ]]
   [[ $output == "workloads/shop's Application doesn't get the same-namespace allow" ]]
   run same_namespace_source_problems workloads/shop \
-    "$(application default workloads/shop platform/workload-network-policy/same-namespace)" \
+    "$(application unisolated workloads/shop platform/workload-network-policy/same-namespace)" \
     "$(application strict workloads/shop platform/workload-network-policy/same-namespace)"
   [[ $status -eq 0 ]]
   [[ $output == "workloads/shop's Application gets the same-namespace allow even when it's isolation: strict" ]]
@@ -119,7 +119,7 @@ application() {
 
 @test "a Workload's Application with the same-namespace allow, and without it when strict: no problems" {
   run same_namespace_source_problems workloads/shop \
-    "$(application default workloads/shop platform/workload-network-policy/same-namespace)" \
+    "$(application unisolated workloads/shop platform/workload-network-policy/same-namespace)" \
     "$(application strict workloads/shop)"
   [[ $status -eq 0 && -z $output ]]
 }
@@ -136,20 +136,25 @@ applicationset() {
 
 @test "an ApplicationSet besides workloads leaving the Demos out, or one leaving them out with demos: true: says which" {
   run demos_selector_problems \
-    "$({ applicationset platform role && applicationset workloads role; } | render default)" \
-    "$({ applicationset platform && applicationset workloads; } | render demos)"
+    "$({ applicationset platform role && applicationset workloads role; } | render without-demos)" \
+    "$({ applicationset platform && applicationset workloads; } | render with-demos)"
   [[ $status -eq 0 ]]
   [[ $output == "the workloads ApplicationSet, and only it, should leave the Demos out by default" ]]
   run demos_selector_problems \
-    "$({ applicationset platform && applicationset workloads role; } | render default)" \
-    "$({ applicationset platform && applicationset workloads role; } | render demos)"
+    "$({ applicationset platform && applicationset workloads role; } | render without-demos)" \
+    "$({ applicationset platform && applicationset workloads role; } | render with-demos)"
   [[ $status -eq 0 ]]
   [[ $output == "an ApplicationSet leaves the Demos out even with demos: true" ]]
+  run demos_selector_problems \
+    "$({ applicationset platform && applicationset workloads; } | render without-demos)" \
+    "$({ applicationset platform && applicationset workloads; } | render with-demos)"
+  [[ $status -eq 0 ]]
+  [[ $output == "the workloads ApplicationSet, and only it, should leave the Demos out by default" ]]
 }
 
 @test "only the workloads ApplicationSet leaving the Demos out, and none with demos: true: no problems" {
   run demos_selector_problems \
-    "$({ applicationset platform && applicationset workloads role; } | render default)" \
-    "$({ applicationset platform && applicationset workloads; } | render demos)"
+    "$({ applicationset platform && applicationset workloads role; } | render without-demos)" \
+    "$({ applicationset platform && applicationset workloads; } | render with-demos)"
   [[ $status -eq 0 && -z $output ]]
 }
