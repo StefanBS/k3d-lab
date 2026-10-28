@@ -24,7 +24,7 @@ declare -gA PLATFORM_FACTS=(
   # Where Cilium reaches the Kubernetes API, before it can resolve anything.
   [cilium.server-ip]='platform/cilium/values.yaml|.k8sServiceHost'
 )
-# The facts that Git can't read from here, so they repeat a constant of lib.sh: each
+# The facts that Git can't read from here, so they repeat a constant of lib/lab.sh: each
 # fact's constant, by name. lint checks they match.
 declare -gA PLATFORM_PINNED_FACTS=(
   [eso.gateway-ip]=LAB_GATEWAY

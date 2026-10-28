@@ -1,6 +1,6 @@
 # Sourced by the checks' scripts in verify/lib: what they share about nodes, pods,
 # retrying and reporting. Their script steps point kubectl at the Lab through a context
-# named chainsaw, so this calls plain kubectl, not scripts/lib.sh's kc (ADR 0004).
+# named chainsaw, so this calls plain kubectl, not scripts/lib/lab.sh's kc (ADR 0004).
 # shellcheck shell=bash
 
 # Run by hand, plain kubectl would act on whatever cluster the current context names,

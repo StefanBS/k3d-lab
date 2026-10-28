@@ -98,7 +98,7 @@ extraObjects:
                   - k3d-lab-secret-store
                   - https://kubernetes.default.svc.cluster.local
 # How the controller reaches the Secret Store: host.k3d.internal is the Host's address
-# on the Lab network, LAB_GATEWAY in scripts/lib.sh, which `just lint` checks this
+# on the Lab network, LAB_GATEWAY in scripts/lib/lab.sh, which `just lint` checks this
 # against. Only ESO talks to the Secret Store, so only its controller resolves the name.
 # k3d also writes it into CoreDNS's NodeHosts, but k3s resets those whenever its
 # CoreDNS addon is applied again, such as when a k3d Node restarts.

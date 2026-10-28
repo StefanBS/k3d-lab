@@ -1,12 +1,36 @@
 # How the Lab runs below, which records the pressure on the Host and on each cgroup in
-# it while verify, or a debugging run of up or track, runs. Sourced by lib.sh's callers,
-# and on its own by scripts/tests/, so it sets no shell options and runs nothing when
-# sourced.
+# it while verify, or a debugging run of up or track, runs. Sourced by lib.sh, and on its
+# own by scripts/tests/, so it sets no shell options and runs nothing when sourced.
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # the variables here are used by the scripts that source this file
 
 # k3s on the Server dies when its datastore stalls for more than about 5s, and its logs
 # only say the SQL was slow (#113). What stalled it shows in the pressure on the Server's
 # cgroups and in the Host's disk, which below records, and keeps for a replay.
+
+# below's config, store and log, in the Lab's state directory.
+LAB_BELOW_DIR=$LAB_STATE_DIR/below
+LAB_BELOW_CONFIG=$LAB_BELOW_DIR/below.conf
+
+# record_pressure: records the pressure on the Host and on each cgroup in it with below
+# until this script exits, failed or not. verify run by up or track keeps their recorder.
+record_pressure() {
+  [[ -z ${LAB_BELOW_RECORDING:-} ]] || return 0
+  if ! command -v below >/dev/null; then
+    log "warning: below isn't installed, so this run records no pressure; see 'just doctor'"
+    return 0
+  fi
+  # Two recorders would write to the same store, as when verify runs beside up.
+  if pgrep -u "$(id -u)" -f "^below --config $LAB_BELOW_CONFIG record" >/dev/null; then
+    log "warning: another run is recording the pressure, so the record of this one ends with it"
+    return 0
+  fi
+  export LAB_BELOW_RECORDING=1
+  # The recorder stops once this script's PID is gone, which exec keeps, so a failed run
+  # stops it too. It writes nowhere else: a pipe the script writes to, such as tee's,
+  # would otherwise stay open until it stops.
+  "$LAB_ROOT/scripts/below-recorder.sh" "$$" >/dev/null 2>&1 &
+}
 
 # below_config <dir>: below's config for a store in that directory. below takes the
 # store's location only from a config file, never from a flag.

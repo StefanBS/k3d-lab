@@ -1,8 +1,9 @@
-# The Host's one-time setup (ADRs 0001 and 0003): where it puts things, and every step
-# that prepares it, each with a check for "done" and a fix. Sourced after lib.sh by
-# host-setup.sh, which fixes the steps (yours as the owner, root's under sudo), and by
-# doctor.sh, which reports them. up.sh and verify.sh source it for the Lab CA. The
-# Secret Store's own steps are in secret-store.sh, which adds them to HOST_STEPS when
+# The Host (ADRs 0001, 0002 and 0003): its address on the LAN, the ports the Lab takes
+# on it, where it puts things, and every step of its one-time setup, each with a check
+# for "done" and a fix. Sourced after lib.sh by host-setup.sh, which fixes the steps
+# (yours as the owner, root's under sudo), and by doctor.sh, which reports them. up.sh,
+# verify.sh, gpu.sh and host-wizard.sh source it for the Lab CA or the Host's address.
+# The Secret Store's own steps are in secret-store.sh, which adds them to HOST_STEPS when
 # it's sourced after this file. Each check needs no root and no Docker socket.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the variables here are used by the scripts that source this file
@@ -11,6 +12,29 @@
 # The Lab's owner, also when host-setup.sh runs under sudo.
 LAB_OWNER=${SUDO_USER:-$USER}
 LAB_OWNER_HOME=$(getent passwd "$LAB_OWNER" | cut -d: -f6)
+
+# The Host's route to the LAN, and its address there (HOST_LAN_IP, ADR 0002).
+host_route() { ip -4 route get 1.1.1.1; }
+host_lan_ip() { host_route | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
+# Succeeds if HOST_LAN_IP, from .env, is still the Host's address; otherwise prints how
+# it differs. The GPU Node routes the Lab's subnet through it (ADR 0002).
+host_lan_ip_current() {
+  local actual
+  actual=$(host_lan_ip)
+  [[ ${HOST_LAN_IP:-} == "$actual" ]] && return
+  echo "HOST_LAN_IP in .env (${HOST_LAN_IP:-unset}) isn't the Host's address ($actual)"
+  return 1
+}
+
+# The Host's ports that k3d publishes the Lab's Gateway on (k3d/cluster.yaml).
+LAB_HOST_PORTS=(80 443)
+
+# Prints the Host's listening sockets on any of LAB_HOST_PORTS, one per line.
+lab_host_ports_taken() {
+  local filter port
+  for port in "${LAB_HOST_PORTS[@]}"; do filter+="${filter:+ or }sport = :$port"; done
+  ss -ltnH "( $filter )" | awk '{ print $4 }'
+}
 
 # ADR 0001: Docker CE's data directory, on /home because the root volume is small.
 DOCKER_DATA_ROOT=/home/docker-data

@@ -62,3 +62,11 @@ k3d-lab-agent-0: NotReady" "$(node k3d-lab-server-0 False)" "$(node k3d-lab-agen
   [[ $status -eq 1 ]]
   [[ ${lines[-2]} == "error: these nodes aren't Ready after 30 seconds:" && ${lines[-1]} == "gpu: NotReady" ]]
 }
+
+@test "the GPU Node in the Lab: its name and Ready status, found by its label" {
+  kc_answers get nodes -l k3d-lab/gpu \
+    -o 'jsonpath={range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' <<<"gpu True"
+  run gpu_node_in_lab
+  [[ $status -eq 0 ]]
+  [[ $output == "gpu True" ]]
+}

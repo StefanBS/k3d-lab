@@ -5,6 +5,8 @@
 # Usage: gpu.sh join [eviction=<size>] | leave [purge] | status | ssh [<command>...]
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=lib/host.sh
+source "$(dirname "$0")/lib/host.sh"
 # shellcheck source=lib/gpu-node-status.sh
 source "$(dirname "$0")/lib/gpu-node-status.sh"
 
