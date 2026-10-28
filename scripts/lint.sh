@@ -331,7 +331,10 @@ lint_script_folders() {
   local file before=$fails
   while IFS= read -r -d '' file; do
     case $file in
-      scripts/lib.sh) ;;
+      scripts/lib.sh)
+        # Only the bootstrap: what a function does belongs to the module of what it reads.
+        if grep -qE '^\s*(function\s+\w+|\w+\s*\(\))' "$file"; then fail "$file is only the bootstrap, so it defines no functions"; fi
+        ;;
       scripts/lib/*.sh)
         [[ ! -x $file ]] || fail "$file is sourced, so it isn't executable"
         if grep -qE '^\s*set -' "$file"; then fail "$file is sourced, so it sets no shell options"; fi

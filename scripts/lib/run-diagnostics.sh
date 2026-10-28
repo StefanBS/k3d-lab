@@ -5,15 +5,12 @@
 # environment, since `just verify` takes no such argument:
 # - LAB_RUN_SINCE (start_run_clock): from when the run's work counts, as Docker's --since
 #   takes it.
-# - LAB_BELOW_RECORDING (lib.sh's record_pressure): set while below records the Pressure.
+# - LAB_BELOW_RECORDING (below.sh's record_pressure): set while below records the Pressure.
 # shellcheck shell=bash
 # shellcheck source=host-memory.sh
 source "$(dirname "${BASH_SOURCE[0]}")/host-memory.sh"
 # shellcheck source=server-restarts.sh
 source "$(dirname "${BASH_SOURCE[0]}")/server-restarts.sh"
-# shellcheck source=below.sh
-source "$(dirname "${BASH_SOURCE[0]}")/below.sh"
-
 # warn_if_short_on_memory <consequence>: WARNs, with the numbers, while the Host is short
 # on memory, since k3s then stalls and may die on its own datastore.
 warn_if_short_on_memory() {

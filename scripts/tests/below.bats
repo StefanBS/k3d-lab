@@ -1,10 +1,59 @@
 #!/usr/bin/env bats
 # How the Lab runs below (scripts/lib/below.sh): the config it records with, the arguments
-# of its recorder, and how verify reads back the minute before k3s stalled.
+# of its recorder, when a run starts one, and how verify reads back the minute before
+# k3s stalled.
 
 setup() {
+  load lab
   # shellcheck source=../lib/below.sh
   source "$BATS_TEST_DIRNAME/../lib/below.sh"
+  unset LAB_BELOW_RECORDING
+}
+
+# A Host with below, where RECORDING says whether another run's recorder is recording,
+# and the recorder at LAB_ROOT writes the PID it was given to STARTED.
+with_below() {
+  below() { :; }
+  pgrep() { [[ $* == "-u $(id -u) -f ^below --config $LAB_BELOW_CONFIG record" && -n ${RECORDING:-} ]]; }
+  LAB_ROOT=$BATS_TEST_TMPDIR/repo
+  STARTED=$BATS_TEST_TMPDIR/started
+  mkdir -p "$LAB_ROOT/scripts"
+  printf '#!/usr/bin/env bash\necho "$1" >%q\n' "$STARTED" >"$LAB_ROOT/scripts/below-recorder.sh"
+  chmod +x "$LAB_ROOT/scripts/below-recorder.sh"
+}
+
+@test "recording: starts the recorder, tied to this script's PID, and says it records" {
+  with_below
+  record_pressure
+  wait
+  [[ $(cat "$STARTED") == "$$" ]]
+  [[ $LAB_BELOW_RECORDING == 1 ]]
+}
+
+@test "recording, while this run already records, as verify under up: starts no other" {
+  with_below
+  LAB_BELOW_RECORDING=1
+  run record_pressure
+  [[ $status -eq 0 && -z $output ]]
+  [[ ! -e $STARTED ]]
+}
+
+@test "recording, while another run records: starts no other, since both would write one store" {
+  with_below
+  RECORDING=1
+  run record_pressure
+  [[ $status -eq 0 ]]
+  [[ $output == "==> warning: another run is recording the pressure, so the record of this one ends with it" ]]
+  [[ ! -e $STARTED ]]
+}
+
+@test "recording, without below: records nothing, and says so" {
+  with_below
+  unset -f below
+  PATH=$BATS_TEST_TMPDIR/no-below run record_pressure
+  [[ $status -eq 0 ]]
+  [[ $output == "==> warning: below isn't installed, so this run records no pressure; see 'just doctor'" ]]
+  [[ ! -e $STARTED ]]
 }
 
 @test "config: the store and its log in the Lab's directory, since below takes them from no flag" {

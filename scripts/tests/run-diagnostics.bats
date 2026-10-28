@@ -4,9 +4,11 @@
 # shows the Pressure, and which disk is under Docker's data root.
 
 setup() {
+  load lab
+  # shellcheck source=../lib/below.sh
+  source "$BATS_TEST_DIRNAME/../lib/below.sh"
   # shellcheck source=../lib/run-diagnostics.sh
   source "$BATS_TEST_DIRNAME/../lib/run-diagnostics.sh"
-  load lab
   LAB_BELOW_DIR=/home/me/.local/state/k3d-lab/below
   LAB_BELOW_CONFIG=$LAB_BELOW_DIR/below.conf
   # k3s and below's dumps give their times in UTC, whatever the Host's time zone.

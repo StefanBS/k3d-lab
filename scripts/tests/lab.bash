@@ -1,20 +1,14 @@
 # What scripts/lib.sh gives the modules in scripts/lib/, for the tests that source one on
-# its own: bats' `load lab` in setup. Everything prints to stdout, which `run` captures.
+# its own: bats' `load lab` in setup. The modules lib.sh sources first, as they are, with
+# stand-ins for the commands that would reach the Lab or wait. log and die print to
+# stderr, which `run` captures with stdout.
 # shellcheck shell=bash
 
-# shellcheck source=../lib/wait.sh
-source "$BATS_TEST_DIRNAME/../lib/wait.sh"
+for module in output lab lab-repo wait; do
+  # shellcheck source=/dev/null
+  source "$BATS_TEST_DIRNAME/../lib/$module.sh"
+done
 
-LAB_REPO=https://github.com/StefanBS/k3d-lab.git
-
-log() { printf '==> %s\n' "$*"; }
-die() {
-  printf 'error: %s\n' "$*"
-  exit 1
-}
-ok() { printf 'OK    %s\n' "$1"; }
-warn() { printf 'WARN  %s\n' "$1"; }
-fail() { printf 'FAIL  %s\n' "$1"; }
 # Moves the clock on instead of waiting, so a wait's deadline passes at once.
 sleep() { SECONDS=$((SECONDS + $1)); }
 # The Lab exists.

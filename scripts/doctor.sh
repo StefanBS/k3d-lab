@@ -34,7 +34,7 @@ else
 fi
 
 # verify, and a debugging run of up or track, record the pressure with below, which shows
-# what stalled k3s (lib.sh's record_pressure). Without it they still run, recording nothing.
+# what stalled k3s (below.sh's record_pressure). Without it they still run, recording nothing.
 if command -v below >/dev/null; then
   ok "below is installed, to record the pressure while verify, 'up --debug' and 'track --debug' run"
 else

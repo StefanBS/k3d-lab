@@ -4,6 +4,8 @@
 # so it must never change. Saves it to .env as HOST_LAN_IP.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
+# shellcheck source=lib/host.sh
+source "$(dirname "$0")/lib/host.sh"
 
 # What the Host uses to reach the LAN.
 route=$(host_route)

@@ -7,7 +7,7 @@
 # *.lab.localhost is loopback inside a pod too. The Gateway's Envoy listens on the
 # Server's own network, so that address reaches it from every node; the Gateway's
 # Service only answers pods on the Server. The address is LAB_SERVER_IP in
-# scripts/lib.sh, which `just lint` checks this against. No AAAA: an empty answer,
+# scripts/lib/lab.sh, which `just lint` checks this against. No AAAA: an empty answer,
 # rather than the loopback one that follows.
 apiVersion: v1
 kind: ConfigMap
