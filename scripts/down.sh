@@ -6,8 +6,11 @@ source "$(dirname "$0")/lib.sh"
 if lab_exists; then
   # A Joined GPU Node leaves first, so its agent and Cilium's state don't outlive the
   # Lab. Never waits on it: when it's off, gpu.sh only warns, and the next `just gpu join`
-  # cleans it up as a Stale install.
-  if [[ -n $(gpu_node_in_lab) ]]; then
+  # cleans it up as a Stale install. Nor when the Lab can't say whether it's Joined, since
+  # its Node objects go with the Lab anyway.
+  if ! node=$(gpu_node_object 2>/dev/null); then
+    warn "can't tell whether the GPU Node is Joined, so it doesn't leave first; if it is, the next 'just gpu join' cleans it up"
+  elif [[ -n $node ]]; then
     "$LAB_ROOT/scripts/gpu.sh" leave || warn "the GPU Node didn't leave cleanly; the next 'just gpu join' cleans it up"
   fi
   log "Deleting the k3d cluster"

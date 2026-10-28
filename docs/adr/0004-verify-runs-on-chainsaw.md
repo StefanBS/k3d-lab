@@ -15,9 +15,9 @@ It was a close call. Chainsaw can't run a step once per node, so every check tha
 - **The wrapper's jobs:**
   - It stops early when the Lab doesn't answer, so there's one clear failure instead of one per check.
   - It decides whether the GPU checks run, filtering them by label with `--selector`:
-    - GPU Node Left: GPU checks left out, silently.
-    - Joined and Ready: GPU checks run.
-    - Joined but NotReady (powered off): GPU checks left out, with a WARN (ADR 0002).
+    - No Node object for the GPU Node, so it's Left: GPU checks left out, silently.
+    - Its Node object Ready, so it's Joined: GPU checks run.
+    - Its Node object NotReady (it's off, or Left since a reboot; ADR 0002): GPU checks left out, with a WARN.
   - It runs only the checks named first, as in `just verify cilium-healthy`, and fails on a name with no folder in `verify/`. Chainsaw itself passes when a filter matches nothing (its regex is matched against `chainsaw/<check>`), so a typo would otherwise look like success.
   - It passes any other arguments on to Chainsaw, after the check names.
 - **Isolation:** each check runs in its own throwaway namespace and deploys its own probes there, so the checks can run concurrently, and `verify` leaves nothing in the Lab outside Git.

@@ -31,21 +31,20 @@ expect() {
 }
 
 @test "Ready: Joined, Ready" {
-  expect "Lab: the GPU Node is Joined as gpu, Ready" true "gpu True" ""
-  expect "Lab: the GPU Node is Joined as gpu, Ready" true "gpu True" "agent: running"
+  expect "Lab: the GPU Node is Joined as gpu, Ready" true "gpu Ready" ""
+  expect "Lab: the GPU Node is Joined as gpu, Ready" true "gpu Ready" "agent: running"
 }
 
 @test "NotReady, and the GPU Node can't be reached: Joined, off" {
-  expect "Lab: the GPU Node is Joined as gpu, NotReady: it's off" true "gpu False" ""
-  expect "Lab: the GPU Node is Joined as gpu, NotReady: it's off" true "gpu Unknown" ""
+  expect "Lab: the GPU Node is Joined as gpu, NotReady: it's off" true "gpu NotReady" ""
 }
 
 @test "NotReady, agent running: Joined, not off" {
-  expect "Lab: the GPU Node is Joined as gpu, NotReady, though its agent is running" true "gpu False" "agent: running"
+  expect "Lab: the GPU Node is Joined as gpu, NotReady, though its agent is running" true "gpu NotReady" "agent: running"
 }
 
 @test "agent stopped: Left, even while the Lab still says Ready" {
   local left="Lab: the GPU Node's agent is stopped, as after a reboot, so it's Left; its Node object gpu stays until 'just gpu join'"
-  expect "$left" true "gpu False" "agent: stopped"
-  expect "$left" true "gpu True" "agent: stopped"
+  expect "$left" true "gpu NotReady" "agent: stopped"
+  expect "$left" true "gpu Ready" "agent: stopped"
 }
