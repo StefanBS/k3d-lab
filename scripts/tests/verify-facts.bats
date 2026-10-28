@@ -10,7 +10,7 @@ setup() {
   done
   load lab
   LAB_ROOT=$BATS_TEST_TMPDIR/repo
-  mkdir -p "$LAB_ROOT/platform/web" "$LAB_ROOT/platform/db" "$LAB_ROOT/verify/web-healthy" "$LAB_ROOT/verify/lib"
+  mkdir -p "$LAB_ROOT/platform/web" "$LAB_ROOT/platform/db" "$LAB_ROOT/verify/lib"
   printf 'host: web.lab.localhost\nurl: https://ui.lab.localhost\n' >"$LAB_ROOT/platform/web/values.yaml"
   printf 'namespace: web\n' >"$LAB_ROOT/platform/web/component.yaml"
   printf 'namespace: data\n' >"$LAB_ROOT/platform/db/component.yaml"

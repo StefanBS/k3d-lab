@@ -1,9 +1,9 @@
 # What verify's checks read from Git instead of copying it: the Platform facts, the
 # namespaces they name, and the labels verify.sh selects them by. verify.sh exports them
-# to the checks, and lint finds the copies left in verify/, and the Demos' checks left
-# without the label that deselects them. Sourced by verify.sh and lint.sh, and on its own
-# by scripts/tests/, so it sets no shell options and runs nothing when sourced. Every
-# path is under LAB_ROOT.
+# to the checks, and lint finds the copies left in verify/. Lint also finds the Demos'
+# checks that lack the label verify.sh deselects them by. Sourced by verify.sh and
+# lint.sh, and on its own by scripts/tests/, so it sets no shell options and runs nothing
+# when sourced. Every path is under LAB_ROOT.
 # shellcheck shell=bash
 
 # The namespaces verify's checks name, which verify.sh exports as VERIFY_NS_<KEY>: each
@@ -101,7 +101,8 @@ demo_checks_problems() {
   for dir in $(demo_dirs); do
     namespace=$(component_namespace "$dir")
     for test in "$LAB_ROOT"/verify/*/chainsaw-test.yaml; do
-      mapfile -t files < <(grep -o '\.\./lib/[A-Za-z0-9._-]*' "$test" | sort -u | sed "s|^\.\./|$LAB_ROOT/verify/|")
+      mapfile -t files < <(grep -o '\.\./lib/[A-Za-z0-9._-]*' "$test" | sort -u)
+      files=("${files[@]/#..\//$LAB_ROOT/verify/}")
       grep -qw -- "$namespace" "$test" "${files[@]}" || continue
       [[ $(KEY=$DEMO_LABEL_KEY yq '.metadata.labels | has(strenv(KEY))' "$test") == true ]] && continue
       echo "${test#"$LAB_ROOT"/} names the Demo's namespace $namespace, but isn't labelled $DEMO_LABEL_KEY"
