@@ -5,7 +5,7 @@
 k3d = "5.9.0"
 # Matches the Lab's Kubernetes version (k3d/cluster.yaml): kubectl supports one minor
 # version of skew either way.
-kubectl = "1.37.1"
+kubectl = "1.37.2"
 helm = "4.3.1"
 just = "1.59.0"
 yq = "4.54.1"
