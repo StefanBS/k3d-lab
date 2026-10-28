@@ -90,7 +90,7 @@ _waves_problems() {
 # _component_problems <group>/<name>: the ApplicationSets template these fields into the
 # component's Application.
 _component_problems() {
-  local dir=$1 key only wave keys=(namespace) file=kustomization.yaml
+  local dir=$1 key only wave waves keys=(namespace) file=kustomization.yaml
   local component=$LAB_ROOT/$1/component.yaml
   if component_has_chart "$dir"; then
     keys+=(repoURL version)
@@ -108,8 +108,11 @@ _component_problems() {
   if [[ -n $wave ]]; then
     if [[ $dir != platform/* ]]; then
       echo "$dir/component.yaml: only a Platform component sets 'wave'"
-    elif ! yq '.platformWaves[]' "$LAB_ROOT/gitops/values.yaml" | grep -qxF -- "$wave"; then
-      echo "$dir/component.yaml: 'wave' isn't one of gitops/values.yaml's platformWaves"
+    else
+      # Captured first: under pipefail, `yq | grep -q` fails when grep stops yq early.
+      waves=$(yq '.platformWaves[]' "$LAB_ROOT/gitops/values.yaml")
+      grep -qxF -- "$wave" <<<"$waves" ||
+        echo "$dir/component.yaml: 'wave' isn't one of gitops/values.yaml's platformWaves"
     fi
   fi
   # Optional, and only a Workload's: the workloads ApplicationSet labels its namespace by
@@ -130,10 +133,12 @@ _component_problems() {
 # refuse. Each Platform component's is listed, and no Workload's. Lint checks the
 # namespaces a Platform component's render creates or installs into.
 _namespace_problems() {
-  local dir=$1 namespace listed=false
+  local dir=$1 namespace namespaces listed=false
   namespace=$(component_namespace "$dir")
   [[ $namespace != null ]] || return 0 # _component_problems names it missing
-  if yq '.platformNamespaces[]' "$LAB_ROOT/gitops/values.yaml" | grep -qxF -- "$namespace"; then listed=true; fi
+  # Captured first: under pipefail, `yq | grep -q` fails when grep stops yq early.
+  namespaces=$(yq '.platformNamespaces[]' "$LAB_ROOT/gitops/values.yaml")
+  if grep -qxF -- "$namespace" <<<"$namespaces"; then listed=true; fi
   if [[ $dir == platform/* && $listed == false ]]; then
     echo "$dir/component.yaml: its namespace $namespace isn't in gitops/values.yaml's platformNamespaces"
   elif [[ $dir == workloads/* && $listed == true ]]; then
