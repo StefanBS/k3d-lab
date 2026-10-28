@@ -34,15 +34,8 @@ lab_ca_hash() {
   lab_exists && token=$(lab_token) && echo "${token%%::*}"
 }
 
-# Prints a line while the GPU Node has no Node object in the Lab.
-gpu_node_unregistered() {
-  local node
-  node=$(gpu_node_object) || return 1
-  [[ -n $node ]] || echo "the GPU Node: not registered yet"
-}
-
 cmd_join() {
-  local eviction=20Gi arg why server_ip version token node
+  local eviction=20Gi arg why server_ip version token stale node
   for arg; do
     case $arg in
       eviction=?*) eviction=${arg#eviction=} ;;
@@ -62,6 +55,14 @@ cmd_join() {
   version=$(kc get nodes -l node-role.kubernetes.io/control-plane \
     -o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}')
   token=$(lab_token)
+  # Left over from an earlier hostname, they'd never be Ready, and the wait below would
+  # wait on them.
+  stale=$(gpu_node_stale_objects) || exit 1
+  if [[ -n $stale ]]; then
+    mapfile -t stale <<<"$stale"
+    log "Deleting the Node objects left over from the GPU Node's earlier hostname: ${stale[*]}"
+    kc delete node "${stale[@]}" >/dev/null
+  fi
 
   log "Joining the GPU Node ($GPU_NODE_SSH) to the Lab"
   run_on_gpu_node "$token" join HOST_LAN_IP="$HOST_LAN_IP" SERVER_URL="https://$server_ip:6443" \
