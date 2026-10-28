@@ -1,0 +1,3 @@
+# A kustomization, so the Application can set the ConfigMap's namespace.
+resources:
+  - forbidden.yaml

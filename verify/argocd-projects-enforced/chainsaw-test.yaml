@@ -6,22 +6,22 @@ spec:
   description: >-
     ArgoCD's projects confine what lands in them (gitops/templates/appprojects.yaml).
     An Application in the workloads project fails to sync a ClusterRole and a ConfigMap
-    in the Platform's namespace monitoring, each refused by the project. One in the
-    default project is refused outright, so ArgoCD never syncs it.
+    in a Platform namespace, each refused by the project. One in the default project is
+    refused outright, so ArgoCD never syncs it.
   bindings:
     # ArgoCD reads forbidden/ from the Git revision the Lab tracks, like everything else.
     - name: root
-      value: (x_k8s_get($client, 'argoproj.io/v1alpha1', 'Application', 'argocd', 'root'))
+      value: (x_k8s_get($client, 'argoproj.io/v1alpha1', 'Application', env('VERIFY_NS_ARGOCD'), 'root'))
   steps:
     - try:
-        # A run that died before Chainsaw's cleanup leaves its Applications in argocd,
-        # outside the check's namespace, and they keep root Degraded. Chainsaw waits
-        # for them to go.
+        # A run that died before Chainsaw's cleanup leaves its Applications in ArgoCD's
+        # namespace, outside the check's, and they keep root Degraded. Chainsaw waits for
+        # them to go.
         - delete:
             ref:
               apiVersion: argoproj.io/v1alpha1
               kind: Application
-              namespace: argocd
+              namespace: (env('VERIFY_NS_ARGOCD'))
               labels:
                 k3d-lab/verify: argocd-projects-enforced
         - apply:
@@ -42,7 +42,7 @@ spec:
               kind: Application
               metadata:
                 name: argocd-projects-enforced-workloads
-                namespace: argocd
+                namespace: (env('VERIFY_NS_ARGOCD'))
               status:
                 operationState:
                   phase: Failed
@@ -50,7 +50,7 @@ spec:
                   # missing field is an error, which ends the assert at once.
                   syncResult:
                     (length(resources[?kind == 'ClusterRole' && contains(message, 'not permitted in project workloads')])): 1
-                    (length(resources[?kind == 'ConfigMap' && contains(message, 'namespace monitoring is not permitted')])): 1
+                    (length(resources[?kind == 'ConfigMap' && contains(message, join('', ['namespace ', env('VERIFY_NS_MONITORING'), ' is not permitted']))])): 1
         # ArgoCD doesn't sync an Application whose spec its project refuses.
         - assert:
             resource:
@@ -58,12 +58,12 @@ spec:
               kind: Application
               metadata:
                 name: argocd-projects-enforced-default
-                namespace: argocd
+                namespace: (env('VERIFY_NS_ARGOCD'))
               status:
                 (length(conditions[?type == 'InvalidSpecError' && contains(message, `"project 'default'"`)]) > `0`): true
                 (operationState == null): true
       catch:
         - script:
             content: >-
-              kubectl -n argocd get applications -l k3d-lab/verify=argocd-projects-enforced
+              kubectl -n "$VERIFY_NS_ARGOCD" get applications -l k3d-lab/verify=argocd-projects-enforced
               -o yaml | yq '.items[] | {.metadata.name: .status | pick(["conditions", "operationState"])}'

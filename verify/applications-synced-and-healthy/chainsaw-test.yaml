@@ -17,23 +17,23 @@ spec:
               kind: Application
               metadata:
                 name: root
-                namespace: argocd
+                namespace: (env('VERIFY_NS_ARGOCD'))
         - error:
             resource:
               apiVersion: argoproj.io/v1alpha1
               kind: Application
               metadata:
-                namespace: argocd
+                namespace: (env('VERIFY_NS_ARGOCD'))
               (metadata.labels."k3d-lab/verify" == null && (status.sync.status != 'Synced' || status.health.status != 'Healthy')): true
         - error:
             resource:
               apiVersion: argoproj.io/v1alpha1
               kind: Application
               metadata:
-                namespace: argocd
+                namespace: (env('VERIFY_NS_ARGOCD'))
               (metadata.labels."k3d-lab/verify" == null && spec.project == 'default'): true
       catch:
         - script:
             content: >-
-              kubectl -n argocd get applications
+              kubectl -n "$VERIFY_NS_ARGOCD" get applications
               -o custom-columns=NAME:.metadata.name,PROJECT:.spec.project,SYNC:.status.sync.status,HEALTH:.status.health.status

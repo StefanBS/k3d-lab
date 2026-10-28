@@ -13,7 +13,16 @@ spec:
     metadata:
       labels: {app: web-gpu}
     spec:
-      nodeSelector: {k3d-lab/gpu: amd}
+      # The GPU Node's label, which verify.sh exports. Chainsaw fills in the strings: a
+      # nodeSelector would have to be the expression itself, which isn't a valid manifest.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: (env('VERIFY_GPU_NODE_LABEL_KEY'))
+                    operator: In
+                    values: [(env('VERIFY_GPU_NODE_LABEL_VALUE'))]
       tolerations:
         - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
       containers:

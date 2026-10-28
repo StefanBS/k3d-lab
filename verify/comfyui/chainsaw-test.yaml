@@ -8,8 +8,8 @@ metadata:
 spec:
   description: >-
     ComfyUI (workloads/comfyui/) runs on the GPU Node with the Lab's NaN guard, answers
-    from the Host at https://comfyui.lab.localhost through the Gateway, and uses the
-    RX 7800 XT through ROCm rather than falling back to the CPU.
+    from the Host at its address through the Gateway, and uses the RX 7800 XT through
+    ROCm rather than falling back to the CPU.
   steps:
     - try:
         # The pod on the GPU Node. Its first start pulls an image of about 20 GB, downloads
@@ -27,7 +27,7 @@ spec:
                 numberReady: 1
         - script:
             content: >-
-              ../lib/host-curl.sh https://comfyui.lab.localhost/system_stats |
+              ../lib/host-curl.sh "https://$PLATFORM_FACT_COMFYUI_HOST/system_stats" |
               yq -p json -e '.devices[0].name | test("RX 7800 XT")'
         # The guard logs once, when ComfyUI loads it.
         - script:

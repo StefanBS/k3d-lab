@@ -14,13 +14,17 @@ sso_secret_clients() {
 # signs its session cookie with it (platform/oauth2-proxy/).
 SSO_COOKIE_CLIENT=oauth2-proxy
 
+# Where the Secret Store keeps the Lab login's password, under lab/: `just host setup`
+# generates it, once.
+SSO_LOGIN_SECRET=platform/sso/login
+
 # sso_secrets: reads Dex's config on stdin, and prints every secret that single sign-on
 # keeps in the Secret Store, as "<path under lab/> <field>...", one per line: the Lab
 # login's, then each client's. Prints nothing if it can't read the clients.
 sso_secrets() {
   local clients client
   clients=$(sso_secret_clients) || return
-  echo "platform/sso/login password"
+  echo "$SSO_LOGIN_SECRET password"
   for client in $clients; do
     if [[ $client == "$SSO_COOKIE_CLIENT" ]]; then
       echo "platform/sso/clients/$client secret cookie"

@@ -6,7 +6,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: (join('-', ['argocd-projects-enforced', $project]))
-  namespace: argocd
+  namespace: (env('VERIFY_NS_ARGOCD'))
   labels:
     k3d-lab/verify: argocd-projects-enforced
 spec:
@@ -15,6 +15,10 @@ spec:
     repoURL: ($root.spec.source.repoURL)
     targetRevision: ($root.spec.source.targetRevision)
     path: verify/argocd-projects-enforced/forbidden
+    # The Platform namespace the ConfigMap in forbidden/ asks for, which ArgoCD reads
+    # from Git, out of Chainsaw's reach.
+    kustomize:
+      namespace: (env('VERIFY_NS_MONITORING'))
   destination:
     server: https://kubernetes.default.svc
     namespace: ($namespace)

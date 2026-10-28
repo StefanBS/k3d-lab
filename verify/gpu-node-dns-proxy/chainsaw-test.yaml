@@ -33,7 +33,7 @@ spec:
                 namespace: comfyui
                 labels: {app: gpu-dns-probe}
               spec:
-                nodeSelector: {k3d-lab/gpu: amd}
+                nodeSelector: (object_from_lists([env('VERIFY_GPU_NODE_LABEL_KEY')], [env('VERIFY_GPU_NODE_LABEL_VALUE')]))
                 tolerations:
                   - {key: amd.com/gpu, operator: Exists, effect: NoSchedule}
                 # `sleep infinity` ignores SIGTERM, so deleting the pod would otherwise wait 30s.

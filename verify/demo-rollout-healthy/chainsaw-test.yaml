@@ -9,9 +9,8 @@ spec:
   description: >-
     The demo Rollout (workloads/rollouts-demo/) is Healthy: fully promoted, with all of
     its traffic on the stable version, and it receives the load generator's requests
-    through the Gateway. From the Host, the demo answers through the
-    Gateway at https://rollouts-demo.lab.localhost, and the Argo Rollouts dashboard's
-    address, https://rollouts.lab.localhost, both with a certificate from the Lab CA.
+    through the Gateway. From the Host, the demo and the Argo Rollouts dashboard each
+    answer at their address through the Gateway, with a certificate from the Lab CA.
   steps:
     - try:
         # A canary in progress is Progressing, and one the analysis aborted is Degraded.
@@ -27,11 +26,11 @@ spec:
         - script:
             content: ../lib/demo-receives-load.sh
         - script:
-            content: ../lib/host-curl.sh -o /dev/null https://rollouts-demo.lab.localhost/
+            content: ../lib/host-curl.sh -o /dev/null "https://$PLATFORM_FACT_ROLLOUTS_DEMO_HOST/"
         # The dashboard's answer is a redirect to Dex, which this doesn't follow:
         # sso-login signs in, and gets the page.
         - script:
-            content: ../lib/host-curl.sh -o /dev/null https://rollouts.lab.localhost/
+            content: ../lib/host-curl.sh -o /dev/null "https://$PLATFORM_FACT_ROLLOUTS_HOST/"
       catch:
         - script:
             content: kubectl -n rollouts-demo get rollout rollouts-demo -o yaml | yq .status

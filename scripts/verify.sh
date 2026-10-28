@@ -13,9 +13,14 @@ source "$(dirname "$0")/lib.sh"
 source "$(dirname "$0")/lib/host.sh"
 # shellcheck source=lib/run-diagnostics.sh
 source "$(dirname "$0")/lib/run-diagnostics.sh"
+# shellcheck source=lib/verify-facts.sh
+source "$(dirname "$0")/lib/verify-facts.sh"
 
 # The checks that call the Lab from the Host trust only the Lab CA.
 export LAB_CA_CERT
+# The hosts, namespaces and labels the checks name, read from Git, so a renamed one
+# changes them too (#220).
+verify_export
 
 # Checked here, because Chainsaw passes when a filter matches no check: a typo would
 # otherwise look like success.
