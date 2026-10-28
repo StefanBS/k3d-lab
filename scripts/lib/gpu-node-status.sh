@@ -4,9 +4,9 @@
 
 # gpu_node_lab_view <true|false> <Node object> <agent line>: the Lab line of 'just gpu
 # status', from whether a Lab exists, the GPU Node's Node object there (gpu_node_object's
-# "<name> Ready" or "<name> NotReady", or empty) and the first line of gpu-node.sh status (empty when
-# the GPU Node can't be reached). The agent decides Joined or Left, since the Ready
-# status lags a stopped agent by about 40s.
+# "<name> Ready" or "<name> NotReady", or empty) and the first line of gpu-node.sh status
+# (empty when the GPU Node can't be reached). The agent decides Joined or Left, since the
+# Ready status lags a stopped agent by about 40s.
 gpu_node_lab_view() {
   local lab=$1 name ready agent=$3
   read -r name ready <<<"$2"

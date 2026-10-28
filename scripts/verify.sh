@@ -71,16 +71,12 @@ args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" -
 # NotReady one means it's powered off (ADR 0002), or Left since a reboot: not a failure,
 # but worth knowing.
 deselected=()
-gpu_node=$(gpu_node_object) || die "can't read the GPU Node's Node object, so can't tell whether its checks run"
+gpu_node=$(gpu_node_object) || exit 1
 read -r gpu_node ready <<<"$gpu_node"
-case $ready in
-  Ready) ;;
-  NotReady)
-    warn "the GPU Node's Node object $gpu_node is NotReady: it's off, or Left since a reboot; its checks are skipped"
-    deselected+=("!$GPU_NODE_LABEL_KEY")
-    ;;
-  *) deselected+=("!$GPU_NODE_LABEL_KEY") ;;
-esac
+if [[ $ready != Ready ]]; then
+  [[ -z $ready ]] || warn "the GPU Node's Node object $gpu_node is NotReady: it's off, or Left since a reboot; its checks are skipped"
+  deselected+=("!$GPU_NODE_LABEL_KEY")
+fi
 # The Demos' checks, labelled DEMO_LABEL_KEY, run only while the Lab has its Demos, which
 # the root Application says. While it has them, a Demo that's missing fails its checks.
 demos=$(root_application_has_demos)

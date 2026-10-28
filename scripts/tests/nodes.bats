@@ -92,9 +92,10 @@ gpu_nodes() { printf '%s\n' "$@" | jq -s '{"items": .}' | kc_answers get nodes -
 @test "the request failed: fails, not Left" {
   run gpu_node_object
   [[ $status -eq 1 ]]
+  [[ $output == "can't read the GPU Node's Node object from the Lab" ]]
 }
 
-@test "two GPU Node's Node objects, as after its hostname changed: fails, naming both" {
+@test "two Node objects labelled as the GPU Node, as after its hostname changed: fails, naming both" {
   gpu_nodes "$(node gpu True)" "$(node gpu-old False)"
   run gpu_node_object
   [[ $status -eq 1 ]]

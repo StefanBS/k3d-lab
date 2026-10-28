@@ -72,31 +72,32 @@ cmd_join() {
     gpu_node_unregistered
   wait_nodes_ready 180 -l "$GPU_NODE_LABEL_KEY"
   settle_join
-  node=$(gpu_node_object) || die "can't read the GPU Node's Node object"
+  node=$(gpu_node_object) || exit 1
   log "The GPU Node is Joined as ${node%% *}"
 }
 
 cmd_leave() {
-  local mode=leave node="" left=true
+  local mode=leave deleting="" left=true node
   case ${1:-} in
     '') ;;
     purge) mode=purge ;;
     *) die "unknown argument '$1'; usage: just gpu leave [purge]" ;;
   esac
   need_env GPU_NODE_IP GPU_NODE_SSH
-  # A Node object it can't read, or more than one, is still drained and deleted, by label.
+  # What's drained and deleted, by label, if there's anything: the Node object, or, when
+  # it can't be read or there's more than one, whatever has the label.
   if lab_exists; then
     if node=$(gpu_node_object); then
-      node=${node:+the Node object ${node%% *}}
+      deleting=${node:+the Node object ${node%% *}}
     else
-      node="the Node objects labelled $GPU_NODE_LABEL_KEY"
-      warn "can't read the GPU Node's Node object; draining and deleting $node"
+      deleting="the Node objects labelled $GPU_NODE_LABEL_KEY"
+      warn "draining and deleting $deleting anyway"
     fi
   fi
 
   if ! gpu_node_reachable; then
-    if [[ -n $node ]]; then
-      log "Deleting $node"
+    if [[ -n $deleting ]]; then
+      log "Deleting $deleting"
       kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
       warn "can't reach the GPU Node as $GPU_NODE_SSH: the next 'just gpu join' cleans it up"
     else
@@ -106,16 +107,16 @@ cmd_leave() {
     return
   fi
 
-  if [[ -n $node ]]; then
-    log "Draining $node"
+  if [[ -n $deleting ]]; then
+    log "Draining $deleting"
     kc drain -l "$GPU_NODE_LABEL_KEY" --ignore-daemonsets --delete-emptydir-data --force --timeout=60s >/dev/null 2>&1 ||
-      warn "$node didn't drain within 60s; its pods are stopped with the agent"
+      warn "$deleting didn't drain within 60s; its pods are stopped with the agent"
   fi
   # gpu-node.sh fails, listing them, if anything is left that mustn't be.
   run_on_gpu_node "" "$mode" || left=false
   # Only once the agent is stopped, or it would register again.
-  if [[ -n $node ]]; then
-    log "Deleting $node"
+  if [[ -n $deleting ]]; then
+    log "Deleting $deleting"
     kc delete node -l "$GPU_NODE_LABEL_KEY" >/dev/null
   fi
   [[ $left == true ]] || die "the GPU Node didn't $mode cleanly (above)"
@@ -132,7 +133,7 @@ cmd_status() {
   fi
   if lab_exists; then
     lab=true
-    node=$(gpu_node_object) || die "can't read the GPU Node's Node object"
+    node=$(gpu_node_object) || exit 1
   fi
 
   gpu_node_lab_view "$lab" "$node" "${machine%%$'\n'*}"
