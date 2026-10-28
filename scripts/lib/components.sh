@@ -47,13 +47,13 @@ component_helm_args() {
 component_namespace() { yq '.namespace' "$LAB_ROOT/$1/component.yaml"; }
 
 # component_wave <group>/<name>: the Wave a Platform component is installed in, or
-# nothing when it sets none, and is installed with the rest of the Platform after them.
+# nothing when it sets none. One that sets none is installed after every Wave.
 component_wave() { yq '.wave // ""' "$LAB_ROOT/$1/component.yaml"; }
 
 # components_problems: prints each way the component folders break what the
 # ApplicationSets expect of them, one per line, or nothing.
 components_problems() {
-  local dirs duplicates dir
+  local dirs duplicates dir namespace
   mapfile -t dirs < <(component_dirs)
   if ((${#dirs[@]} == 0)); then
     echo "no component folders found"
@@ -64,6 +64,9 @@ components_problems() {
   [[ -z $duplicates ]] || echo "component names used twice: $(paste -sd' ' <<<"$duplicates")"
   for dir in "${dirs[@]}"; do _component_problems "$dir"; done
   _waves_problems "${dirs[@]}"
+  for namespace in $(yq '.platformNamespaces[]' "$LAB_ROOT/gitops/values.yaml" | sort | uniq -d); do
+    echo "gitops/values.yaml: platformNamespaces lists $namespace twice"
+  done
 }
 
 # _waves_problems <group>/<name>...: the root Application's sync would wait forever for an

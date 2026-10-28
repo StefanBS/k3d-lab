@@ -159,3 +159,9 @@ gitops/values.yaml: no Platform component is in the Wave controllers
 gitops/values.yaml: every Platform component sets a Wave, which leaves the Platform's last ApplicationSet with none" \
     "$(components_problems)"
 }
+
+@test "a namespace gitops/values.yaml lists twice: names it" {
+  platform
+  printf '  - monitoring\n' >>"$LAB_ROOT/gitops/values.yaml"
+  expect "gitops/values.yaml: platformNamespaces lists monitoring twice" "$(components_problems)"
+}

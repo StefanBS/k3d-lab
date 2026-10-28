@@ -36,26 +36,23 @@ report_problems() {
 
 # The gitops chart can't read component.yaml, so it lists the Platform's namespaces
 # itself, for the workloads project to refuse. components_problems checks each Platform
-# component's own is listed; this checks the rest: each namespace a Platform component's
-# render creates or installs into, such as Cilium's cilium-secrets, is listed, and every
-# listed one is a Platform component's.
+# component's own is listed; this checks the rest: each other namespace a Platform
+# component's render creates or installs into, such as Cilium's cilium-secrets, is
+# listed, and every listed one is a Platform component's.
 # Usage: lint_platform_namespaces <the Platform's rendered namespaces, one per line>
 lint_platform_namespaces() {
-  local dir namespace listed platform before=$fails
+  local dir namespace listed own before=$fails
   listed=$(yq '.platformNamespaces[]' gitops/values.yaml)
+  own=$(for dir in "${components[@]}"; do
+    if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
+  done)
   while read -r namespace; do
-    grep -qxF -- "$namespace" <<<"$listed" ||
-      fail "a Platform component's render creates or installs into $namespace, which isn't in gitops/values.yaml's platformNamespaces"
+    grep -qxF -- "$namespace" <<<"$own"$'\n'"$listed" ||
+      fail "gitops/values.yaml: platformNamespaces doesn't list $namespace, which a Platform component's render creates or installs into"
   done < <(grep . <<<"$1" | sort -u)
-  platform=$(
-    for dir in "${components[@]}"; do
-      if [[ $dir == platform/* ]]; then component_namespace "$dir"; fi
-    done
-    printf '%s\n' "$1"
-  )
   for namespace in $listed; do
-    grep -qxF -- "$namespace" <<<"$platform" ||
-      fail "gitops/values.yaml's platformNamespaces lists $namespace, which no Platform component creates or installs into"
+    grep -qxF -- "$namespace" <<<"$own"$'\n'"$1" ||
+      fail "gitops/values.yaml: platformNamespaces lists $namespace, which no Platform component creates or installs into"
   done
   ((fails > before)) || ok "gitops/values.yaml lists the Platform's namespaces"
 }
@@ -368,11 +365,11 @@ report_problems "every component folder, and gitops/values.yaml's lists of them,
 mapfile -t components < <(component_dirs)
 write_application_chart
 # What the Platform's renders create or install into, for lint_platform_namespaces.
-platform_namespaces=
+platform_rendered_namespaces=
 for dir in "${components[@]}"; do
   lint_rendering "$dir" render_component "$dir"
   if [[ $dir == platform/* ]]; then
-    platform_namespaces+=$(rendered_namespaces)$'\n'
+    platform_rendered_namespaces+=$(rendered_namespaces)$'\n'
     lint_wave_routes "$dir" "$manifests"
   fi
   # A render that failed left $manifests empty.
@@ -380,7 +377,7 @@ for dir in "${components[@]}"; do
   lint_rendering "$dir's Application" render_application "$dir"
 done
 lint_admission
-lint_platform_namespaces "$platform_namespaces"
+lint_platform_namespaces "$platform_rendered_namespaces"
 lint_rendering "the same-namespace allow" render_same_namespace_allow
 lint_same_namespace_source workloads/rollouts-demo
 lint_rendering gitops render_gitops
