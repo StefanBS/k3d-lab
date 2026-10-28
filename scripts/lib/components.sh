@@ -46,6 +46,10 @@ component_helm_args() {
 # component_namespace <group>/<name>: the namespace that component folder installs into.
 component_namespace() { yq '.namespace' "$LAB_ROOT/$1/component.yaml"; }
 
+# component_wave <group>/<name>: the Wave a Platform component is installed in, or
+# nothing when it sets none, and is installed with the rest of the Platform after them.
+component_wave() { yq '.wave // ""' "$LAB_ROOT/$1/component.yaml"; }
+
 # components_problems: prints each way the component folders break what the
 # ApplicationSets expect of them, one per line, or nothing.
 components_problems() {
@@ -59,12 +63,31 @@ components_problems() {
   duplicates=$(printf '%s\n' "${dirs[@]##*/}" | sort | uniq -d)
   [[ -z $duplicates ]] || echo "component names used twice: $(paste -sd' ' <<<"$duplicates")"
   for dir in "${dirs[@]}"; do _component_problems "$dir"; done
+  _waves_problems "${dirs[@]}"
+}
+
+# _waves_problems <group>/<name>...: the root Application's sync would wait forever for an
+# ApplicationSet with no component to be Healthy (platform/argocd/values.yaml), so each
+# Wave gitops/values.yaml lists has a Platform component. So does the Platform's last
+# ApplicationSet, which gets the components that set no Wave.
+_waves_problems() {
+  local dir wave waves=() last=false
+  for dir; do
+    [[ $dir == platform/* ]] || continue
+    wave=$(component_wave "$dir")
+    if [[ -n $wave ]]; then waves+=("$wave"); else last=true; fi
+  done
+  for wave in $(yq '.platformWaves[]' "$LAB_ROOT/gitops/values.yaml"); do
+    [[ " ${waves[*]} " == *" $wave "* ]] || echo "gitops/values.yaml: no Platform component is in the Wave $wave"
+  done
+  [[ $last == true ]] ||
+    echo "gitops/values.yaml: every Platform component sets a Wave, which leaves the Platform's last ApplicationSet with none"
 }
 
 # _component_problems <group>/<name>: the ApplicationSets template these fields into the
 # component's Application.
 _component_problems() {
-  local dir=$1 key only keys=(namespace) file=kustomization.yaml
+  local dir=$1 key only wave keys=(namespace) file=kustomization.yaml
   local component=$LAB_ROOT/$1/component.yaml
   if component_has_chart "$dir"; then
     keys+=(repoURL version)
@@ -75,12 +98,14 @@ _component_problems() {
     yq -e ".$key" "$component" >/dev/null 2>&1 || echo "$dir/component.yaml: '$key' is missing"
   done
   [[ -f $LAB_ROOT/$dir/$file ]] || echo "$dir/$file is missing"
+  _namespace_problems "$dir"
   # Optional, and only a Platform component's: the Wave its ApplicationSet installs it
   # in, one that gitops/values.yaml lists.
-  if [[ $(yq 'has("wave")' "$component") == true ]]; then
+  wave=$(component_wave "$dir")
+  if [[ -n $wave ]]; then
     if [[ $dir != platform/* ]]; then
       echo "$dir/component.yaml: only a Platform component sets 'wave'"
-    elif ! yq '.platformWaves[]' "$LAB_ROOT/gitops/values.yaml" | grep -qxF -- "$(yq '.wave' "$component")"; then
+    elif ! yq '.platformWaves[]' "$LAB_ROOT/gitops/values.yaml" | grep -qxF -- "$wave"; then
       echo "$dir/component.yaml: 'wave' isn't one of gitops/values.yaml's platformWaves"
     fi
   fi
@@ -95,4 +120,20 @@ _component_problems() {
       echo "$dir/component.yaml: '$key' can only be '${only#*=}'"
     fi
   done
+}
+
+# _namespace_problems <group>/<name>: the gitops chart can't read component.yaml, so
+# gitops/values.yaml lists the Platform's namespaces itself, for the workloads project to
+# refuse. Each Platform component's is listed, and no Workload's. Lint checks the
+# namespaces a Platform component's render creates or installs into.
+_namespace_problems() {
+  local dir=$1 namespace listed=false
+  namespace=$(component_namespace "$dir")
+  [[ $namespace != null ]] || return 0 # _component_problems names it missing
+  if yq '.platformNamespaces[]' "$LAB_ROOT/gitops/values.yaml" | grep -qxF -- "$namespace"; then listed=true; fi
+  if [[ $dir == platform/* && $listed == false ]]; then
+    echo "$dir/component.yaml: its namespace $namespace isn't in gitops/values.yaml's platformNamespaces"
+  elif [[ $dir == workloads/* && $listed == true ]]; then
+    echo "$dir/component.yaml: its namespace $namespace is one of gitops/values.yaml's platformNamespaces"
+  fi
 }
