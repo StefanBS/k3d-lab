@@ -22,6 +22,10 @@ declare -gA PLATFORM_FACTS=(
   [sso.server-ip]='platform/coredns-custom/coredns-custom.yaml|.data["sso.override"] | capture("IN A (?P<ip>[0-9.]+)") | .ip'
   # The audience of the tokens ESO logs in to the Secret Store with.
   [eso.audience]='platform/external-secrets/values.yaml|.extraObjects[0] | from_yaml | .spec.provider.vault.auth.kubernetes.serviceAccountRef.audiences[0]'
+  # The ServiceAccount each of the Secret Store's roles is bound to: the one the
+  # ClusterSecretStore that logs in as that role names.
+  [eso.service-account]='platform/external-secrets/values.yaml|.extraObjects[] | from_yaml | .spec.provider.vault.auth.kubernetes | select(.role == "eso") | .serviceAccountRef.name'
+  [eso-platform.service-account]='platform/external-secrets/values.yaml|.extraObjects[] | from_yaml | .spec.provider.vault.auth.kubernetes | select(.role == "eso-platform") | .serviceAccountRef.name'
   # Where ESO reaches the Secret Store: the Lab network's gateway.
   [eso.gateway-ip]='platform/external-secrets/values.yaml|.hostAliases[] | select(.hostnames[] == "host.k3d.internal") | .ip'
   # Where Cilium reaches the Kubernetes API, before it can resolve anything.

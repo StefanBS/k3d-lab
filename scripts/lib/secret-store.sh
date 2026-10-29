@@ -347,14 +347,16 @@ secret_store_trust_lab() {
   log "Pointing the Secret Store's Kubernetes auth at the Lab"
   bao_enabled auth kubernetes || quietly secret_store_bao auth enable kubernetes
   eso_ns=$(component_namespace platform/external-secrets)
-  eso_audience=$(platform_fact eso.audience)
+  eso_audience=$(platform_fact eso.audience) || return
   # Two roles, each read-only and for its own half of the Secret Store: eso for
   # Workloads' secrets, lab/workloads/<workload>/<key>, and eso-platform for the
   # Platform's own, lab/platform/*, which no Workload may read (ADR 0013): the Lab login
   # and the OIDC clients' secrets. Each is bound to a ServiceAccount of its own, so
-  # neither reads the other's.
-  for spec in "eso external-secrets workloads" "eso-platform external-secrets-platform platform"; do
-    read -r role service_account part <<<"$spec"
+  # neither reads the other's. That's the ServiceAccount the role's ClusterSecretStore
+  # names.
+  for spec in "eso workloads" "eso-platform platform"; do
+    read -r role part <<<"$spec"
+    service_account=$(platform_fact "$role.service-account") || return
     quietly secret_store_bao policy write "$role" - <<EOF
 path "lab/data/$part/*" { capabilities = ["read"] }
 path "lab/metadata/$part/*" { capabilities = ["read", "list"] }
