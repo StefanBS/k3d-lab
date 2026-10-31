@@ -85,9 +85,11 @@ settle_resume() {
 }
 
 # settle_start: once start.sh has started the k3d Nodes again. Their pods start again
-# with them, so each Application is Healthy again a while after the nodes are Ready. The
-# GPU Node isn't waited for: it's Left after its own reboot, or off (ADR 0002). Nor is a
-# paused Application, which may stay OutOfSync with what was changed by hand.
+# with them, so each Application is Healthy again a while after the nodes are Ready. Each
+# Application's status still says what ArgoCD saw before the Lab stopped, so they're
+# all refreshed first, and waited for until ArgoCD has compared each again. The GPU Node
+# isn't waited for: it's Left after its own reboot, or off (ADR 0002). Nor is a paused
+# Application, which may stay OutOfSync with what was changed by hand.
 settle_start() {
   local listed paused names
   log "Waiting for the k3d Nodes to be Ready"
@@ -97,6 +99,7 @@ settle_start() {
   paused=$(paused_applications) || die "can't read the Lab's AppProjects"
   mapfile -t names < <(grep -vxF -f <(printf '%s\n' "$paused") <<<"$listed")
   ((${#names[@]})) || die "the Lab has no Applications that aren't paused"
+  refresh_applications || die "can't refresh the Lab's Applications"
   log "Waiting for the Applications to be Settled${paused:+, but those paused: $(paste -sd' ' <<<"$paused")}"
   wait_settled 600 "${names[@]}"
 }

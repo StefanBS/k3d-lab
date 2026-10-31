@@ -90,6 +90,11 @@ cilium: Synced, Progressing" -- \
   expect "" -- "$(application cilium Synced Healthy "1.20.2,0123456789" "https://helm.cilium.io,$repo")"
 }
 
+@test "a refresh not taken yet: unsettled, whatever its status still says" {
+  expect "cilium: refresh pending" -- \
+    "$(settled cilium | jq '.metadata.annotations["argocd.argoproj.io/refresh"] = "hard"')"
+}
+
 @test "with no status yet: unsettled, with its state Unknown" {
   expect "grafana: Unknown, Unknown" -- '{"metadata": {"name": "grafana"}}'
 }

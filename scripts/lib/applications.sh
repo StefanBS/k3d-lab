@@ -52,7 +52,10 @@ applications_unsettled() {
       (.status.health.status // "" | if . == "" then "Unknown" end) as $health |
       [$ours[] | select(.compared != .tracks) | .compared] as $stale |
       [$ours[] | select(.synced != $commit) | .synced] as $elsewhere |
-      if $sync != "Synced" or $health != "Healthy" then "\($sync), \($health)"
+      # ArgoCD takes the annotation off once it has compared the Application again;
+      # until then, its status may be from before, such as before the Lab was stopped.
+      if .metadata.annotations["argocd.argoproj.io/refresh"] != null then "refresh pending"
+      elif $sync != "Synced" or $health != "Healthy" then "\($sync), \($health)"
       elif ($stale | length) > 0 then "compared with \($stale[0])"
       elif ($elsewhere | length) == 0 then empty
       elif $elsewhere[0] == "" then "synced at no revision"

@@ -352,17 +352,19 @@ k3d_nodes() {
 }
 K3D_NODES="get nodes -o json -l !k3d-lab/gpu"
 
-@test "start: the k3d Nodes Ready, then every Application Settled but those paused" {
+@test "start: the k3d Nodes Ready, then every Application refreshed, then Settled but those paused" {
   k3d_nodes True
+  kc_succeeds $REFRESH_ALL
   apps "$(app root)" "$(app cilium)" "$(app comfyui workloads | jq '.status.health.status = "Degraded"')"
   projects comfyui
   run settle_start
   [[ $status -eq 0 && $output == *"but those paused: comfyui"* ]]
-  in_order "$K3D_NODES" "$APPS"
+  in_order "$K3D_NODES" "$REFRESH_ALL" "$APPS"
 }
 
 @test "start: an Application not Settled at the deadline: fails naming it" {
   k3d_nodes True
+  kc_succeeds $REFRESH_ALL
   apps "$(app root)" "$(app cilium | jq '.status.health.status = "Progressing"')"
   give_up_at_once
   run settle_start
