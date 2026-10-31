@@ -41,10 +41,10 @@ SECRET_STORE_FIREWALL_RULES=(
 )
 
 # After the Host's own steps, in order: the firewall first, so the Secret Store never
-# listens before the LAN is kept out. Lingering starts it at boot, before you log in.
+# listens before the LAN is kept out. It never starts at boot: `just start` starts it.
 HOST_STEPS+=(
   secret_store_firewalled root "only the Lab's subnet can reach the Secret Store's port $SECRET_STORE_PORT"
-  owner_lingers owner "$LAB_OWNER's user services start at boot (lingering)"
+  owner_lingers owner "$LAB_OWNER's user services keep running after you log out (lingering)"
   secret_store_unseal_key_exists owner "Secret Store's unseal key exists ($SECRET_STORE_UNSEAL_KEY)"
   secret_store_tls_valid owner "Secret Store's TLS certificate is from the Lab CA, and valid for 30 more days"
   secret_store_config_current owner "Secret Store's configuration is up to date"
@@ -79,10 +79,11 @@ fix_secret_store_firewalled() {
   firewall-cmd -q --reload
 }
 
-# A user unit only starts at boot, before you log in, with lingering.
+# Without lingering, a user unit stops when your last session ends, so the Secret Store
+# would go with it while the Lab runs on.
 owner_lingers() { [[ $(loginctl show-user "$LAB_OWNER" -p Linger --value 2>/dev/null) == yes ]]; }
 fix_owner_lingers() {
-  changed "Enabling lingering, so $LAB_OWNER's user services start at boot"
+  changed "Enabling lingering, so $LAB_OWNER's user services keep running after you log out"
   loginctl enable-linger "$LAB_OWNER"
 }
 
@@ -177,11 +178,9 @@ PublishPort=$SECRET_STORE_PORT:8200
 # For the bao CLI that scripts/secret-store.sh runs in the container.
 Environment=BAO_ADDR=https://127.0.0.1:8200 BAO_CACERT=/openbao/state/ca.crt
 
+# No [Install] section, so it never starts at boot: 'just start' starts it.
 [Service]
 Restart=always
-
-[Install]
-WantedBy=default.target
 EOF
 }
 secret_store_quadlet_current() { [[ -f $SECRET_STORE_QUADLET && $(<"$SECRET_STORE_QUADLET") == "$(secret_store_quadlet)" ]]; }
@@ -267,7 +266,7 @@ fix_secret_store_has_kv_mount() {
 # inside the Secret Store's container, so the Host needs no bao of its own.
 secret_store_bao() {
   [[ -f $SECRET_STORE_INIT ]] || die "the Secret Store isn't set up yet; run 'just host setup'"
-  secret_store_running || die "the Secret Store isn't running; see: systemctl --user status $SECRET_STORE_UNIT"
+  secret_store_running || die "the Secret Store isn't running; run 'just start'"
   # Passed by name, so the token never shows up in the Host's process list.
   BAO_TOKEN=$(yq -p json -o yaml '.root_token' "$SECRET_STORE_INIT") \
     podman exec -i -e BAO_TOKEN "$SECRET_STORE_UNIT" bao "$@"

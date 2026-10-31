@@ -46,6 +46,14 @@ pause name:
 resume name:
     @scripts/pause.sh resume {{ name }}
 
+# Start the stopped Lab and the Secret Store again, as after a reboot: nothing of the Lab starts at boot
+start:
+    @scripts/start.sh
+
+# Stop the Lab and the Secret Store, keeping their state, until `just start`
+stop:
+    @scripts/stop.sh
+
 # Destroy the Lab, taking a Joined GPU Node back first (the Host's Secret Store, Lab CA and Docker CE are kept)
 down:
     @scripts/down.sh

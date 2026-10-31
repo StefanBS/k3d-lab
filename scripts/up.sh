@@ -49,7 +49,7 @@ install_component() {
 
 lab_exists && die "a Lab already exists; run 'just down' first"
 lab_ca_exists || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host setup'"
-secret_store_unsealed || die "the Secret Store isn't running and unsealed; run 'just host setup'"
+secret_store_unsealed || die "the Secret Store isn't running and unsealed; run 'just start'"
 # Before anything is built: without them Dex never starts, and a sync that never ends
 # says nothing of why.
 sso_missing=$(sso_secrets_missing) || die "can't read single sign-on's secrets from the Secret Store"
@@ -89,11 +89,13 @@ server_ip=$(lab_server_ip)
 [[ $server_ip == "$LAB_SERVER_IP" ]] ||
   die "the Server got $server_ip, but Cilium's values expect LAB_SERVER_IP ($LAB_SERVER_IP); run 'just down' and try again"
 
-# Docker only keeps a container's address across its own restart, such as a Host
-# reboot, if the address is static; otherwise the k3d Nodes come back in whichever
-# order they start. k3d only gives addresses on a network it creates itself, which
-# can't be this one (ADR 0002). So each k3d Node is reconnected, stopped, with the
+# Docker only keeps a container's address across its own restart, such as `just stop`
+# and `just start`, if the address is static; otherwise the k3d Nodes come back in
+# whichever order they start. k3d only gives addresses on a network it creates itself,
+# which can't be this one (ADR 0002). So each k3d Node is reconnected, stopped, with the
 # address it already has: k3s has already put that address in its certificates.
+# k3d also makes each one restart unless stopped, which Docker does at every boot. The
+# Lab only starts when you ask, with `just start`, so they never restart by themselves.
 log "Pinning the k3d Nodes' addresses"
 # Each k3d Node's name and CIDR address, one per line.
 nodes=$(docker network inspect "$LAB_NETWORK" \
@@ -103,6 +105,7 @@ while read -r node cidr; do
   [[ -n $node ]] || continue
   docker network disconnect "$LAB_NETWORK" "$node"
   docker network connect --ip "${cidr%/*}" "$LAB_NETWORK" "$node"
+  docker update --restart no "$node" >/dev/null
 done <<<"$nodes"
 quietly k3d cluster start "$LAB_NAME"
 # Stopping and starting the k3d Nodes restarted k3s on the Server on purpose. Any restart

@@ -84,6 +84,23 @@ settle_resume() {
   wait_settled 600 --at "$commit" "$app"
 }
 
+# settle_start: once start.sh has started the k3d Nodes again. Their pods start again
+# with them, so each Application is Healthy again a while after the nodes are Ready. The
+# GPU Node isn't waited for: it's Left after its own reboot, or off (ADR 0002). Nor is a
+# paused Application, which may stay OutOfSync with what was changed by hand.
+settle_start() {
+  local listed paused names
+  log "Waiting for the k3d Nodes to be Ready"
+  wait_nodes_ready 300 -l "!$GPU_NODE_LABEL_KEY"
+  listed=$(kc -n argocd get applications -o json | jq -r '.items[].metadata.name') ||
+    die "can't read the Lab's Applications"
+  paused=$(paused_applications) || die "can't read the Lab's AppProjects"
+  mapfile -t names < <(grep -vxF -f <(printf '%s\n' "$paused") <<<"$listed")
+  ((${#names[@]})) || die "the Lab has no Applications that aren't paused"
+  log "Waiting for the Applications to be Settled${paused:+, but those paused: $(paste -sd' ' <<<"$paused")}"
+  wait_settled 600 "${names[@]}"
+}
+
 # need_none_paused [<Application>...]: fails, naming them, if any of those Applications,
 # or any at all without names, is paused: ArgoCD never syncs it, so a wait for it would
 # only time out. Each settle_* checks first; track and demos also check before they change

@@ -4,7 +4,7 @@
 # ApplicationSets it renders.
 
 setup() {
-  for module in applications applicationsets pauses root-application components daemonsets namespaces settling; do
+  for module in applications applicationsets pauses root-application components daemonsets namespaces nodes settling; do
     # shellcheck source=/dev/null
     source "$BATS_TEST_DIRNAME/../lib/$module.sh"
   done
@@ -342,4 +342,39 @@ alloy: synced at 0123456" ]]
   run settle_join
   [[ $status -eq 1 && $output == *"error: paused, so they'd never be Settled: cilium; 'just resume <name>' each first" ]]
   ! grep -qF -- "$DAEMONSETS" "$KC_CALLS"
+}
+
+# k3d_nodes <ready>: while the Lab lists its two k3d Nodes, both with that Ready status.
+k3d_nodes() {
+  jq -n --arg r "$1" '{items: ["k3d-lab-server-0", "k3d-lab-agent-0"] |
+    map({metadata: {name: .}, status: {conditions: [{type: "Ready", status: $r}]}})}' |
+    kc_answers get nodes -o json -l '!k3d-lab/gpu'
+}
+K3D_NODES="get nodes -o json -l !k3d-lab/gpu"
+
+@test "start: the k3d Nodes Ready, then every Application Settled but those paused" {
+  k3d_nodes True
+  apps "$(app root)" "$(app cilium)" "$(app comfyui workloads | jq '.status.health.status = "Degraded"')"
+  projects comfyui
+  run settle_start
+  [[ $status -eq 0 && $output == *"but those paused: comfyui"* ]]
+  in_order "$K3D_NODES" "$APPS"
+}
+
+@test "start: an Application not Settled at the deadline: fails naming it" {
+  k3d_nodes True
+  apps "$(app root)" "$(app cilium | jq '.status.health.status = "Progressing"')"
+  give_up_at_once
+  run settle_start
+  [[ $status -eq 1 && $output == *"error: these Applications aren't Settled after 10 minutes:
+cilium: "* ]]
+}
+
+@test "start: a k3d Node not Ready at the deadline: fails before reading the Applications" {
+  k3d_nodes False
+  give_up_at_once
+  run settle_start
+  [[ $status -eq 1 && $output == *"error: these nodes aren't Ready after 5 minutes:
+k3d-lab-server-0: NotReady"* ]]
+  ! grep -qF -- "$APPS" "$KC_CALLS"
 }
