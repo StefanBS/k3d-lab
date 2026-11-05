@@ -6,4 +6,4 @@ resources:
   - oauth2-proxy.yaml
 images:
   - name: quay.io/oauth2-proxy/oauth2-proxy
-    newTag: v7.15.5
+    newTag: v7.15.6
