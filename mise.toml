@@ -6,9 +6,9 @@ k3d = "5.9.0"
 # Matches the Lab's Kubernetes version (k3d/cluster.yaml): kubectl supports one minor
 # version of skew either way.
 kubectl = "1.37.2"
-helm = "4.3.1"
+helm = "4.3.2"
 just = "1.59.0"
-yq = "4.54.1"
+yq = "4.54.3"
 # For logic over JSON, such as kubectl -o json: yq's expressions read like jq's but don't
 # behave like them (docs/agents/shell.md).
 jq = "1.8.2"
@@ -24,4 +24,4 @@ kubeconform = "0.8.0"
 "aqua:kyverno/kyverno" = "1.19.2"
 # Tests the health checks ArgoCD's values add (platform/argocd/values.yaml) without a
 # Lab, at the ArgoCD version platform/argocd/'s chart installs.
-"aqua:argoproj/argo-cd" = "3.6.0"
+"aqua:argoproj/argo-cd" = "3.6.1"
