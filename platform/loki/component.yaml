@@ -2,5 +2,5 @@
 # Enterprise Logs, so Loki comes from the community's chart.
 chart: loki
 repoURL: https://grafana-community.github.io/helm-charts
-version: 21.1.1
+version: 21.2.3
 namespace: monitoring
