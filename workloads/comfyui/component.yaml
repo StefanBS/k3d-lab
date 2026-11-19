@@ -1,2 +1,4 @@
 # No chart: the kustomization.yaml beside this is the component.
 namespace: comfyui
+# A Lab can be built without it (gitops/values.yaml).
+feature: gpu

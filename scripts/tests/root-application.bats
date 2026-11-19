@@ -143,6 +143,24 @@ without() {
   [[ $status -eq 1 && $output == "error: can't read the Lab's root Application" ]]
 }
 
+@test "need_feature: fails while the Lab is built without the Feature, saying why, and passes while it has it" {
+  without '{"revision": "main", "without": ["admission-policy", "gpu"]}' >/dev/null
+  run need_feature gpu "the GPU Node can't join it"
+  [[ $status -eq 1 && $output == "error: the Lab is built without gpu, so the GPU Node can't join it; 'just down', then a 'just up' that keeps gpu, builds one with it" ]]
+  without '{"revision": "main", "without": ["admission-policy"]}' >/dev/null
+  run need_feature gpu "the GPU Node can't join it"
+  [[ $status -eq 0 && -z $output ]]
+  # A Feature whose name is only part of another's isn't the one left out.
+  without '{"revision": "main", "without": ["gpu-extra"]}' >/dev/null
+  run need_feature gpu "the GPU Node can't join it"
+  [[ $status -eq 0 ]]
+}
+
+@test "need_feature: the root Application can't be read: fails, saying so" {
+  run need_feature gpu "the GPU Node can't join it"
+  [[ $status -eq 1 && $output == "error: can't read the Lab's root Application" ]]
+}
+
 @test "need_root_application: passes while the Lab has it, and fails without it" {
   run need_root_application
   [[ $status -eq 1 && $output == "error: the Lab has no root Application; run 'just down', then 'just up'" ]]

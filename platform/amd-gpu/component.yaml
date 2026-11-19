@@ -3,3 +3,5 @@ chart: amd-gpu
 repoURL: https://rocm.github.io/k8s-device-plugin/
 version: 0.22.0
 namespace: amd-gpu
+# A Lab can be built without it (gitops/values.yaml).
+feature: gpu

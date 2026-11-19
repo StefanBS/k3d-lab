@@ -137,6 +137,14 @@ root_application_without() {
   root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
   lab_without <<<"$root"
 }
+# need_feature <Feature> <what can't happen without it>: fails, saying so, while the root
+# Application says the Lab is built without that Feature, which it is until it's rebuilt.
+need_feature() {
+  local left_out
+  left_out=$(root_application_without) || exit 1
+  ! grep -qxF -- "$1" <<<"$left_out" ||
+    die "the Lab is built without $1, so $2; 'just down', then a 'just up' that keeps $1, builds one with it"
+}
 # tracked_commit: prints the commit LAB_REPO has now for the root Application's Tracked
 # revision, the one every Application is Settled at. Fails as pushed_commit does.
 tracked_commit() {

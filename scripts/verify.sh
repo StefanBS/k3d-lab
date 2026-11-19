@@ -71,16 +71,26 @@ args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" -
 # Chainsaw names each check chainsaw/<check>, and matches the regex against that.
 ((${#checks[@]} == 0)) || args+=(--include-test-regex "^chainsaw/($(IFS='|' && echo "${checks[*]}"))\$")
 
+deselected=()
+# The Features the Lab is built without, which the root Application says, not .env.
+mapfile -t features_out < <(root_application_without)
+gpu_feature=$(component_feature platform/amd-gpu)
+has_gpu=true
+[[ " ${features_out[*]} " != *" $gpu_feature "* ]] || has_gpu=false
 # The GPU checks, labelled GPU_NODE_LABEL_KEY, run only while the GPU Node's Node object
 # is Ready. No Node object means it's Left, its normal state, so that says nothing. A
 # NotReady one means it's powered off (ADR 0002), or Left since a reboot: not a failure,
-# but worth knowing.
-deselected=()
-gpu_node=$(gpu_node_object) || exit 1
-read -r gpu_node ready <<<"$gpu_node"
-if [[ $ready != Ready ]]; then
-  [[ -z $ready ]] || warn "the GPU Node's Node object $gpu_node is NotReady: it's off, or Left since a reboot; its checks are skipped"
+# but worth knowing. A Lab without the GPU's Feature never has the GPU Node (gpu.sh), so
+# there's nothing to warn about.
+if [[ $has_gpu == false ]]; then
   deselected+=("!$GPU_NODE_LABEL_KEY")
+else
+  gpu_node=$(gpu_node_object) || exit 1
+  read -r gpu_node ready <<<"$gpu_node"
+  if [[ $ready != Ready ]]; then
+    [[ -z $ready ]] || warn "the GPU Node's Node object $gpu_node is NotReady: it's off, or Left since a reboot; its checks are skipped"
+    deselected+=("!$GPU_NODE_LABEL_KEY")
+  fi
 fi
 # The Demos' checks, labelled DEMO_LABEL_KEY, run only while the Lab has its Demos, which
 # the root Application says. While it has them, a Demo that's missing fails its checks.
@@ -90,8 +100,7 @@ if [[ $demos != true ]]; then
   deselected+=("!$DEMO_LABEL_KEY")
 fi
 # The checks of a Feature's components, labelled FEATURE_LABEL_KEY with its name, run only
-# while the Lab has that Feature, which the root Application says, not .env.
-mapfile -t features_out < <(root_application_without)
+# while the Lab has that Feature.
 for feature in "${features_out[@]}"; do
   log "The Lab is built without $feature, so its checks are skipped"
   deselected+=("$FEATURE_LABEL_KEY!=$feature")
@@ -100,7 +109,7 @@ done
 export VERIFY_WITHOUT="${features_out[*]}"
 ((${#deselected[@]} == 0)) || args+=(--selector "$(IFS=, && echo "${deselected[*]}")")
 # The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
-if [[ -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then
+if [[ $has_gpu == true && -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then
   warn "$why: the GPU Node's route to the Lab is stale; run 'just host wizard', then 'just gpu join'"
 fi
 # Go's test runner announces every check as it starts, pauses and resumes it, even with

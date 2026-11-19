@@ -17,6 +17,8 @@ features:
   # not the Prometheus-operator CRDs, whose ServiceMonitors other charts ship
   # (docs/observability.md).
   - observability
+  # AMD's device plugin and ComfyUI, the GPU Node's components (docs/gpu-node.md).
+  - gpu
 # The Features this Lab is built without, from `features`: every ApplicationSet leaves
 # their components out. `just up --without` sets it in the root Application, which then
 # says what the Lab has.

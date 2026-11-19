@@ -13,6 +13,8 @@ Once, after `just host wizard` and filling in `GPU_NODE_IP` and `GPU_NODE_SSH` i
 
 The agent is never enabled at boot. After any reboot the GPU Node is Left, and the GPU is entirely yours until the next `just gpu join`. While it's Joined but powered off, `just verify` WARNs about it and skips its checks. The Platform's DaemonSets stop counting it while it's off, so every Application stays Healthy.
 
+AMD's device plugin and ComfyUI are the Feature `gpu`, which `just up --without gpu` leaves out, for a Lab with no GPU Node. `just gpu join` refuses that Lab, and `just verify` skips the GPU checks without warning about the GPU Node. `leave`, `status` and `ssh` still work, to clean up a Stale install. While `LAB_WITHOUT` in `.env` names `gpu`, `just doctor` doesn't ask for the GPU Node's values in `.env`.
+
 ## GPU Workloads
 
 A GPU Workload requests the GPU as `amd.com/gpu: 1` and tolerates the `amd.com/gpu:NoSchedule` taint. AMD's device plugin (`platform/amd-gpu/`) advertises the GPU, and its node labeller adds `amd.com/gpu.*` labels describing it. Both run only on the GPU Node. Nothing ROCm-related is installed on the GPU Node, so a GPU Workload's image brings ROCm. The GPU's devices are world-accessible there, so a GPU Workload can run as non-root without `supplementalGroups`; `just gpu join` warns if that changes.
