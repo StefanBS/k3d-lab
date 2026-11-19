@@ -3,16 +3,19 @@
 # sourced.
 # shellcheck shell=bash
 
-# root_application_patch [--revision <branch or tag>] [--demos true|false]: prints the
-# merge patch that sets those fields of the root Application.
+# root_application_patch [--revision <branch or tag>] [--demos true|false]
+# [--without <Feature>[,<Feature>...]]: prints the merge patch that sets those fields of
+# the root Application.
 #   --revision  The Tracked revision, set twice: the root Application's own, and the one
 #               its chart gives every Application it generates.
 #   --demos     Whether the Lab has its Demos: the workloads ApplicationSet leaves them
 #               out while it's false.
+#   --without   The Features the Lab is built without, which every ApplicationSet leaves
+#               out; empty for none. Names aren't checked here: without_features does that.
 # Fails, printing no patch, on no options, an empty revision, or a --demos that isn't
 # true or false: a patch that changes nothing, or blanks a field, is a caller's mistake.
 root_application_patch() {
-  local revision='' demos=''
+  local revision='' demos='' without='' set_without=false
   (($#)) || return 1
   while (($#)); do
     case $1 in
@@ -26,25 +29,36 @@ root_application_patch() {
         [[ $demos == true || $demos == false ]] || return 1
         shift 2
         ;;
+      --without)
+        (($# >= 2)) || return 1
+        without=$2
+        set_without=true
+        shift 2
+        ;;
       *) return 1 ;;
     esac
   done
   # shellcheck disable=SC2016 # The $ names are jq variables, not the shell's.
-  jq -n --arg revision "$revision" --arg demos "$demos" '{}
+  jq -n --arg revision "$revision" --arg demos "$demos" --arg without "$without" \
+    --argjson set_without "$set_without" '{}
     | if $revision != "" then
         .spec.source.targetRevision = $revision |
         .spec.source.helm.valuesObject.revision = $revision
       end
-    | if $demos != "" then .spec.source.helm.valuesObject.demos = ($demos == "true") end'
+    | if $demos != "" then .spec.source.helm.valuesObject.demos = ($demos == "true") end
+    | if $set_without then
+        .spec.source.helm.valuesObject.without = ($without | split(",") | map(select(. != "")))
+      end'
 }
 
-# root_application_manifest <revision> <demos>: prints the root Application that up.sh
-# applies, reading the Lab from LAB_REPO at that revision, with or without the Demos
-# (true or false). The fields a patch can change come from root_application_patch, so
-# each has one path in the code. Fails, printing nothing, as the patch does.
+# root_application_manifest <revision> <demos> [<Feature>...]: prints the root
+# Application that up.sh applies, reading the Lab from LAB_REPO at that revision, with or
+# without the Demos (true or false), and without those Features. The fields a patch can
+# change come from root_application_patch, so each has one path in the code. Fails,
+# printing nothing, as the patch does.
 root_application_manifest() {
   local patch
-  patch=$(root_application_patch --revision "$1" --demos "$2") || return 1
+  patch=$(root_application_patch --revision "$1" --demos "$2" --without "$(IFS=, && echo "${*:3}")") || return 1
   PATCH=$patch yq -P '. * (strenv(PATCH) | from_yaml)' <<EOF
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -85,6 +99,13 @@ lab_has_demos() {
   jq -rn 'input | .spec.source.helm.valuesObject.demos == true'
 }
 
+# lab_without: reads the root Application (kubectl get application/root -o json) on stdin,
+# and prints each Feature the Lab is built without, one per line, or nothing.
+lab_without() {
+  # input fails when there's nothing to read, where a plain filter would print nothing.
+  jq -rn 'input | .spec.source.helm.valuesObject.without // [] | .[]'
+}
+
 # For the scripts that patch the root Application, which up.sh creates last.
 need_root_application() {
   need_lab
@@ -108,6 +129,13 @@ root_application_has_demos() {
   local root
   root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
   lab_has_demos <<<"$root"
+}
+# root_application_without: prints each Feature the Lab is built without, one per line, or
+# nothing. Once the Lab exists, the root Application says so, not .env's LAB_WITHOUT.
+root_application_without() {
+  local root
+  root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
+  lab_without <<<"$root"
 }
 # tracked_commit: prints the commit LAB_REPO has now for the root Application's Tracked
 # revision, the one every Application is Settled at. Fails as pushed_commit does.

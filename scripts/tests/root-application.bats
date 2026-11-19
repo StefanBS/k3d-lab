@@ -42,7 +42,7 @@ patched() { kc_stdin "${PATCH[@]}" | jq -cS .; }
   [[ $status -ne 0 ]]
 }
 
-@test "the manifest is the root Application, with the fixed fields and the three set ones" {
+@test "the manifest is the root Application, with the fixed fields and the four set ones" {
   run root_application_manifest my-branch true
   [[ $status -eq 0 ]]
   field() { yq "$1" <<<"$output"; }
@@ -62,12 +62,29 @@ patched() { kc_stdin "${PATCH[@]}" | jq -cS .; }
   [[ $(field .spec.source.helm.valuesObject.revision) == my-branch ]]
   [[ $(field '.spec.source.helm.valuesObject.demos | tag') == '!!bool' ]]
   [[ $(field .spec.source.helm.valuesObject.demos) == true ]]
+  [[ $(field '.spec.source.helm.valuesObject.without | tag') == '!!seq' ]]
 }
 
 @test "a manifest without the Demos says so" {
   run root_application_manifest v1.2 false
   [[ $status -eq 0 ]]
   [[ $(yq .spec.source.helm.valuesObject.demos <<<"$output") == false ]]
+}
+
+@test "a manifest without Features lists them, and one with every Feature lists none" {
+  run root_application_manifest main false admission-policy observability
+  [[ $status -eq 0 ]]
+  [[ $(yq -o json -I0 .spec.source.helm.valuesObject.without <<<"$output") == '["admission-policy","observability"]' ]]
+  run root_application_manifest main false
+  [[ $status -eq 0 ]]
+  [[ $(yq -o json -I0 .spec.source.helm.valuesObject.without <<<"$output") == '[]' ]]
+}
+
+@test "the patch's --without sets the Features as a list, and an empty one as none" {
+  [[ $(root_application_patch --without admission-policy,gpu | jq -c .spec) == '{"source":{"helm":{"valuesObject":{"without":["admission-policy","gpu"]}}}}' ]]
+  [[ $(root_application_patch --without '' | jq -c .spec) == '{"source":{"helm":{"valuesObject":{"without":[]}}}}' ]]
+  run root_application_patch --without
+  [[ $status -eq 1 && -z $output ]]
 }
 
 @test "a manifest with an empty revision: fails" {
@@ -102,8 +119,27 @@ has_demos() {
   [[ $(has_demos '{"revision": "main"}') == false ]]
 }
 
+# without <valuesObject>: what root_application_without prints while the root
+# Application has those values.
+without() {
+  V=$1 yq -n -o json '.metadata.name = "root" | .spec.source.helm.valuesObject = env(V)' |
+    kc_answers -n argocd get application/root -o json
+  root_application_without
+}
+
+@test "the root Application lists Features it's without: prints each" {
+  [[ $(without '{"revision": "main", "without": ["admission-policy", "gpu"]}') == $'admission-policy\ngpu' ]]
+}
+
+@test "the root Application lists none, or doesn't say, as a Lab from before Features: prints nothing" {
+  [[ -z $(without '{"revision": "main", "without": []}') ]]
+  [[ -z $(without '{"revision": "main"}') ]]
+}
+
 @test "the root Application can't be read: fails, saying so" {
   run root_application_has_demos
+  [[ $status -eq 1 && $output == "error: can't read the Lab's root Application" ]]
+  run root_application_without
   [[ $status -eq 1 && $output == "error: can't read the Lab's root Application" ]]
 }
 

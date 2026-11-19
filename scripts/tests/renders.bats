@@ -10,7 +10,7 @@ setup() {
   load lab
   LAB_ROOT=$BATS_TEST_TMPDIR/repo
   mkdir -p "$LAB_ROOT/gitops"
-  printf 'platformNamespaces:\n  - kube-system\n  - monitoring\n' >"$LAB_ROOT/gitops/values.yaml"
+  printf 'features:\n  - observability\n  - gpu\nplatformNamespaces:\n  - kube-system\n  - monitoring\n' >"$LAB_ROOT/gitops/values.yaml"
 }
 
 # component <group>/<name> < <component.yaml>
@@ -124,13 +124,17 @@ application() {
   [[ $status -eq 0 && -z $output ]]
 }
 
-# applicationset <name> [role]: an ApplicationSet as the gitops chart renders it, its git
-# generator selecting by Wave, and with "role", leaving the Demos out too.
+# applicationset <name> [role] [<Features>]: an ApplicationSet as the gitops chart renders
+# it, its git generator selecting by Wave, and with "role", leaving the Demos out too, and
+# with Features, such as "[gpu]", leaving those out.
 applicationset() {
   printf -- '---\napiVersion: argoproj.io/v1alpha1\nkind: ApplicationSet\nmetadata:\n  name: %s\n' "$1"
   printf 'spec:\n  generators:\n    - selector:\n        matchExpressions:\n          - key: wave\n            operator: DoesNotExist\n'
   if [[ ${2:-} == role ]]; then
     printf '          - key: role\n            operator: NotIn\n            values: [demo]\n'
+  fi
+  if [[ -n ${3:-} ]]; then
+    printf '          - key: feature\n            operator: NotIn\n            values: %s\n' "$3"
   fi
 }
 
@@ -157,4 +161,21 @@ applicationset() {
     "$({ applicationset platform && applicationset workloads role; } | render without-demos)" \
     "$({ applicationset platform && applicationset workloads; } | render with-demos)"
   [[ $status -eq 0 && -z $output ]]
+}
+
+@test "every ApplicationSet leaving out every Feature, and none with every one: no problems" {
+  run features_selector_problems \
+    "$({ applicationset platform && applicationset workloads role; } | render with-features)" \
+    "$({ applicationset platform '' '[observability, gpu]' && applicationset workloads role '[observability, gpu]'; } | render without-features)"
+  [[ $status -eq 0 && -z $output ]]
+}
+
+@test "an ApplicationSet that keeps a Feature left out, or leaves one out of a Lab with every one: says which" {
+  run features_selector_problems \
+    "$({ applicationset platform '' '[gpu]' && applicationset workloads role; } | render with-features)" \
+    "$({ applicationset platform '' '[observability]' && applicationset workloads role; } | render without-features)"
+  [[ $status -eq 0 ]]
+  [[ $output == "the platform ApplicationSet leaves Features out of a Lab built with every one
+the platform ApplicationSet keeps the components of Features a Lab is built without
+the workloads ApplicationSet keeps the components of Features a Lab is built without" ]]
 }

@@ -5,6 +5,16 @@ revision: main
 # Whether the Lab has its Demos, the Workloads with `role: demo` in their component.yaml.
 # `just up --demos` and `just demos on` set it in the root Application.
 demos: false
+# The Features, the sets of components a Lab can be built without. A component joins one
+# with `feature` in its component.yaml. This chart can't read component.yaml, so lint
+# checks that every Feature named there is listed here.
+features:
+  # Kyverno and its policies (docs/admission-policy.md).
+  - admission-policy
+# The Features this Lab is built without, from `features`: every ApplicationSet leaves
+# their components out. `just up --without` sets it in the root Application, which then
+# says what the Lab has.
+without: []
 # The Platform's Waves, in the order a new Lab installs them, after which comes the rest
 # of the Platform, then the Workloads. A Platform component joins one with `wave` in its
 # component.yaml, when other components need its CRDs or webhooks to sync. This chart

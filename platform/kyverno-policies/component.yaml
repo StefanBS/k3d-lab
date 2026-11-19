@@ -2,3 +2,5 @@
 # cluster-wide, so they have no namespace of their own; this is only the Application's
 # destination.
 namespace: kyverno
+# A Lab can be built without it (gitops/values.yaml).
+feature: admission-policy

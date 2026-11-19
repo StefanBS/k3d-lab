@@ -89,6 +89,13 @@ if [[ $demos != true ]]; then
   log "The Lab has no Demos, so their checks are skipped; 'just demos on' adds them"
   deselected+=("!$DEMO_LABEL_KEY")
 fi
+# The checks of a Feature's components, labelled FEATURE_LABEL_KEY with its name, run only
+# while the Lab has that Feature, which the root Application says, not .env.
+mapfile -t features_out < <(root_application_without)
+for feature in "${features_out[@]}"; do
+  log "The Lab is built without $feature, so its checks are skipped"
+  deselected+=("$FEATURE_LABEL_KEY!=$feature")
+done
 ((${#deselected[@]} == 0)) || args+=(--selector "$(IFS=, && echo "${deselected[*]}")")
 # The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
 if [[ -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then

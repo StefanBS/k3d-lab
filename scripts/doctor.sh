@@ -79,7 +79,7 @@ fi
 report_host_steps
 
 if [[ ! -f $LAB_ENV_FILE ]]; then
-  warn ".env is missing: copy .env.example and fill it in (only the GPU Node recipes need it)"
+  warn ".env is missing: copy .env.example and fill it in (only the GPU Node recipes need it, and LAB_WITHOUT is optional)"
 else
   missing=$(comm -23 <(env_keys "$LAB_ROOT/.env.example") <(env_keys "$LAB_ENV_FILE"))
   if [[ -n $missing ]]; then

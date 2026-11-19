@@ -67,3 +67,23 @@ demos_selector_problems() {
     echo "the workloads ApplicationSet, and only it, should leave the Demos out by default"
   [[ -z $(yq ea "$selectors" "$2") ]] || echo "an ApplicationSet leaves the Demos out even with demos: true"
 }
+
+# features_selector_problems <the gitops render> <its render without every Feature>: every
+# ApplicationSet leaves out the components of the Features a Lab is built without, with a
+# selector on its generator, and none leaves any out of a Lab built with every one.
+features_selector_problems() {
+  local want selects='[select(.kind == "ApplicationSet")]'
+  want=$(features | jq -Rsc 'split("\n") | map(select(. != ""))')
+  # shellcheck disable=SC2016 # $want is jq's, not the shell's.
+  local without='.[] | select(any(.spec.generators[0].selector.matchExpressions[]?;
+      .key == "feature" and .operator == "NotIn" and .values == $want) | not) | .metadata.name'
+  # shellcheck disable=SC2016
+  local with='.[] | select(any(.spec.generators[0].selector.matchExpressions[]?; .key == "feature")) | .metadata.name'
+  local name
+  for name in $(yq ea -o json -I0 "$selects" "$1" | jq -r "$with"); do
+    echo "the $name ApplicationSet leaves Features out of a Lab built with every one"
+  done
+  for name in $(yq ea -o json -I0 "$selects" "$2" | jq -r --argjson want "$want" "$without"); do
+    echo "the $name ApplicationSet keeps the components of Features a Lab is built without"
+  done
+}

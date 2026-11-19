@@ -2,6 +2,9 @@ apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
   name: policies-enforced
+  # Runs only while the Lab has the Feature (scripts/verify.sh).
+  labels:
+    k3d-lab/feature: admission-policy
 spec:
   description: >-
     Kyverno's enforced policies (platform/kyverno-policies/) reject a bad object, naming

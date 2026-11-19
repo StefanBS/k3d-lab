@@ -35,22 +35,34 @@ spec:
         revision: {{ $.Values.revision }}
         files:
           - path: {{ $group }}/*/component.yaml
-      {{- if and $appset.waves (eq $group "platform") }}
-      # The components of this Wave. NotIn also selects a missing key, so the last
-      # ApplicationSet gets every component that sets no Wave.
+      {{- $byWave := and $appset.waves (eq $group "platform") }}
+      {{- $noDemos := and (eq $group "workloads") (not $.Values.demos) }}
+      {{- if or $byWave $noDemos $.Values.without }}
+      # A component is selected only if it matches every expression. A Kubernetes
+      # selector refuses an empty list of values, so an expression with none is left out.
       selector:
         matchExpressions:
+          {{- if $byWave }}
+          # The components of this Wave. NotIn also selects a missing key, so the last
+          # ApplicationSet gets every component that sets no Wave.
           - key: wave
             operator: {{ $appset.operator }}
             values: [{{ join ", " $appset.waves }}]
-      {{- else if and (eq $group "workloads") (not $.Values.demos) }}
-      # A Demo is left out of a Lab that wasn't asked for its Demos. A Workload that sets
-      # no `role` matches: NotIn also selects a missing key.
-      selector:
-        matchExpressions:
+          {{- end }}
+          {{- if $noDemos }}
+          # A Demo is left out of a Lab that wasn't asked for its Demos. A Workload that
+          # sets no `role` matches: NotIn also selects a missing key.
           - key: role
             operator: NotIn
             values: [demo]
+          {{- end }}
+          {{- with $.Values.without }}
+          # The components of the Features this Lab is built without. One that sets no
+          # `feature` matches: it's in every Lab.
+          - key: feature
+            operator: NotIn
+            values: [{{ join ", " . }}]
+          {{- end }}
       {{- end }}
   template:
     metadata:

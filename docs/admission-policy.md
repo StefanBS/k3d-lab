@@ -1,6 +1,6 @@
 # Admission policy
 
-Kyverno (`platform/kyverno/`) checks every object as it's admitted against the Lab's policies in `platform/kyverno-policies/` (ADR 0010):
+Kyverno (`platform/kyverno/`) checks every object as it's admitted against the Lab's policies in `platform/kyverno-policies/` (ADR 0010). Both are the Feature `admission-policy`, which `just up --without admission-policy` leaves out:
 
 | Policy | What it checks | Mode |
 |---|---|---|
