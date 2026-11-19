@@ -8,7 +8,7 @@ controller:
   trafficRouterPlugins:
     - name: argoproj-labs/gatewayAPI
       location: https://github.com/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi/releases/download/v0.18.0/gatewayapi-plugin-linux-amd64
-      sha256: 1904ca787d33107c140521899d61fff030ee75d99908bd175fca5a4647759061
+      sha256: b18ffefd53416f3c630d655e938fdf5b5b38bbf724326e20a124556bb134720d
   resources:
     requests: {cpu: 10m, memory: 64Mi}
 # Shows every Rollout, and promotes or aborts one. It has no login of its own, so the
