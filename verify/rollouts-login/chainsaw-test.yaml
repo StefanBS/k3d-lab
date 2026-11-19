@@ -1,0 +1,22 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: rollouts-login
+  # Runs only while the Lab has the Feature (scripts/verify.sh).
+  labels:
+    k3d-lab/feature: progressive-delivery
+spec:
+  description: >-
+    The Lab login opens the Rollouts dashboard (ADR 0013). From the Host, with the Lab
+    login's password from the Secret Store: the dashboard sends a request without a
+    session to Dex, and the sign-in to Hubble UI opens it too. sso-login checks the rest
+    of single sign-on.
+  steps:
+    - try:
+        - script:
+            content: ../lib/rollouts-login.sh
+      catch:
+        - script:
+            content: kubectl -n "$VERIFY_NS_SSO" logs deploy/oauth2-proxy --tail 20
+        - script:
+            content: kubectl -n argo-rollouts get pods,httproutes -o wide

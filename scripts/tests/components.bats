@@ -112,12 +112,26 @@ observability" "$(without_features gpu,observability,gpu)"
   [[ $status -eq 1 && $output == "not a Feature: '';"* ]]
 }
 
+@test "demos_lacking: each Demo that needs a Feature left out, with those it lacks" {
+  { kustomized rollouts-demo && printf 'role: demo\nneeds: [observability, gpu]\n'; } |
+    component workloads/rollouts-demo kustomization.yaml
+  { kustomized web-demo && printf 'role: demo\nneeds: [gpu]\n'; } | component workloads/web-demo kustomization.yaml
+  { kustomized plain-demo && echo 'role: demo'; } | component workloads/plain-demo kustomization.yaml
+  expect "gpu" "$(component_needs workloads/web-demo)"
+  expect "" "$(component_needs workloads/plain-demo)"
+  expect "rollouts-demo needs observability, gpu
+web-demo needs gpu" "$(demos_lacking gpu observability)"
+  expect "rollouts-demo needs observability" "$(demos_lacking observability)"
+  expect "" "$(demos_lacking)"
+}
+
 @test "folders as the ApplicationSets expect them: no problems" {
   platform
   { chart loki monitoring && echo 'feature: observability'; } | component platform/loki values.yaml
   { kustomized comfyui && echo 'feature: gpu'; } | component workloads/comfyui kustomization.yaml
   { kustomized web && echo 'isolation: strict'; } | component workloads/web kustomization.yaml
-  { kustomized rollouts-demo && echo 'role: demo'; } | component workloads/rollouts-demo kustomization.yaml
+  { kustomized rollouts-demo && printf 'role: demo\nneeds: [observability]\n'; } |
+    component workloads/rollouts-demo kustomization.yaml
   expect "" "$(components_problems)"
 }
 
@@ -192,6 +206,19 @@ workloads/comfyui/component.yaml: only a Platform component sets 'wave'" "$(comp
   expect "platform/loki/component.yaml: only a Workload sets 'role'
 workloads/comfyui/component.yaml: 'isolation' can only be 'strict'
 workloads/rollouts-demo/component.yaml: 'role' can only be 'demo'" "$(components_problems)"
+}
+
+@test "needs: only a Demo's, a list, and only of listed Features" {
+  platform
+  { chart loki monitoring && echo 'needs: [gpu]'; } | component platform/loki values.yaml
+  { kustomized comfyui && echo 'needs: [gpu]'; } | component workloads/comfyui kustomization.yaml
+  { kustomized web-demo && printf 'role: demo\nneeds: gpu\n'; } | component workloads/web-demo kustomization.yaml
+  { kustomized rollouts-demo && printf 'role: demo\nneeds: [gpu, tracing]\n'; } |
+    component workloads/rollouts-demo kustomization.yaml
+  expect "platform/loki/component.yaml: only a Demo (role: demo) sets 'needs'
+workloads/comfyui/component.yaml: only a Demo (role: demo) sets 'needs'
+workloads/rollouts-demo/component.yaml: 'needs' names tracing, which isn't one of gitops/values.yaml's features
+workloads/web-demo/component.yaml: 'needs' is a list of Features" "$(components_problems)"
 }
 
 @test "a listed Wave without a Platform component: names it" {

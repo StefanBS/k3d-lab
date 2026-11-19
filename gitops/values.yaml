@@ -11,6 +11,8 @@ demos: false
 features:
   # Kyverno and its policies (docs/admission-policy.md).
   - admission-policy
+  # Argo Rollouts (docs/progressive-delivery.md).
+  - progressive-delivery
 # The Features this Lab is built without, from `features`: every ApplicationSet leaves
 # their components out. `just up --without` sets it in the root Application, which then
 # says what the Lab has.

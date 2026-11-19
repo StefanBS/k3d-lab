@@ -2,3 +2,5 @@
 namespace: rollouts-demo
 # A Demo: a Lab has it only when asked for (`just up --demos`, `just demos on`).
 role: demo
+# A Rollout: `just up --demos` and `just demos on` refuse a Lab built without Argo Rollouts.
+needs: [progressive-delivery]

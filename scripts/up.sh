@@ -10,7 +10,8 @@
 # its root Application says what it was built without.
 # --debug makes it a debugging run, which also records the pressure and ends with verify
 # (run-diagnostics.sh). That's the test of a change, so it builds the Demos too: it must
-# cover all of Git.
+# cover all of Git. Without a Feature a Demo needs, --demos refuses, and --debug builds no
+# Demos.
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 # shellcheck source=lib/host.sh
@@ -23,13 +24,14 @@ source "$(dirname "$0")/lib/run-diagnostics.sh"
 usage="usage: just up [REVISION=<branch>] [--demos] [--without <Feature>,...|none] [--debug]"
 revision=$(git -C "$LAB_ROOT" branch --show-current)
 demos=false
+demos_asked=false
 debug=''
 left_out=${LAB_WITHOUT-}
 without_from="LAB_WITHOUT in .env"
 while (($#)); do
   case $1 in
     REVISION=?*) revision=${1#REVISION=} ;;
-    --demos) demos=true ;;
+    --demos) demos=true demos_asked=true ;;
     --debug)
       debug=1
       demos=true
@@ -48,6 +50,13 @@ done
 # Before anything is built, so a typo can't cost a build.
 checked=$(without_features "$left_out" 2>&1) || die "$without_from: $checked"
 mapfile -t features_out < <(grep . <<<"$checked")
+lacking=$(demos_lacking "${features_out[@]}")
+if [[ $demos == true && -n $lacking ]]; then
+  [[ $demos_asked == false ]] ||
+    die "--demos asks for the Demos, but $without_from leaves out Features they need:
+$lacking"
+  demos=false
+fi
 
 # k3s may stall on its datastore during the build or the checks, and the Pressure then
 # says why (run-diagnostics.sh).
@@ -70,6 +79,7 @@ for feature in "${features_out[@]}"; do
 done
 if [[ -n $debug ]] && ((${#features_out[@]})); then
   warn "a debugging run without ${features_out[*]} doesn't test all of Git"
+  [[ -z $lacking ]] || warn "it builds no Demos, since they need what it leaves out: ${lacking//$'\n'/; }"
 fi
 lab_ca_exists || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host setup'"
 secret_store_unsealed || die "the Secret Store isn't running and unsealed; run 'just start'"

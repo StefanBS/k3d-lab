@@ -4,14 +4,15 @@ metadata:
   name: sso-login
 spec:
   description: >-
-    The Lab login opens every UI of the Platform (ADR 0013). From a client pod on every
-    Ready node, Dex answers at its address, the name the UIs that sign in through it
-    call it by. From the Host, with the Lab login's password from the Secret Store: Dex
-    serves the signing keys in its storage, Dex gives a token for the Lab login and
-    refuses a wrong password, ArgoCD's API takes that token, the Rollouts dashboard and
-    Hubble UI send a request without a session to Dex and one sign-in opens both,
-    Grafana signs the Lab login in as an Admin, that sign-in opens ArgoCD and Hubble UI
-    without Dex asking again, and ArgoCD's and Grafana's Break-glass logins still work.
+    The Lab login opens every UI of the Platform (ADR 0013), but the Rollouts dashboard,
+    which rollouts-login checks. From a client pod on every Ready node, Dex answers at
+    its address, the name the UIs that sign in through it call it by. From the Host,
+    with the Lab login's password from the Secret Store: Dex serves the signing keys in
+    its storage, Dex gives a token for the Lab login and refuses a wrong password,
+    ArgoCD's API takes that token, Hubble UI sends a request without a session to Dex
+    and the Lab login opens it, Grafana signs the Lab login in as an Admin, that sign-in
+    opens ArgoCD and Hubble UI without Dex asking again, and ArgoCD's and Grafana's
+    Break-glass logins still work.
   steps:
     - use:
         template: ../lib/deploy-probes.yaml
