@@ -199,7 +199,11 @@ lint_policy_fixtures() {
 # without a namespace gets its component's, as ArgoCD installs it there.
 add_admitted() {
   echo --- >>"$admitted"
-  NS=$(component_namespace "$1") yq 'select(.kind != null) | .metadata.namespace = (.metadata.namespace // strenv(NS)) | ... comments = ""' "$manifests" >>"$admitted"
+  # From yq 4.54.3, a document that held only a comment, such as the # Source: line that
+  # starts helm template's output, leaves its --- behind. Two in a row make an empty
+  # document, which kyverno apply rejects, so a run of them is cut to the one above.
+  NS=$(component_namespace "$1") yq 'select(.kind != null) | .metadata.namespace = (.metadata.namespace // strenv(NS)) | ... comments = ""' "$manifests" |
+    awk 'BEGIN { sep = 1 } /^---$/ { if (sep) next; sep = 1; print; next } { sep = 0; print }' >>"$admitted"
 }
 
 # Every component passes the enforced policies, in one kyverno apply: a process per
