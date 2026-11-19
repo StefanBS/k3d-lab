@@ -73,6 +73,8 @@ _verify_variables() {
   for name in "${!PLATFORM_FACTS[@]}"; do platform_fact_variable "$name"; done
   for name in "${!VERIFY_NAMESPACES[@]}"; do verify_namespace_variable "$name"; done
   printf '%s\n' VERIFY_GPU_NODE_LABEL_KEY VERIFY_GPU_NODE_LABEL_VALUE
+  # Not from Git: verify.sh exports it from the root Application.
+  echo VERIFY_WITHOUT
 }
 
 # Chainsaw can't template a check's own labels, which verify.sh's --selector reads, so

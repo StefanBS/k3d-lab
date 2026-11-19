@@ -3,3 +3,5 @@ chart: kube-state-metrics
 repoURL: https://prometheus-community.github.io/helm-charts
 version: 9.0.1
 namespace: monitoring
+# A Lab can be built without it (gitops/values.yaml).
+feature: observability

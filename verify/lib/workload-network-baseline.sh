@@ -5,9 +5,9 @@
 # as the workloads ApplicationSet labels a Workload's, each with baseline-workload.yaml:
 # - <check namespace>-baseline, with the same-namespace allow, as a Workload gets it,
 #   and baseline-exposed.yaml: podinfo answers the Host through the Gateway, Alloy
-#   scrapes it, the client reaches it, the client can't reach the web probe in the
-#   check's namespace, and a client in the check's namespace can't reach podinfo
-#   directly, at its pod's address;
+#   scrapes it in a Lab with Alloy, the client reaches it, the client can't reach the
+#   web probe in the check's namespace, and a client in the check's namespace can't
+#   reach podinfo directly, at its pod's address;
 # - <check namespace>-strict, `isolation: strict`, so without the same-namespace allow:
 #   the client can't reach podinfo;
 # - <check namespace>-guardrail, with the same-namespace allow and a policy of its own
@@ -87,7 +87,13 @@ not_scraped() {
   [[ $(prometheus_query "max(up{namespace=\"$exposed\"})" '.data.result[0].value[1] // ""') == 1 ]] ||
     echo "$scraped"
 }
-eventually '%s: no successful scrape' "$scraped" -- not_scraped || bad=1
+# Only in a Lab with Alloy's Feature. verify.sh exports those it's built without.
+alloy_feature=$(yq '.feature // ""' "$lib/../../platform/alloy/component.yaml")
+if [[ " $VERIFY_WITHOUT " == *" $alloy_feature "* ]]; then
+  echo "SKIP  $scraped: the Lab is built without $alloy_feature"
+else
+  eventually '%s: no successful scrape' "$scraped" -- not_scraped || bad=1
+fi
 
 exposed_pod=$(podinfo_pod "$exposed")
 if kubectl -n "$exposed" exec client -- wget -qO /dev/null -T 3 "http://$(pod_ip "$exposed" "$exposed_pod"):9898/"; then

@@ -1,5 +1,7 @@
 # Observability
 
+Alloy, Prometheus, Loki, Tempo and Grafana, with kube-state-metrics, node-exporter and Grafana's dashboards, are the Feature `observability`, which `just up --without observability` leaves out. The Prometheus-operator CRDs stay, since other charts ship ServiceMonitors and PodMonitors.
+
 ## Metrics
 
 Each component comes from its own upstream chart, never an umbrella chart, and all run in the namespace `monitoring`:

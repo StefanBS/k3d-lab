@@ -2,6 +2,9 @@ apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
   name: grafana-healthy
+  # Runs only while the Lab has the Feature (scripts/verify.sh).
+  labels:
+    k3d-lab/feature: observability
 spec:
   description: >-
     From the Host, Grafana answers at its address with a certificate from the Lab

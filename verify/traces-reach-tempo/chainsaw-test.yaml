@@ -2,6 +2,9 @@ apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
   name: traces-reach-tempo
+  # Runs only while the Lab has the Feature (scripts/verify.sh).
+  labels:
+    k3d-lab/feature: observability
 spec:
   description: >-
     The probe client on every Ready node, the GPU Node included when Joined, sends a
