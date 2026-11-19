@@ -68,6 +68,10 @@ _Avoid_: admin password, local admin
 A group of Platform components that a new Lab installs together, after the Waves before it are Healthy, such as the controllers whose CRDs and webhooks the rest of the Platform uses.
 _Avoid_: stage, phase, tier
 
+**Feature**:
+A set of Platform components or Workloads that a Lab can be built without, such as `admission-policy`, to spare the Host's memory. A Lab has every Feature unless `just up --without` leaves it out, and keeps what it was built with until it's rebuilt. A component in no Feature is in every Lab.
+_Avoid_: group (the Platform and the Workloads are the groups), module, profile, add-on
+
 **Workload**:
 Something deployed into the Lab as an experiment, running on top of the Platform.
 _Avoid_: application, app (clashes with ArgoCD's `Application`)

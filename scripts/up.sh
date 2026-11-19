@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Builds the Lab from scratch, and stops once every Application is Settled.
-# Usage: up.sh [REVISION=<branch or tag>] [--demos] [--debug]. ArgoCD reads the Lab from that
-# revision of LAB_REPO. By default, that's the branch checked out here, since verify runs
-# the checks from this checkout: a Lab built from another branch would fail checks it was
-# never meant to pass.
+# Usage: up.sh [REVISION=<branch or tag>] [--demos] [--without <Feature>,...|none] [--debug].
+# ArgoCD reads the Lab from that revision of LAB_REPO. By default, that's the branch checked
+# out here, since verify runs the checks from this checkout: a Lab built from another
+# branch would fail checks it was never meant to pass.
 # --demos also builds the Demos, which a Lab that's only used doesn't need.
+# --without leaves those Features out (gitops/values.yaml), and none builds every one. It
+# replaces LAB_WITHOUT from .env, which is the default without it. Once the Lab exists,
+# its root Application says what it was built without.
 # --debug makes it a debugging run, which also records the pressure and ends with verify
 # (run-diagnostics.sh). That's the test of a change, so it builds the Demos too: it must
 # cover all of Git.
@@ -17,21 +20,34 @@ source "$(dirname "$0")/lib/secret-store.sh"
 # shellcheck source=lib/run-diagnostics.sh
 source "$(dirname "$0")/lib/run-diagnostics.sh"
 
+usage="usage: just up [REVISION=<branch>] [--demos] [--without <Feature>,...|none] [--debug]"
 revision=$(git -C "$LAB_ROOT" branch --show-current)
 demos=false
 debug=''
-for arg; do
-  case $arg in
-    REVISION=?*) revision=${arg#REVISION=} ;;
+left_out=${LAB_WITHOUT-}
+without_from="LAB_WITHOUT in .env"
+while (($#)); do
+  case $1 in
+    REVISION=?*) revision=${1#REVISION=} ;;
     --demos) demos=true ;;
     --debug)
       debug=1
       demos=true
       ;;
-    *) die "unknown argument '$arg'; usage: just up [REVISION=<branch>] [--demos] [--debug]" ;;
+    --without=*) left_out=${1#--without=} without_from=--without ;;
+    --without)
+      (($# >= 2)) || die "--without takes the Features to leave out, or none; $usage"
+      left_out=$2 without_from=--without
+      shift
+      ;;
+    *) die "unknown argument '$1'; $usage" ;;
   esac
+  shift
 done
 [[ -n $revision ]] || die "no branch is checked out; check one out, or pass REVISION=<branch or tag>"
+# Before anything is built, so a typo can't cost a build.
+checked=$(without_features "$left_out" 2>&1) || die "$without_from: $checked"
+mapfile -t features_out < <(grep . <<<"$checked")
 
 # k3s may stall on its datastore during the build or the checks, and the Pressure then
 # says why (run-diagnostics.sh).
@@ -48,6 +64,13 @@ install_component() {
 }
 
 lab_exists && die "a Lab already exists; run 'just down' first"
+for feature in "${features_out[@]}"; do
+  mapfile -t dirs < <(feature_dirs "$feature")
+  log "Leaving out $feature (${dirs[*]##*/}), as $without_from asks"
+done
+if [[ -n $debug ]] && ((${#features_out[@]})); then
+  warn "a debugging run without ${features_out[*]} doesn't test all of Git"
+fi
 lab_ca_exists || die "the Lab CA isn't in $LAB_CA_DIR; run 'just host setup'"
 secret_store_unsealed || die "the Secret Store isn't running and unsealed; run 'just start'"
 # Before anything is built: without them Dex never starts, and a sync that never ends
@@ -151,7 +174,7 @@ log "Handing the Lab over to ArgoCD, tracking $revision"
 # renders them.
 helm template gitops "$LAB_ROOT/gitops" --show-only templates/appprojects.yaml |
   kc apply -f - >/dev/null
-root_application_manifest "$revision" "$demos" | kc apply -f - >/dev/null
+root_application_manifest "$revision" "$demos" "${features_out[@]}" | kc apply -f - >/dev/null
 
 settle_new_lab "$commit"
 

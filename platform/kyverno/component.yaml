@@ -5,3 +5,5 @@ version: 3.10.0
 namespace: kyverno
 # Other components need its CRDs or webhooks before they sync (gitops/values.yaml).
 wave: controllers
+# A Lab can be built without it (gitops/values.yaml).
+feature: admission-policy

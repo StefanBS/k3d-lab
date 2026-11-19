@@ -8,9 +8,9 @@ setup() {
   load lab
   LAB_ROOT=$BATS_TEST_TMPDIR/repo
   mkdir -p "$LAB_ROOT/gitops"
-  # As the Lab's own lists them: the Waves, before the Platform's last ApplicationSet, and
-  # the Platform's namespaces.
-  printf 'platformWaves:\n  - crds\n  - controllers\nplatformNamespaces:\n  - kube-system\n  - monitoring\n' \
+  # As the Lab's own lists them: the Features, the Waves, before the Platform's last
+  # ApplicationSet, and the Platform's namespaces.
+  printf 'features:\n  - observability\n  - gpu\nwithout: []\nplatformWaves:\n  - crds\n  - controllers\nplatformNamespaces:\n  - kube-system\n  - monitoring\n' \
     >"$LAB_ROOT/gitops/values.yaml"
 }
 
@@ -79,11 +79,80 @@ $LAB_ROOT/platform/cilium/values.yaml" "$(component_helm_args platform/cilium)"
   expect "" "$(component_wave platform/grafana)"
 }
 
+@test "a component's Feature, or nothing when it's in none, and a Feature's folders" {
+  platform
+  { chart loki monitoring && echo 'feature: observability'; } | component platform/loki values.yaml
+  { kustomized comfyui && echo 'feature: gpu'; } | component workloads/comfyui kustomization.yaml
+  expect observability "$(component_feature platform/loki)"
+  expect "" "$(component_feature platform/grafana)"
+  expect "platform/loki" "$(feature_dirs observability)"
+  expect "workloads/comfyui" "$(feature_dirs gpu)"
+}
+
+@test "without_features: the Features named, once each, in the order given" {
+  expect "gpu
+observability" "$(without_features gpu,observability,gpu)"
+  expect observability "$(without_features observability,)"
+}
+
+@test "without_features: none, or nothing, leaves every Feature in" {
+  run without_features none
+  [[ $status -eq 0 && -z $output ]]
+  run without_features ''
+  [[ $status -eq 0 && -z $output ]]
+}
+
+@test "without_features: a name that isn't a Feature fails, naming it and the Features, and prints none of the others" {
+  run without_features gpu,observabilty
+  [[ $status -eq 1 ]]
+  expect "not a Feature: 'observabilty'; the Features are observability gpu, or none for every one" "$output"
+  run without_features none,gpu
+  [[ $status -eq 1 && $output == "not a Feature: 'none';"* ]]
+  run without_features gpu,,observability
+  [[ $status -eq 1 && $output == "not a Feature: '';"* ]]
+}
+
 @test "folders as the ApplicationSets expect them: no problems" {
   platform
-  { kustomized comfyui && echo 'isolation: strict'; } | component workloads/comfyui kustomization.yaml
+  { chart loki monitoring && echo 'feature: observability'; } | component platform/loki values.yaml
+  { kustomized comfyui && echo 'feature: gpu'; } | component workloads/comfyui kustomization.yaml
+  { kustomized web && echo 'isolation: strict'; } | component workloads/web kustomization.yaml
   { kustomized rollouts-demo && echo 'role: demo'; } | component workloads/rollouts-demo kustomization.yaml
   expect "" "$(components_problems)"
+}
+
+@test "a feature that gitops/values.yaml doesn't list: names the component" {
+  platform
+  { chart loki monitoring && echo 'feature: logging'; } | component platform/loki values.yaml
+  { kustomized comfyui && echo 'feature: GPU'; } | component workloads/comfyui kustomization.yaml
+  expect "platform/loki/component.yaml: 'feature' isn't one of gitops/values.yaml's features
+workloads/comfyui/component.yaml: 'feature' isn't one of gitops/values.yaml's features" "$(components_problems)"
+}
+
+@test "without naming what features doesn't list, a Feature listed twice, or one named none: names each" {
+  platform
+  yq -i '.features += ["gpu", "none"] | .without = ["gpu", "tracing"]' "$LAB_ROOT/gitops/values.yaml"
+  expect "gitops/values.yaml: features lists gpu twice
+gitops/values.yaml: no Feature can be named none
+gitops/values.yaml: without names tracing, which isn't one of its features" "$(components_problems)"
+}
+
+@test "a Wave whose every component is in a Feature: names the Wave" {
+  { chart prometheus-crds monitoring && printf 'wave: crds\nfeature: observability\n'; } |
+    component platform/prometheus-crds values.yaml
+  { chart cilium kube-system && echo 'wave: controllers'; } | component platform/cilium values.yaml
+  { chart kyverno kube-system && printf 'wave: controllers\nfeature: gpu\n'; } | component platform/kyverno values.yaml
+  chart grafana monitoring | component platform/grafana values.yaml
+  expect "gitops/values.yaml: every Platform component in the Wave crds is in a Feature, which leaves its ApplicationSet with none in a Lab without them" \
+    "$(components_problems)"
+}
+
+@test "every Platform component that sets no Wave in a Feature: says the last ApplicationSet gets none" {
+  { chart prometheus-crds monitoring && echo 'wave: crds'; } | component platform/prometheus-crds values.yaml
+  { chart cilium kube-system && echo 'wave: controllers'; } | component platform/cilium values.yaml
+  { chart grafana monitoring && echo 'feature: observability'; } | component platform/grafana values.yaml
+  expect "gitops/values.yaml: every Platform component that sets no Wave is in a Feature, which leaves the Platform's last ApplicationSet with none in a Lab without them" \
+    "$(components_problems)"
 }
 
 @test "no folders: says so" {

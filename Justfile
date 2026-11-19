@@ -26,7 +26,7 @@ default:
 doctor:
     @scripts/doctor.sh
 
-# Build the Lab from the pushed branch checked out here; REVISION=<branch> picks another, --demos also builds the Demos, --debug also records and verifies
+# Build the Lab from the pushed branch checked out here; REVISION=<branch> picks another, --demos also builds the Demos, --without <Feature>,... leaves Features out, --debug also records and verifies
 up *args:
     @scripts/up.sh {{ args }}
 

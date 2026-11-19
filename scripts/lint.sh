@@ -313,6 +313,9 @@ gitops_without_demos=$(copy_render gitops)
 lint_rendering "gitops with the Demos" render_gitops --set demos=true
 report_problems "the workloads ApplicationSet leaves the Demos out, unless the Lab has its Demos" \
   demos_selector_problems "$gitops_without_demos" "$(copy_render gitops-demos)"
+lint_rendering "gitops without every Feature" render_gitops --set-json "without=$(features | jq -Rsc 'split("\n") | map(select(. != ""))')"
+report_problems "every ApplicationSet leaves out the Features a Lab is built without, and only those" \
+  features_selector_problems "$gitops_without_demos" "$(copy_render gitops-without)"
 
 # Every fact the scripts read from the Platform's values, so a renamed value fails
 # here rather than in the middle of `just up`.

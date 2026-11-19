@@ -10,7 +10,8 @@ setup() {
   done
   load lab
   LAB_ROOT=$BATS_TEST_TMPDIR/repo
-  mkdir -p "$LAB_ROOT/platform/web" "$LAB_ROOT/platform/db" "$LAB_ROOT/verify/lib"
+  mkdir -p "$LAB_ROOT/platform/web" "$LAB_ROOT/platform/db" "$LAB_ROOT/verify/lib" "$LAB_ROOT/gitops"
+  printf 'features:\n  - caching\n' >"$LAB_ROOT/gitops/values.yaml"
   printf 'host: web.lab.localhost\nurl: https://ui.lab.localhost\n' >"$LAB_ROOT/platform/web/values.yaml"
   printf 'namespace: web\n' >"$LAB_ROOT/platform/web/component.yaml"
   printf 'namespace: data\n' >"$LAB_ROOT/platform/db/component.yaml"
@@ -104,8 +105,26 @@ metadata:
 YAML
   run verify_copies_problems
   [[ $status -eq 0 ]]
-  [[ $output == "verify/web-healthy/chainsaw-test.yaml:4 is labelled k3d-lab/gpu=nvidia, which verify.sh doesn't select by: label it k3d-lab/gpu=amd or k3d-lab/demo
-verify/web-healthy/chainsaw-test.yaml:5 is labelled k3d-lab/demos=web, which verify.sh doesn't select by: label it k3d-lab/gpu=amd or k3d-lab/demo" ]]
+  [[ $output == "verify/web-healthy/chainsaw-test.yaml:4 is labelled k3d-lab/gpu=nvidia, which verify.sh doesn't select by: label it k3d-lab/gpu=amd, k3d-lab/demo or k3d-lab/feature
+verify/web-healthy/chainsaw-test.yaml:5 is labelled k3d-lab/demos=web, which verify.sh doesn't select by: label it k3d-lab/gpu=amd, k3d-lab/demo or k3d-lab/feature" ]]
+}
+
+@test "a check labelled with a Feature: passes for one gitops/values.yaml lists, and names the file and label for another" {
+  check web-healthy <<'YAML'
+metadata:
+  name: web-healthy
+  labels:
+    k3d-lab/feature: caching
+YAML
+  check db-healthy <<'YAML'
+metadata:
+  name: db-healthy
+  labels:
+    k3d-lab/feature: databases
+YAML
+  run verify_copies_problems
+  [[ $status -eq 0 ]]
+  [[ $output == "verify/db-healthy/chainsaw-test.yaml:4 is labelled k3d-lab/feature=databases, which isn't one of gitops/values.yaml's features" ]]
 }
 
 @test "the GPU Node's label key outside a check's labels: names the file and line" {

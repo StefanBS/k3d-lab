@@ -78,14 +78,20 @@ _verify_variables() {
 # Chainsaw can't template a check's own labels, which verify.sh's --selector reads, so
 # they're the one place the labels' keys are written out: each one is checked here.
 _verify_label_copies() {
-  local test file line key value hit labels=""
+  local test file line key value hit features labels=""
+  features=$(features)
   for test in "$LAB_ROOT"/verify/*/chainsaw-test.yaml; do
     file=${test#"$LAB_ROOT"/}
     while IFS=$'\t' read -r line key value; do
       [[ -n $line ]] || continue # a check with no labels
       labels+="$file:$line"$'\n'
       [[ $key=$value == "$GPU_NODE_LABEL" || $key == "$DEMO_LABEL_KEY" ]] && continue
-      echo "$file:$line is labelled $key=$value, which verify.sh doesn't select by: label it $GPU_NODE_LABEL or $DEMO_LABEL_KEY"
+      if [[ $key == "$FEATURE_LABEL_KEY" ]]; then
+        grep -qxF -- "$value" <<<"$features" ||
+          echo "$file:$line is labelled $key=$value, which isn't one of gitops/values.yaml's features"
+        continue
+      fi
+      echo "$file:$line is labelled $key=$value, which verify.sh doesn't select by: label it $GPU_NODE_LABEL, $DEMO_LABEL_KEY or $FEATURE_LABEL_KEY"
     done < <(yq '.metadata.labels[] | [line, key, .] | @tsv' "$test")
   done
   while IFS= read -r hit; do

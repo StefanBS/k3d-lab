@@ -2,6 +2,9 @@ apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
   name: kyverno-healthy
+  # Runs only while the Lab has the Feature (scripts/verify.sh).
+  labels:
+    k3d-lab/feature: admission-policy
 spec:
   description: >-
     Kyverno's admission controller, which checks each object as it's admitted, and its
