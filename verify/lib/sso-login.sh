@@ -19,8 +19,6 @@
 set -euo pipefail
 # shellcheck source=checks.sh
 source "$(dirname "$0")/checks.sh"
-# shellcheck source=../../scripts/lib/sso.sh
-source "$(dirname "$0")/../../scripts/lib/sso.sh"
 # shellcheck source=sso-browser.sh
 source "$(dirname "$0")/sso-browser.sh"
 

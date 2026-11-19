@@ -1,4 +1,4 @@
-# Sourced by the checks' scripts that sign in from the Host, as a browser on it would
+# Sourced, with scripts/lib/sso.sh, by the checks' scripts that sign in from the Host, as a browser on it would
 # (ADR 0013): sso-login.sh and rollouts-login.sh. Reads the Lab login's password from the
 # Secret Store, and keeps the cookies and answers in $tmp, deleted when the script exits.
 # Every request trusts only the Lab CA. verify.sh exports LAB_CA_CERT, and the Platform
@@ -6,6 +6,9 @@
 # which fail sets.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # bad is read by the scripts that source this file
+
+# shellcheck source=../../scripts/lib/sso.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/sso.sh"
 
 sso=$PLATFORM_FACT_SSO_URL
 login=$PLATFORM_FACT_SSO_LOGIN
