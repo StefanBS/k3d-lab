@@ -4,3 +4,5 @@ chart: loki
 repoURL: https://grafana-community.github.io/helm-charts
 version: 21.4.1
 namespace: monitoring
+# A Lab can be built without it (gitops/values.yaml).
+feature: observability

@@ -3,3 +3,5 @@ chart: alloy
 repoURL: https://grafana.github.io/helm-charts
 version: 1.16.0
 namespace: monitoring
+# A Lab can be built without it (gitops/values.yaml).
+feature: observability

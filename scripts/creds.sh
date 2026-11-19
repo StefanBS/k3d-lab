@@ -21,10 +21,10 @@ hubble_url=https://$(platform_fact hubble.host)
 lab_password=$(secret_store_bao kv get -mount=lab -field=password "$SSO_LOGIN_SECRET" </dev/null)
 # The Break-glass logins. ArgoCD generates its own at install, and keeps it in this Secret.
 argocd_password=$(kc -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
-# `just up` generates Grafana's.
-grafana_login=$(kc -n "$grafana_ns" get secret "$grafana_secret" -o json)
-grafana_user=$(yq -p json '.data["admin-user"] | @base64d' <<<"$grafana_login")
-grafana_password=$(yq -p json '.data["admin-password"] | @base64d' <<<"$grafana_login")
+# The root Application says which Features the Lab was built without.
+left_out=$(root_application_without)
+# Usage: has_feature_of <group>/<name>: whether the Lab has the component's Feature.
+has_feature_of() { ! grep -qxF -- "$(component_feature "$1")" <<<"$left_out"; }
 
 echo "The Lab login, which opens every UI below:"
 printf '  %-17s %s\n' USER PASSWORD "$(platform_fact sso.login)" "$lab_password"
@@ -32,12 +32,15 @@ echo
 # The Rollouts dashboard and Hubble UI have no login of their own, so no Break-glass
 # login either: only the Lab login opens them.
 echo "Each UI, with its Break-glass login, for when the Lab login can't be used:"
-uis=(
-  ArgoCD "$argocd_url" admin "$argocd_password"
-  Grafana "$grafana_url" "$grafana_user" "$grafana_password"
-)
-# Only in a Lab built with Argo Rollouts' Feature, which the root Application says.
-left_out=$(root_application_without)
-grep -qxF -- "$(component_feature platform/argo-rollouts)" <<<"$left_out" || uis+=(Rollouts "$rollouts_url" - -)
+uis=(ArgoCD "$argocd_url" admin "$argocd_password")
+# Grafana and the Rollouts dashboard are only in a Lab with their Features.
+if has_feature_of platform/grafana; then
+  # ESO generates Grafana's.
+  grafana_login=$(kc -n "$grafana_ns" get secret "$grafana_secret" -o json)
+  uis+=(Grafana "$grafana_url"
+    "$(yq -p json '.data["admin-user"] | @base64d' <<<"$grafana_login")"
+    "$(yq -p json '.data["admin-password"] | @base64d' <<<"$grafana_login")")
+fi
+if has_feature_of platform/argo-rollouts; then uis+=(Rollouts "$rollouts_url" - -); fi
 uis+=(Hubble "$hubble_url" - -)
 printf '  %-9s %-31s %-6s %s\n' UI URL USER PASSWORD "${uis[@]}"

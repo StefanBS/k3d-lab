@@ -96,6 +96,8 @@ for feature in "${features_out[@]}"; do
   log "The Lab is built without $feature, so its checks are skipped"
   deselected+=("$FEATURE_LABEL_KEY!=$feature")
 done
+# For a check that runs in every Lab, but has a step that needs a Feature.
+export VERIFY_WITHOUT="${features_out[*]}"
 ((${#deselected[@]} == 0)) || args+=(--selector "$(IFS=, && echo "${deselected[*]}")")
 # The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
 if [[ -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then

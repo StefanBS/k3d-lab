@@ -2,7 +2,7 @@
 
 **Argo Rollouts** (`platform/argo-rollouts/`) releases Workloads by canary, and its dashboard at https://rollouts.lab.localhost shows every Rollout, and promotes or aborts one, behind the Lab login. It's the Feature `progressive-delivery`, which `just up --without progressive-delivery` leaves out. A canary's traffic is split for real, by weight, at the Lab's Gateway: Rollouts' Gateway API plugin sets the weights of the Rollout's HTTPRoute, which Cilium applies. ArgoCD leaves those weights alone, as it does the version that Rollouts adds to each of the Rollout's Services' selectors (see [GitOps](gitops.md)).
 
-The demo Rollout (`workloads/rollouts-demo/`) is a Demo, so a Lab has it only when asked: build the Lab with `just up --demos`, or add it to a running one with `just demos on`. It's a Rollout, so both refuse a Lab built without `progressive-delivery`. It's podinfo, at https://rollouts-demo.lab.localhost. A small load generator sends it 5 requests per second through the Gateway. A canary goes through these steps:
+The demo Rollout (`workloads/rollouts-demo/`) is a Demo, so a Lab has it only when asked: build the Lab with `just up --demos`, or add it to a running one with `just demos on`. It's a Rollout whose analysis queries Prometheus, so both refuse a Lab built without `progressive-delivery` or `observability`. It's podinfo, at https://rollouts-demo.lab.localhost. A small load generator sends it 5 requests per second through the Gateway. A canary goes through these steps:
 
 1. 20% of the traffic goes to the new version, then the analysis runs.
 2. 50%, then the analysis.

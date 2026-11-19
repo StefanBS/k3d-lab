@@ -1,5 +1,5 @@
 # Sourced, with scripts/lib/sso.sh, by the checks' scripts that sign in from the Host, as a browser on it would
-# (ADR 0013): sso-login.sh and rollouts-login.sh. Reads the Lab login's password from the
+# (ADR 0013): sso-login.sh, rollouts-login.sh and grafana-login.sh. Reads the Lab login's password from the
 # Secret Store, and keeps the cookies and answers in $tmp, deleted when the script exits.
 # Every request trusts only the Lab CA. verify.sh exports LAB_CA_CERT, and the Platform
 # facts this reads (scripts/lib/verify-facts.sh). The script exits "$bad" at its end,

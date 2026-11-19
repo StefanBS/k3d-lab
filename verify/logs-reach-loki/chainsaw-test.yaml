@@ -2,6 +2,9 @@ apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
   name: logs-reach-loki
+  # Runs only while the Lab has the Feature (scripts/verify.sh).
+  labels:
+    k3d-lab/feature: observability
 spec:
   description: >-
     For every Ready node, the GPU Node included when Joined, Loki holds the line the
