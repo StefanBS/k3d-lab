@@ -8,7 +8,7 @@ source "$(dirname "$0")/lib/host.sh"
 # shellcheck source=lib/secret-store.sh
 source "$(dirname "$0")/lib/secret-store.sh"
 
-need_lab
+need_root_application
 
 argocd_url=https://$(platform_fact argocd.host)
 grafana_url=$(platform_fact grafana.url)
@@ -32,9 +32,12 @@ echo
 # The Rollouts dashboard and Hubble UI have no login of their own, so no Break-glass
 # login either: only the Lab login opens them.
 echo "Each UI, with its Break-glass login, for when the Lab login can't be used:"
-printf '  %-9s %-31s %-6s %s\n' \
-  UI URL USER PASSWORD \
-  ArgoCD "$argocd_url" admin "$argocd_password" \
-  Grafana "$grafana_url" "$grafana_user" "$grafana_password" \
-  Rollouts "$rollouts_url" - - \
-  Hubble "$hubble_url" - -
+uis=(
+  ArgoCD "$argocd_url" admin "$argocd_password"
+  Grafana "$grafana_url" "$grafana_user" "$grafana_password"
+)
+# Only in a Lab built with Argo Rollouts' Feature, which the root Application says.
+left_out=$(root_application_without)
+grep -qxF -- "$(component_feature platform/argo-rollouts)" <<<"$left_out" || uis+=(Rollouts "$rollouts_url" - -)
+uis+=(Hubble "$hubble_url" - -)
+printf '  %-9s %-31s %-6s %s\n' UI URL USER PASSWORD "${uis[@]}"

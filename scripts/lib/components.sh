@@ -67,6 +67,27 @@ feature_dirs() {
   done < <(component_dirs)
 }
 
+# component_needs <group>/<name>: the Features a Demo needs, one per line, or nothing. A
+# Lab built without one of them can't have its Demos.
+component_needs() { yq '.needs // [] | .[]' "$LAB_ROOT/$1/component.yaml"; }
+
+# demos_lacking [<Feature>...]: for a Lab built without those Features, prints each Demo
+# that needs one of them, as "<Demo> needs <Feature>[, <Feature>...]", one per line, or
+# nothing when the Lab can have its Demos.
+demos_lacking() {
+  local dir feature missing
+  for dir in $(demo_dirs); do
+    missing=()
+    while read -r feature; do
+      if [[ -n $feature && " $* " == *" $feature "* ]]; then missing+=("$feature"); fi
+    done < <(component_needs "$dir")
+    if ((${#missing[@]})); then
+      printf -v feature '%s, ' "${missing[@]}"
+      echo "${dir##*/} needs ${feature%, }"
+    fi
+  done
+}
+
 # The checks of a Feature's components carry this label, with the Feature's name: they run
 # only while the Lab has it (verify.sh).
 FEATURE_LABEL_KEY=k3d-lab/feature
@@ -195,6 +216,20 @@ _component_problems() {
   feature=$(component_feature "$dir")
   if [[ -n $feature ]] && ! grep -qxF -- "$feature" <<<"$(features)"; then
     echo "$dir/component.yaml: 'feature' isn't one of gitops/values.yaml's features"
+  fi
+  # Optional, and only a Demo's: the Features it needs, each one gitops/values.yaml lists.
+  # `just up --demos` and `just demos on` refuse a Lab built without one.
+  if [[ $(yq 'has("needs")' "$component") == true ]]; then
+    if [[ $(yq '.role' "$component") != demo ]]; then
+      echo "$dir/component.yaml: only a Demo (role: demo) sets 'needs'"
+    elif [[ $(yq '.needs | tag' "$component") != '!!seq' ]]; then
+      echo "$dir/component.yaml: 'needs' is a list of Features"
+    else
+      for feature in $(component_needs "$dir"); do
+        grep -qxF -- "$feature" <<<"$(features)" ||
+          echo "$dir/component.yaml: 'needs' names $feature, which isn't one of gitops/values.yaml's features"
+      done
+    fi
   fi
   # Optional, and only a Workload's: the workloads ApplicationSet labels its namespace by
   # `isolation`, and leaves a `role: demo` out of a Lab that wasn't asked for its Demos.

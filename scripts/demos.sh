@@ -9,6 +9,12 @@ source "$(dirname "$0")/lib.sh"
 if [[ $1 == on ]]; then demos=true; else demos=false; fi
 
 need_root_application
+if [[ $1 == on ]]; then
+  mapfile -t features_out < <(root_application_without)
+  lacking=$(demos_lacking "${features_out[@]}")
+  [[ -z $lacking ]] || die "the Lab is built without Features the Demos need, and keeps them out until it's rebuilt:
+$lacking"
+fi
 # The Demos, as this checkout has them, like the checks that verify runs.
 mapfile -t demo_components < <(demo_dirs)
 ((${#demo_components[@]})) || die "no Workload in workloads/ is a Demo (role: demo in its component.yaml)"

@@ -5,11 +5,11 @@
 #   - Dex serves the signing keys in its storage, so a restart keeps them.
 #   - Dex gives the Lab login a token for its password, and refuses a wrong one.
 #   - ArgoCD's API takes that token, as its admin.
-#   - The Rollouts dashboard and Hubble UI send a request without a session to Dex, and
-#     one sign-in opens both.
+#   - Hubble UI sends a request without a session to Dex, and the Lab login opens it.
 #   - Grafana signs the Lab login in through Dex, as an Admin.
 #   - That sign-in opens ArgoCD and Hubble UI too, without Dex asking again.
 #   - ArgoCD's and Grafana's Break-glass logins still work.
+# rollouts-login.sh checks the Rollouts dashboard, which a Lab may be built without.
 # Every request trusts only the Lab CA. verify.sh exports LAB_CA_CERT, and the Platform
 # facts and namespaces this reads (scripts/lib/verify-facts.sh). No secret is
 # passed as an argument, where the Host's process list would show it: each goes to curl
@@ -19,31 +19,12 @@
 set -euo pipefail
 # shellcheck source=checks.sh
 source "$(dirname "$0")/checks.sh"
-# shellcheck source=../../scripts/lib/sso.sh
-source "$(dirname "$0")/../../scripts/lib/sso.sh"
+# shellcheck source=sso-browser.sh
+source "$(dirname "$0")/sso-browser.sh"
 
-sso=$PLATFORM_FACT_SSO_URL
 argocd=https://$PLATFORM_FACT_ARGOCD_HOST
 grafana=$PLATFORM_FACT_GRAFANA_URL
-rollouts=https://$PLATFORM_FACT_ROLLOUTS_HOST
 hubble=https://$PLATFORM_FACT_HUBBLE_HOST
-login=$PLATFORM_FACT_SSO_LOGIN
-
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
-
-bad=0
-ok() { echo "OK    $1"; }
-fail() {
-  echo "FAIL  $1"
-  bad=1
-}
-
-# Usage: lab_curl <curl args>...
-# A failed connection is retried: the Gateway drops some while a route changes.
-lab_curl() {
-  curl -sS --cacert "$LAB_CA_CERT" --retry 5 --retry-delay 2 --retry-connrefused "$@"
-}
 
 # Usage: token_status <password>
 # Asks Dex for a token for the Lab login with that password, through Verify's own
@@ -54,42 +35,6 @@ token_status() {
     -d grant_type=password -d client_id=verify -d 'scope=openid email' \
     --data-urlencode "username=$login" --data-urlencode password@-
 }
-
-# Usage: browse <cookie jar> <url> [curl args]...
-# Opens the URL as a browser would, following every redirect and keeping the cookies in
-# the jar. Prints the HTTP status and the URL it ended on.
-browse() {
-  local jar=$1
-  shift
-  lab_curl -L -b "$jar" -c "$jar" -o /dev/null -w '%{http_code} %{url_effective}' "$@"
-}
-
-# Usage: sign_in <cookie jar> <url>
-# Browses to the URL. If that ends on Dex's login form, fills it in with the Lab login
-# and follows the redirects again. Prints the HTTP status and the URL it ended on.
-sign_in() {
-  local jar=$1 url=$2 landed
-  landed=$(browse "$jar" "$url")
-  if [[ $landed == "200 $sso/auth/local/login"* ]]; then
-    landed=$(printf %s "$password" |
-      browse "$jar" "${landed#* }" --data-urlencode "login=$login" --data-urlencode password@-)
-  fi
-  echo "$landed"
-}
-
-# Usage: expect_sent_to_dex <UI's name> <url>
-# Without a session, the UI's address answers with a redirect to Dex, not with the page.
-expect_sent_to_dex() {
-  local got
-  got=$(lab_curl -o /dev/null -w '%{http_code} %{redirect_url}' "$2")
-  if [[ $got == "302 $sso/"* ]]; then
-    ok "$1 sends a request without a session to Dex"
-  else
-    fail "$1 answers a request without a session with '${got%%\?*}', not a redirect to $sso"
-  fi
-}
-
-password=$("$(dirname "$0")/../../scripts/secret-store.sh" bao kv get -mount=lab -field=password "$SSO_LOGIN_SECRET" </dev/null)
 
 # Dex keeps its state in the Lab's API: the signing keys it serves are the ones in its
 # storage. With a state of its own it would have made its own keys, and a restart would
@@ -130,8 +75,7 @@ else
   fail "ArgoCD's API doesn't list the Applications for the Lab login's token: HTTP $status"
 fi
 
-# The UIs behind oauth2-proxy.
-expect_sent_to_dex "The Rollouts dashboard" "$rollouts/"
+# A UI behind oauth2-proxy.
 expect_sent_to_dex "Hubble UI" "$hubble/"
 landed=$(sign_in "$tmp/proxied.jar" "$hubble/")
 if [[ $landed == "200 $hubble/" ]]; then
@@ -139,15 +83,6 @@ if [[ $landed == "200 $hubble/" ]]; then
 else
   fail "The Lab login doesn't open Hubble UI: it ends on '${landed%%\?*}'"
 fi
-# With the cookie of that sign-in, and no redirect followed. The dashboard's own page:
-# it answers / with a redirect there, whoever asks.
-status=$(lab_curl -b "$tmp/proxied.jar" -o /dev/null -w '%{http_code}' "$rollouts/rollouts/")
-if [[ $status == 200 ]]; then
-  ok "The sign-in to Hubble UI opens the Rollouts dashboard too"
-else
-  fail "The sign-in to Hubble UI doesn't open the Rollouts dashboard: HTTP $status"
-fi
-
 # Grafana's own OIDC login. Its API takes no token of Dex's, so it's signed in to as a
 # browser would, which also shows the role it gives the Lab login.
 landed=$(sign_in "$tmp/grafana.jar" "$grafana/login/generic_oauth")

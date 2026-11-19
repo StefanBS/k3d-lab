@@ -3,3 +3,5 @@ chart: argo-rollouts
 repoURL: https://argoproj.github.io/argo-helm
 version: 2.43.12
 namespace: argo-rollouts
+# A Lab can be built without it (gitops/values.yaml).
+feature: progressive-delivery
