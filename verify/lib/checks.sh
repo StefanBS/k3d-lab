@@ -124,6 +124,22 @@ hubble_denied() {
   return 1
 }
 
+# Usage: create_workload_namespace <name> <check> [<label>=<value>...]
+# Creates a throwaway namespace labelled as the workloads ApplicationSet labels a
+# Workload's, so the Platform's policies apply to it, with baseline-workload.yaml's podinfo
+# and client. It's also labelled k3d-lab/verify=<check>, so network-policy-enforced doesn't
+# take it for a Workload's, and the check can find what a crashed run left behind.
+create_workload_namespace() {
+  local ns=$1 check=$2
+  shift 2
+  kubectl create namespace "$ns" >/dev/null
+  kubectl label namespace "$ns" k3d-lab/group=workloads "k3d-lab/verify=$check" "$@" >/dev/null
+  # The API server refuses a pod until its namespace has the default ServiceAccount,
+  # which a controller creates after the namespace: seconds after, when it's busy (#158).
+  kubectl -n "$ns" wait --for=create serviceaccount/default --timeout=1m >/dev/null
+  kubectl -n "$ns" apply -f "$(dirname "${BASH_SOURCE[0]}")/baseline-workload.yaml" >/dev/null
+}
+
 # Usage: pod_ip <namespace> <pod>
 pod_ip() { kubectl -n "$1" get pod "$2" -o jsonpath='{.status.podIP}'; }
 
