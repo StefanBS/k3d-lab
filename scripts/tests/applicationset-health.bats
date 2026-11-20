@@ -14,7 +14,8 @@ setup_file() {
 
 # applicationset [<ResourcesUpToDate status>] [--error] [<Application>=<health>...]: an
 # ApplicationSet with that condition, or none, ErrorOccurred when --error is given, and
-# those Applications in its status, a health of "" being none.
+# those Applications in its status, a health of "" being none. With MAY_BE_EMPTY set, it's
+# annotated k3d-lab/may-be-empty with that value.
 applicationset() {
   local uptodate=${1:-} error=False app
   (($#)) && shift
@@ -25,7 +26,11 @@ applicationset() {
   {
     echo 'apiVersion: argoproj.io/v1alpha1'
     echo 'kind: ApplicationSet'
-    echo 'metadata: {name: platform, namespace: argocd}'
+    if [[ -n ${MAY_BE_EMPTY:-} ]]; then
+      echo "metadata: {name: workloads, namespace: argocd, annotations: {k3d-lab/may-be-empty: \"$MAY_BE_EMPTY\"}}"
+    else
+      echo 'metadata: {name: platform, namespace: argocd}'
+    fi
     echo 'status:'
     echo '  conditions:'
     echo "    - {type: ErrorOccurred, status: \"$error\", message: the generator failed}"
@@ -78,6 +83,26 @@ expect() {
 
 @test "up to date but listing no Applications, as its first status can: Progressing" {
   applicationset True
+  expect Progressing "Waiting for the Applications to be listed"
+}
+
+@test "annotated k3d-lab/may-be-empty, up to date and listing none: Healthy" {
+  MAY_BE_EMPTY=true applicationset True
+  expect Healthy "No Application to wait for"
+}
+
+@test "annotated k3d-lab/may-be-empty, still waits for the Applications it lists" {
+  MAY_BE_EMPTY=true applicationset True a=Progressing
+  expect Progressing "Waiting for a, which is Progressing"
+}
+
+@test "annotated k3d-lab/may-be-empty, but not up to date yet: Progressing" {
+  MAY_BE_EMPTY=true applicationset
+  expect Progressing "Waiting for the Applications to be generated"
+}
+
+@test "k3d-lab/may-be-empty other than true: listing none is Progressing" {
+  MAY_BE_EMPTY=false applicationset True
   expect Progressing "Waiting for the Applications to be listed"
 }
 
