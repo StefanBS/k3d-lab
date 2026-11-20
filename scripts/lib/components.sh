@@ -1,6 +1,7 @@
 # The component folders, one ArgoCD Application each: what their component.yaml says,
-# and what it may say. Sourced by lib.sh, and on its own by scripts/tests/, so it sets no
-# shell options and runs nothing when sourced. Every path is under LAB_ROOT.
+# and what it may say. Sourced by lib.sh, and on its own by scripts/tests/ and
+# verify/lib/workload-network-baseline.sh, so it sets no shell options and runs nothing
+# when sourced. Every path is under LAB_ROOT.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # DEMO_LABEL_KEY and FEATURE_LABEL_KEY are used by the scripts that source this file
 
@@ -57,6 +58,16 @@ component_feature() { yq '.feature // ""' "$LAB_ROOT/$1/component.yaml"; }
 # The Features, the sets of components a Lab can be built without, as gitops/values.yaml
 # lists them, one per line.
 features() { yq '.features[]' "$LAB_ROOT/gitops/values.yaml"; }
+# The Features as a JSON array, for a chart value or a jq argument.
+features_json() { yq -o json -I0 '.features' "$LAB_ROOT/gitops/values.yaml"; }
+
+# feature_left_out <Feature> <the Features left out, one per line>: whether a Lab built
+# without those leaves that Feature out. No Feature, a component's that's in none, never is.
+feature_left_out() { [[ -n $1 ]] && grep -qxF -- "$1" <<<"$2"; }
+
+# gpu_feature: the Feature the GPU's device plugin is in, which a Lab needs before the GPU
+# Node can join it.
+gpu_feature() { component_feature platform/amd-gpu; }
 
 # feature_dirs <feature>: the component folders in that Feature, as component_dirs prints
 # them.
@@ -119,7 +130,7 @@ without_features() {
 # components_problems: prints each way the component folders break what the
 # ApplicationSets expect of them, one per line, or nothing.
 components_problems() {
-  local dirs duplicates dir namespace
+  local dirs duplicates dir namespace known
   mapfile -t dirs < <(component_dirs)
   if ((${#dirs[@]} == 0)); then
     echo "no component folders found"
@@ -128,20 +139,20 @@ components_problems() {
   # Each folder's name is its Application's name, and those share one namespace.
   duplicates=$(printf '%s\n' "${dirs[@]##*/}" | sort | uniq -d)
   [[ -z $duplicates ]] || echo "component names used twice: $(paste -sd' ' <<<"$duplicates")"
-  for dir in "${dirs[@]}"; do _component_problems "$dir"; done
+  known=$(features)
+  for dir in "${dirs[@]}"; do _component_problems "$dir" "$known"; done
   _waves_problems "${dirs[@]}"
-  _features_problems
+  _features_problems "$known"
   for namespace in $(yq '.platformNamespaces[]' "$LAB_ROOT/gitops/values.yaml" | sort | uniq -d); do
     echo "gitops/values.yaml: platformNamespaces lists $namespace twice"
   done
 }
 
-# _features_problems: gitops/values.yaml lists each Feature once, and a Lab is built
-# without only Features it lists. `none` is what `just up --without` takes for every
-# Feature, so it can't name one.
+# _features_problems <the Features, one per line>: gitops/values.yaml lists each Feature
+# once, and a Lab is built without only Features it lists. `none` is what
+# `just up --without` takes for every Feature, so it can't name one.
 _features_problems() {
-  local feature known
-  known=$(features)
+  local feature known=$1
   for feature in $(sort <<<"$known" | uniq -d); do
     echo "gitops/values.yaml: features lists $feature twice"
   done
@@ -183,10 +194,10 @@ _waves_problems() {
   fi
 }
 
-# _component_problems <group>/<name>: the ApplicationSets template these fields into the
-# component's Application.
+# _component_problems <group>/<name> <the Features, one per line>: the ApplicationSets
+# template these fields into the component's Application.
 _component_problems() {
-  local dir=$1 key only wave waves feature keys=(namespace) file=kustomization.yaml
+  local dir=$1 known=$2 key only wave waves feature keys=(namespace) file=kustomization.yaml
   local component=$LAB_ROOT/$1/component.yaml
   if component_has_chart "$dir"; then
     keys+=(repoURL version)
@@ -214,7 +225,7 @@ _component_problems() {
   # Optional: the Feature it's in, one that gitops/values.yaml lists, which every
   # ApplicationSet leaves out of a Lab built without it.
   feature=$(component_feature "$dir")
-  if [[ -n $feature ]] && ! grep -qxF -- "$feature" <<<"$(features)"; then
+  if [[ -n $feature ]] && ! grep -qxF -- "$feature" <<<"$known"; then
     echo "$dir/component.yaml: 'feature' isn't one of gitops/values.yaml's features"
   fi
   # Optional, and only a Demo's: the Features it needs, each one gitops/values.yaml lists.
@@ -226,7 +237,7 @@ _component_problems() {
       echo "$dir/component.yaml: 'needs' is a list of Features"
     else
       for feature in $(component_needs "$dir"); do
-        grep -qxF -- "$feature" <<<"$(features)" ||
+        grep -qxF -- "$feature" <<<"$known" ||
           echo "$dir/component.yaml: 'needs' names $feature, which isn't one of gitops/values.yaml's features"
       done
     fi

@@ -14,7 +14,6 @@ source "$(dirname "$0")/checks.sh"
 source "$(dirname "$0")/sso-browser.sh"
 
 grafana=$PLATFORM_FACT_GRAFANA_URL
-hubble=https://$PLATFORM_FACT_HUBBLE_HOST
 
 # Grafana's own OIDC login. Its API takes no token of Dex's, so it's signed in to as a
 # browser would, which also shows the role it gives the Lab login.

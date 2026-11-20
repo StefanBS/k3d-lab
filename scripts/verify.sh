@@ -72,11 +72,12 @@ args=(--config "$LAB_ROOT/verify/.chainsaw.yaml" --test-dir "$LAB_ROOT/verify" -
 ((${#checks[@]} == 0)) || args+=(--include-test-regex "^chainsaw/($(IFS='|' && echo "${checks[*]}"))\$")
 
 deselected=()
-# The Features the Lab is built without, which the root Application says, not .env.
-mapfile -t features_out < <(root_application_without)
-gpu_feature=$(component_feature platform/amd-gpu)
+# The root Application says which Features the Lab is built without, not .env, and whether
+# it has its Demos.
+root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
+left_out=$(lab_without <<<"$root")
 has_gpu=true
-[[ " ${features_out[*]} " != *" $gpu_feature "* ]] || has_gpu=false
+if feature_left_out "$(gpu_feature)" "$left_out"; then has_gpu=false; fi
 # The GPU checks, labelled GPU_NODE_LABEL_KEY, run only while the GPU Node's Node object
 # is Ready. No Node object means it's Left, its normal state, so that says nothing. A
 # NotReady one means it's powered off (ADR 0002), or Left since a reboot: not a failure,
@@ -94,19 +95,19 @@ else
 fi
 # The Demos' checks, labelled DEMO_LABEL_KEY, run only while the Lab has its Demos, which
 # the root Application says. While it has them, a Demo that's missing fails its checks.
-demos=$(root_application_has_demos)
+demos=$(lab_has_demos <<<"$root")
 if [[ $demos != true ]]; then
   log "The Lab has no Demos, so their checks are skipped; 'just demos on' adds them"
   deselected+=("!$DEMO_LABEL_KEY")
 fi
 # The checks of a Feature's components, labelled FEATURE_LABEL_KEY with its name, run only
 # while the Lab has that Feature.
-for feature in "${features_out[@]}"; do
+for feature in $left_out; do
   log "The Lab is built without $feature, so its checks are skipped"
   deselected+=("$FEATURE_LABEL_KEY!=$feature")
 done
-# For a check that runs in every Lab, but has a step that needs a Feature.
-export VERIFY_WITHOUT="${features_out[*]}"
+# For a check that runs in every Lab, but has a step that needs a Feature: one per line.
+export VERIFY_WITHOUT=$left_out
 ((${#deselected[@]} == 0)) || args+=(--selector "$(IFS=, && echo "${deselected[*]}")")
 # The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
 if [[ $has_gpu == true && -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then

@@ -24,7 +24,7 @@ argocd_password=$(kc -n argocd get secret argocd-initial-admin-secret -o jsonpat
 # The root Application says which Features the Lab was built without.
 left_out=$(root_application_without)
 # Usage: has_feature_of <group>/<name>: whether the Lab has the component's Feature.
-has_feature_of() { ! grep -qxF -- "$(component_feature "$1")" <<<"$left_out"; }
+has_feature_of() { ! feature_left_out "$(component_feature "$1")" "$left_out"; }
 
 echo "The Lab login, which opens every UI below:"
 printf '  %-17s %s\n' USER PASSWORD "$(platform_fact sso.login)" "$lab_password"

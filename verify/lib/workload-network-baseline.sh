@@ -20,6 +20,8 @@
 set -euo pipefail
 # shellcheck source=checks.sh
 source "$(dirname "$0")/checks.sh"
+# shellcheck source=../../scripts/lib/components.sh
+source "$(dirname "$0")/../../scripts/lib/components.sh"
 
 namespace=$1
 lib=$(dirname "$0")
@@ -88,8 +90,8 @@ not_scraped() {
     echo "$scraped"
 }
 # Only in a Lab with Alloy's Feature. verify.sh exports those it's built without.
-alloy_feature=$(yq '.feature // ""' "$lib/../../platform/alloy/component.yaml")
-if [[ " $VERIFY_WITHOUT " == *" $alloy_feature "* ]]; then
+alloy_feature=$(LAB_ROOT=$lib/../.. component_feature platform/alloy)
+if feature_left_out "$alloy_feature" "$VERIFY_WITHOUT"; then
   echo "SKIP  $scraped: the Lab is built without $alloy_feature"
 else
   eventually '%s: no successful scrape' "$scraped" -- not_scraped || bad=1

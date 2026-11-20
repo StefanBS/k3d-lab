@@ -73,7 +73,7 @@ demos_selector_problems() {
 # selector on its generator, and none leaves any out of a Lab built with every one.
 features_selector_problems() {
   local want selects='[select(.kind == "ApplicationSet")]'
-  want=$(features | jq -Rsc 'split("\n") | map(select(. != ""))')
+  want=$(features_json)
   # shellcheck disable=SC2016 # $want is jq's, not the shell's.
   local without='.[] | select(any(.spec.generators[0].selector.matchExpressions[]?;
       .key == "feature" and .operator == "NotIn" and .values == $want) | not) | .metadata.name'

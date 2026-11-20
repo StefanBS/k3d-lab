@@ -14,15 +14,9 @@ source "$(dirname "$0")/checks.sh"
 source "$(dirname "$0")/sso-browser.sh"
 
 rollouts=https://$PLATFORM_FACT_ROLLOUTS_HOST
-hubble=https://$PLATFORM_FACT_HUBBLE_HOST
 
 expect_sent_to_dex "The Rollouts dashboard" "$rollouts/"
-landed=$(sign_in "$tmp/proxied.jar" "$hubble/")
-if [[ $landed == "200 $hubble/" ]]; then
-  ok "The Lab login opens Hubble UI"
-else
-  fail "The Lab login doesn't open Hubble UI: it ends on '${landed%%\?*}'"
-fi
+sign_in_to_hubble "$tmp/proxied.jar"
 # With the cookie of that sign-in, and no redirect followed. The dashboard's own page:
 # it answers / with a redirect there, whoever asks.
 status=$(lab_curl -b "$tmp/proxied.jar" -o /dev/null -w '%{http_code}' "$rollouts/rollouts/")

@@ -5,6 +5,8 @@
 setup() {
   # shellcheck source=../lib/root-application.sh
   source "$BATS_TEST_DIRNAME/../lib/root-application.sh"
+  # shellcheck source=../lib/components.sh
+  source "$BATS_TEST_DIRNAME/../lib/components.sh" # need_feature's feature_left_out
   load lab
 }
 
@@ -99,12 +101,11 @@ patched() { kc_stdin "${PATCH[@]}" | jq -cS .; }
   [[ $(yq '.spec.source.helm.valuesObject.revision | tag' <<<"$output") == '!!str' ]]
 }
 
-# has_demos <valuesObject>: what root_application_has_demos prints while the root
-# Application has those values.
+# has_demos <valuesObject>: what lab_has_demos prints for a root Application with those
+# values.
 has_demos() {
   V=$1 yq -n -o json '.metadata.name = "root" | .spec.source.helm.valuesObject = env(V)' |
-    kc_answers -n argocd get application/root -o json
-  root_application_has_demos
+    lab_has_demos
 }
 
 @test "the root Application says demos: true: the Lab has its Demos" {
@@ -137,8 +138,6 @@ without() {
 }
 
 @test "the root Application can't be read: fails, saying so" {
-  run root_application_has_demos
-  [[ $status -eq 1 && $output == "error: can't read the Lab's root Application" ]]
   run root_application_without
   [[ $status -eq 1 && $output == "error: can't read the Lab's root Application" ]]
 }
