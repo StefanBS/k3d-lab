@@ -81,13 +81,12 @@ report_host_steps
 # Only the GPU Node recipes need .env's values, which a Lab without the GPU's Feature
 # never runs (gpu.sh). up reads LAB_WITHOUT the same way, and fails on a name that isn't
 # a Feature.
-gpu_feature=$(component_feature platform/amd-gpu)
 if ! left_out=$(without_features "${LAB_WITHOUT-}" 2>&1); then
   fail "LAB_WITHOUT in .env: $left_out"
   left_out=""
 fi
-if grep -qxF -- "$gpu_feature" <<<"$left_out"; then
-  ok "LAB_WITHOUT in .env leaves out $gpu_feature, so the Lab needs neither the GPU Node's values in .env nor HOST_LAN_IP"
+if feature_left_out "$(gpu_feature)" "$left_out"; then
+  ok "LAB_WITHOUT in .env leaves out $(gpu_feature), so the Lab needs neither the GPU Node's values in .env nor HOST_LAN_IP"
 elif [[ ! -f $LAB_ENV_FILE ]]; then
   warn ".env is missing: copy .env.example and fill it in (only the GPU Node recipes need it, and LAB_WITHOUT is optional)"
 else

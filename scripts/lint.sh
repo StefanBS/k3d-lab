@@ -313,7 +313,7 @@ gitops_without_demos=$(copy_render gitops)
 lint_rendering "gitops with the Demos" render_gitops --set demos=true
 report_problems "the workloads ApplicationSet leaves the Demos out, unless the Lab has its Demos" \
   demos_selector_problems "$gitops_without_demos" "$(copy_render gitops-demos)"
-lint_rendering "gitops without every Feature" render_gitops --set-json "without=$(features | jq -Rsc 'split("\n") | map(select(. != ""))')"
+lint_rendering "gitops without every Feature" render_gitops --set-json "without=$(features_json)"
 report_problems "every ApplicationSet leaves out the Features a Lab is built without, and only those" \
   features_selector_problems "$gitops_without_demos" "$(copy_render gitops-without)"
 

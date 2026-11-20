@@ -5,13 +5,15 @@
 # facts this reads (scripts/lib/verify-facts.sh). The script exits "$bad" at its end,
 # which fail sets.
 # shellcheck shell=bash
-# shellcheck disable=SC2034  # bad is read by the scripts that source this file
+# shellcheck disable=SC2034  # bad and hubble are read by the scripts that source this file
 
 # shellcheck source=../../scripts/lib/sso.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/sso.sh"
 
 sso=$PLATFORM_FACT_SSO_URL
 login=$PLATFORM_FACT_SSO_LOGIN
+# Hubble UI, behind oauth2-proxy, which every Lab has.
+hubble=https://$PLATFORM_FACT_HUBBLE_HOST
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -49,6 +51,18 @@ sign_in() {
       browse "$jar" "${landed#* }" --data-urlencode "login=$login" --data-urlencode password@-)
   fi
   echo "$landed"
+}
+
+# Usage: sign_in_to_hubble <cookie jar>
+# Signs in to Hubble UI with the Lab login, keeping oauth2-proxy's cookie in the jar.
+sign_in_to_hubble() {
+  local landed
+  landed=$(sign_in "$1" "$hubble/")
+  if [[ $landed == "200 $hubble/" ]]; then
+    ok "The Lab login opens Hubble UI"
+  else
+    fail "The Lab login doesn't open Hubble UI: it ends on '${landed%%\?*}'"
+  fi
 }
 
 # Usage: expect_sent_to_dex <UI's name> <url>

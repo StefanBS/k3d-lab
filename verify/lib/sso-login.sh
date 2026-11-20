@@ -23,7 +23,6 @@ source "$(dirname "$0")/checks.sh"
 source "$(dirname "$0")/sso-browser.sh"
 
 argocd=https://$PLATFORM_FACT_ARGOCD_HOST
-hubble=https://$PLATFORM_FACT_HUBBLE_HOST
 
 # Usage: token_status <password>
 # Asks Dex for a token for the Lab login with that password, through Verify's own
@@ -76,12 +75,7 @@ fi
 
 # A UI behind oauth2-proxy.
 expect_sent_to_dex "Hubble UI" "$hubble/"
-landed=$(sign_in "$tmp/proxied.jar" "$hubble/")
-if [[ $landed == "200 $hubble/" ]]; then
-  ok "The Lab login opens Hubble UI"
-else
-  fail "The Lab login doesn't open Hubble UI: it ends on '${landed%%\?*}'"
-fi
+sign_in_to_hubble "$tmp/proxied.jar"
 
 # One sign-in for every UI: Dex remembers the browser that signed in to Hubble UI. With
 # that jar, ArgoCD's login goes through Dex and back without the form: nothing here

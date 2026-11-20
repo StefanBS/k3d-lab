@@ -15,7 +15,7 @@
 # Fails, printing no patch, on no options, an empty revision, or a --demos that isn't
 # true or false: a patch that changes nothing, or blanks a field, is a caller's mistake.
 root_application_patch() {
-  local revision='' demos='' without='' set_without=false
+  local revision='' demos='' without=null
   (($#)) || return 1
   while (($#)); do
     case $1 in
@@ -31,24 +31,20 @@ root_application_patch() {
         ;;
       --without)
         (($# >= 2)) || return 1
-        without=$2
-        set_without=true
+        without=$(jq -cn --arg without "$2" '$without | split(",") | map(select(. != ""))')
         shift 2
         ;;
       *) return 1 ;;
     esac
   done
   # shellcheck disable=SC2016 # The $ names are jq variables, not the shell's.
-  jq -n --arg revision "$revision" --arg demos "$demos" --arg without "$without" \
-    --argjson set_without "$set_without" '{}
+  jq -n --arg revision "$revision" --arg demos "$demos" --argjson without "$without" '{}
     | if $revision != "" then
         .spec.source.targetRevision = $revision |
         .spec.source.helm.valuesObject.revision = $revision
       end
     | if $demos != "" then .spec.source.helm.valuesObject.demos = ($demos == "true") end
-    | if $set_without then
-        .spec.source.helm.valuesObject.without = ($without | split(",") | map(select(. != "")))
-      end'
+    | if $without != null then .spec.source.helm.valuesObject.without = $without end'
 }
 
 # root_application_manifest <revision> <demos> [<Feature>...]: prints the root
@@ -124,12 +120,6 @@ root_application_change() {
   jq '.metadata.annotations."argocd.argoproj.io/refresh" = "hard"' <<<"$patch" |
     kc -n argocd patch application/root --type merge --patch-file /dev/stdin >/dev/null
 }
-# root_application_has_demos: prints true if the Lab has its Demos, false otherwise.
-root_application_has_demos() {
-  local root
-  root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
-  lab_has_demos <<<"$root"
-}
 # root_application_without: prints each Feature the Lab is built without, one per line, or
 # nothing. Once the Lab exists, the root Application says so, not .env's LAB_WITHOUT.
 root_application_without() {
@@ -142,7 +132,7 @@ root_application_without() {
 need_feature() {
   local left_out
   left_out=$(root_application_without) || exit 1
-  ! grep -qxF -- "$1" <<<"$left_out" ||
+  ! feature_left_out "$1" "$left_out" ||
     die "the Lab is built without $1, so $2; 'just down', then a 'just up' that keeps $1, builds one with it"
 }
 # tracked_commit: prints the commit LAB_REPO has now for the root Application's Tracked

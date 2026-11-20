@@ -47,7 +47,7 @@ cmd_join() {
   # A Lab without the GPU's Feature has no device plugin or ComfyUI to run on it. Before
   # .env, which such a Lab doesn't need. leave, status and ssh don't check, so a Stale
   # install can still be cleaned up.
-  need_feature "$(component_feature platform/amd-gpu)" "the GPU Node can't join it"
+  need_feature "$(gpu_feature)" "the GPU Node can't join it"
   need_env HOST_LAN_IP GPU_NODE_IP GPU_NODE_SSH
   # The GPU Node routes the Lab's subnet through this address (ADR 0002).
   why=$(host_lan_ip_current) || die "$why; run 'just host wizard'"
