@@ -1,0 +1,22 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: workload-scraped
+  # Runs only while the Lab has the Feature (scripts/verify.sh).
+  labels:
+    k3d-lab/feature: observability
+spec:
+  description: >-
+    Alloy scrapes a Workload that writes no network policy of its own: the Workload
+    baseline (platform/workload-network-policy, ADR 0008) lets it reach a pod's port
+    named metrics. In a throwaway namespace labelled as a Workload's, with a PodMonitor
+    on podinfo, Prometheus gets podinfo's `up` at 1.
+  steps:
+    - try:
+        - script:
+            content: ../lib/workload-scraped.sh "$NAMESPACE"
+      catch:
+        - script:
+            content: >-
+              kubectl get namespaces -l k3d-lab/verify=workload-scraped --show-labels;
+              kubectl get pods,podmonitors -A -l app=podinfo -o wide

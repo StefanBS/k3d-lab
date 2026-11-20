@@ -16,8 +16,8 @@ set -euo pipefail
 source "$(dirname "$0")/checks.sh"
 
 namespace=$1
-# Leaves out the namespaces workload-network-baseline labels as a Workload's for its
-# own run, which it labels k3d-lab/verify.
+# Leaves out the namespaces a check labels as a Workload's for its own run
+# (create_workload_namespace), which it labels k3d-lab/verify.
 mapfile -t workload_namespaces < <(kubectl get namespaces -l 'k3d-lab/group=workloads,!k3d-lab/verify' \
   -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
 # The Platform labels exactly the namespaces of the Workloads' Applications.

@@ -4,24 +4,21 @@
 # (platform/workload-network-policy, ADR 0008), in three throwaway namespaces labelled
 # as the workloads ApplicationSet labels a Workload's, each with baseline-workload.yaml:
 # - <check namespace>-baseline, with the same-namespace allow, as a Workload gets it,
-#   and baseline-exposed.yaml: podinfo answers the Host through the Gateway, Alloy
-#   scrapes it in a Lab with Alloy, the client reaches it, the client can't reach the
-#   web probe in the check's namespace, and a client in the check's namespace can't
-#   reach podinfo directly, at its pod's address;
+#   and baseline-exposed.yaml: podinfo answers the Host through the Gateway, the client
+#   reaches it, the client can't reach the web probe in the check's namespace, and a
+#   client in the check's namespace can't reach podinfo directly, at its pod's address;
 # - <check namespace>-strict, `isolation: strict`, so without the same-namespace allow:
 #   the client can't reach podinfo;
 # - <check namespace>-guardrail, with the same-namespace allow and a policy of its own
 #   allowing the kube-apiserver (baseline-apiserver-allow.yaml): the client still can't
 #   reach it.
-# Each denial must also show in Hubble as DROPPED by policy. The namespaces are also
-# labelled k3d-lab/verify, so network-policy-enforced doesn't take them for Workloads'.
+# Each denial must also show in Hubble as DROPPED by policy. workload-scraped checks that
+# Alloy scrapes such a Workload, in a Lab with Alloy.
 # Run by workload-network-baseline, whose script steps point kubectl at the Lab through
 # a context named chainsaw. verify.sh exports LAB_CA_CERT.
 set -euo pipefail
 # shellcheck source=checks.sh
 source "$(dirname "$0")/checks.sh"
-# shellcheck source=../../scripts/lib/components.sh
-source "$(dirname "$0")/../../scripts/lib/components.sh"
 
 namespace=$1
 lib=$(dirname "$0")
@@ -41,21 +38,9 @@ trap delete_namespaces EXIT
 # on the Gateway. Their names never repeat, so this doesn't wait for them to go.
 kubectl delete namespace -l k3d-lab/verify=workload-network-baseline --wait=false >/dev/null
 
-# Usage: create_namespace <name> [<label>=<value>...]
-create_namespace() {
-  local ns=$1
-  shift
-  kubectl create namespace "$ns" >/dev/null
-  kubectl label namespace "$ns" k3d-lab/group=workloads k3d-lab/verify=workload-network-baseline \
-    "$@" >/dev/null
-  # The API server refuses a pod until its namespace has the default ServiceAccount,
-  # which a controller creates after the namespace: seconds after, when it's busy (#158).
-  kubectl -n "$ns" wait --for=create serviceaccount/default --timeout=1m >/dev/null
-  kubectl -n "$ns" apply -f "$lib/baseline-workload.yaml" >/dev/null
-}
-create_namespace "$exposed"
-create_namespace "$strict" k3d-lab/isolation=strict
-create_namespace "$guardrail"
+create_workload_namespace "$exposed" workload-network-baseline
+create_workload_namespace "$strict" workload-network-baseline k3d-lab/isolation=strict
+create_workload_namespace "$guardrail" workload-network-baseline
 kubectl -n "$exposed" apply -f "$same_namespace" >/dev/null
 kubectl -n "$guardrail" apply -f "$same_namespace" >/dev/null
 host=$exposed.lab.localhost
@@ -80,21 +65,6 @@ if curl -sS --fail --retry 10 --retry-all-errors --retry-delay 3 --cacert "$LAB_
 else
   echo "FAIL  $exposed doesn't answer through the Gateway at https://$host"
   bad=1
-fi
-
-scraped="Alloy scrapes podinfo in $exposed"
-# Prints $scraped until Alloy's last scrape of podinfo there succeeded.
-# shellcheck disable=SC2329 # Run by eventually.
-not_scraped() {
-  [[ $(prometheus_query "max(up{namespace=\"$exposed\"})" '.data.result[0].value[1] // ""') == 1 ]] ||
-    echo "$scraped"
-}
-# Only in a Lab with Alloy's Feature. verify.sh exports those it's built without.
-alloy_feature=$(LAB_ROOT=$lib/../.. component_feature platform/alloy)
-if feature_left_out "$alloy_feature" "$VERIFY_WITHOUT"; then
-  echo "SKIP  $scraped: the Lab is built without $alloy_feature"
-else
-  eventually '%s: no successful scrape' "$scraped" -- not_scraped || bad=1
 fi
 
 exposed_pod=$(podinfo_pod "$exposed")

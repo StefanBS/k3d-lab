@@ -1,7 +1,6 @@
 # The component folders, one ArgoCD Application each: what their component.yaml says,
-# and what it may say. Sourced by lib.sh, and on its own by scripts/tests/ and
-# verify/lib/workload-network-baseline.sh, so it sets no shell options and runs nothing
-# when sourced. Every path is under LAB_ROOT.
+# and what it may say. Sourced by lib.sh, and on its own by scripts/tests/, so it sets no
+# shell options and runs nothing when sourced. Every path is under LAB_ROOT.
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # DEMO_LABEL_KEY and FEATURE_LABEL_KEY are used by the scripts that source this file
 

@@ -76,22 +76,15 @@ deselected=()
 # it has its Demos.
 root=$(kc -n argocd get application/root -o json) || die "can't read the Lab's root Application"
 left_out=$(lab_without <<<"$root")
-has_gpu=true
-if feature_left_out "$(gpu_feature)" "$left_out"; then has_gpu=false; fi
 # The GPU checks, labelled GPU_NODE_LABEL_KEY, run only while the GPU Node's Node object
-# is Ready. No Node object means it's Left, its normal state, so that says nothing. A
-# NotReady one means it's powered off (ADR 0002), or Left since a reboot: not a failure,
-# but worth knowing. A Lab without the GPU's Feature never has the GPU Node (gpu.sh), so
-# there's nothing to warn about.
-if [[ $has_gpu == false ]]; then
+# is Ready. No Node object means it's Left, its normal state, so that says nothing: a Lab
+# without the GPU's Feature never has one (gpu.sh). A NotReady one means it's powered off
+# (ADR 0002), or Left since a reboot: not a failure, but worth knowing.
+gpu_node=$(gpu_node_object) || exit 1
+read -r gpu_node ready <<<"$gpu_node"
+if [[ $ready != Ready ]]; then
+  [[ -z $ready ]] || warn "the GPU Node's Node object $gpu_node is NotReady: it's off, or Left since a reboot; its checks are skipped"
   deselected+=("!$GPU_NODE_LABEL_KEY")
-else
-  gpu_node=$(gpu_node_object) || exit 1
-  read -r gpu_node ready <<<"$gpu_node"
-  if [[ $ready != Ready ]]; then
-    [[ -z $ready ]] || warn "the GPU Node's Node object $gpu_node is NotReady: it's off, or Left since a reboot; its checks are skipped"
-    deselected+=("!$GPU_NODE_LABEL_KEY")
-  fi
 fi
 # The Demos' checks, labelled DEMO_LABEL_KEY, run only while the Lab has its Demos, which
 # the root Application says. While it has them, a Demo that's missing fails its checks.
@@ -106,11 +99,10 @@ for feature in $left_out; do
   log "The Lab is built without $feature, so its checks are skipped"
   deselected+=("$FEATURE_LABEL_KEY!=$feature")
 done
-# For a check that runs in every Lab, but has a step that needs a Feature: one per line.
-export VERIFY_WITHOUT=$left_out
 ((${#deselected[@]} == 0)) || args+=(--selector "$(IFS=, && echo "${deselected[*]}")")
-# The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002).
-if [[ $has_gpu == true && -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then
+# The GPU Node routes the Lab's subnet through HOST_LAN_IP, from .env (ADR 0002): only a
+# GPU Node with a Node object has a route to go stale.
+if [[ -n $gpu_node && -n ${HOST_LAN_IP:-} ]] && ! why=$(host_lan_ip_current); then
   warn "$why: the GPU Node's route to the Lab is stale; run 'just host wizard', then 'just gpu join'"
 fi
 # Go's test runner announces every check as it starts, pauses and resumes it, even with
