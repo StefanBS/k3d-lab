@@ -15,7 +15,13 @@ The `{{`...`}}` parts are left for the ApplicationSet's own templating.
 {{- $appsets = append $appsets (dict "name" (printf "platform-%s" $wave) "group" "platform" "waves" (list $wave) "operator" "In") }}
 {{- end }}
 {{- $appsets = append $appsets (dict "name" "platform" "group" "platform" "waves" .Values.platformWaves "operator" "NotIn") }}
-{{- $appsets = append $appsets (dict "name" "workloads" "group" "workloads") }}
+{{- /*
+`workloads` can generate no Application: a Lab without its Demos and the Features of
+every Workload has none. As the last sync wave, it holds no Wave back, so its health
+counts an empty list as Healthy (platform/argocd/values.yaml); a Wave's can't, since its
+first status can list none of the Applications it just created.
+*/}}
+{{- $appsets = append $appsets (dict "name" "workloads" "group" "workloads" "mayBeEmpty" true) }}
 {{- range $i, $appset := $appsets }}
 {{- $group := $appset.group }}
 ---
@@ -26,6 +32,9 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "{{ $i }}"
+    {{- if $appset.mayBeEmpty }}
+    k3d-lab/may-be-empty: "true"
+    {{- end }}
 spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]

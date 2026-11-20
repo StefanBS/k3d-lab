@@ -36,8 +36,10 @@ configs:
     # Healthy before the next (gitops/values.yaml). ArgoCD's own check says Healthy once
     # the Applications exist, so this one also waits for every one of them to be
     # Healthy. An ApplicationSet's first status can list none of the Applications it
-    # just created, so one that lists none isn't Healthy either. A Degraded Application
-    # keeps its Wave Progressing: it retries until it's Healthy (gitops/).
+    # just created, so one that lists none isn't Healthy either, unless it's annotated
+    # k3d-lab/may-be-empty: `workloads`, the last, which a Lab without its Demos and
+    # Features can leave with none (gitops/templates/applicationsets.yaml). A Degraded
+    # Application keeps its Wave Progressing: it retries until it's Healthy (gitops/).
     # Tested by scripts/tests/applicationset-health.bats.
     resource.customizations.health.argoproj.io_ApplicationSet: |
       local function condition(type)
@@ -64,6 +66,12 @@ configs:
       end
       local resources = obj.status.resources or {}
       if #resources == 0 then
+        local annotations = obj.metadata.annotations or {}
+        if annotations["k3d-lab/may-be-empty"] == "true" then
+          hs.status = "Healthy"
+          hs.message = "No Application to wait for"
+          return hs
+        end
         hs.status = "Progressing"
         hs.message = "Waiting for the Applications to be listed"
         return hs
