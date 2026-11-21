@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # renovate: datasource=git-refs depName=https://github.com/Comfy-Org/ComfyUI branch=master
-COMFYUI_COMMIT=35060f0156181ae78a86b10f098f67ce8e83697f
+COMFYUI_COMMIT=5df2ce62f1408572c18a12a3aefee326cd2305a5
 
 # rocprofiler-sdk with the HSA signal pool fix (ADR 0011), and ROCr with upstream's
 # event-age fix (ADR 0012), which the DaemonSet mounts over the image's copies. They're
